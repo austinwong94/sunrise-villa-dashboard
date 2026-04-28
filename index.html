@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sunrise Villa Bookings</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">SV</div>
+          <div>
+            <h1>Sunrise Villa</h1>
+            <p>Booking calendar</p>
+          </div>
+        </div>
+
+        <nav class="nav-tabs" aria-label="Views">
+          <button class="nav-button active" data-view="calendar" type="button">
+            <span aria-hidden="true">▦</span>
+            Calendar
+          </button>
+          <button class="nav-button" data-view="dashboard" type="button">
+            <span aria-hidden="true">◫</span>
+            Dashboard
+          </button>
+          <button class="nav-button" data-view="bookings" type="button">
+            <span aria-hidden="true">☷</span>
+            Bookings
+          </button>
+          <button class="nav-button" data-view="documents" type="button">
+            <span aria-hidden="true">▤</span>
+            Documents
+          </button>
+          <button class="nav-button" data-view="tax" type="button">
+            <span aria-hidden="true">%</span>
+            Tax Plan
+          </button>
+        </nav>
+
+        <section class="month-switcher" aria-label="Month selector">
+          <button class="icon-button" id="prevMonth" type="button" title="Previous month">‹</button>
+          <label for="monthPicker">
+            <span>Month</span>
+            <input id="monthPicker" type="month" />
+          </label>
+          <button class="icon-button" id="nextMonth" type="button" title="Next month">›</button>
+        </section>
+
+        <section class="sidebar-panel focus-panel">
+          <h2>Payment Snapshot</h2>
+          <div class="mini-stat hero-stat">
+            <span>Upcoming unpaid</span>
+            <strong id="sideUpcomingPayments">RM 0</strong>
+          </div>
+          <div class="mini-stat-grid">
+            <div>
+              <span>Month Accommodation Fees</span>
+              <strong id="sideRevenue">RM 0</strong>
+            </div>
+            <div>
+              <span>Month Total to Receive</span>
+              <strong id="sideTotalToReceive">RM 0</strong>
+            </div>
+            <div>
+              <span>Month Balance</span>
+              <strong id="sideBalance">RM 0</strong>
+            </div>
+            <div>
+              <span>Booked Nights</span>
+              <strong id="sideNights">0</strong>
+            </div>
+          </div>
+        </section>
+
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Private villa operations</p>
+            <h2 id="pageTitle">Monthly Calendar</h2>
+          </div>
+          <div class="topbar-actions">
+            <button class="primary-button" id="openAddBooking" type="button">+ Booking</button>
+            <details class="data-menu">
+              <summary>Data tools</summary>
+              <div class="data-menu-list">
+                <button class="ghost-button" id="exportSheets" type="button">Google Sheets CSV</button>
+                <button class="ghost-button soft-action" id="exportJson" type="button">Backup JSON</button>
+                <div class="backup-menu-row">
+                  <span>Last backup: <strong id="backupStatus">Not yet</strong></span>
+                  <button class="ghost-button compact" id="backupNow" type="button">Backup now</button>
+                </div>
+                <label class="ghost-button file-button">
+                  Import
+                  <input id="importJson" type="file" accept="application/json" />
+                </label>
+                <label class="ghost-button file-button">
+                  Restore Backup
+                  <input id="restoreBackup" type="file" accept="application/json" />
+                </label>
+              </div>
+            </details>
+          </div>
+        </header>
+
+        <section class="view active" id="calendarView" aria-labelledby="pageTitle">
+          <div class="calendar-layout">
+            <section class="calendar-panel" aria-label="Booked dates calendar">
+              <div class="weekday-row">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              </div>
+              <div class="calendar-grid" id="calendarGrid"></div>
+            </section>
+
+            <section class="detail-panel" aria-label="Booking details">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Selected month</p>
+                  <h3 id="detailMonth">Bookings</h3>
+                </div>
+                <div class="heading-actions">
+                  <span class="count-pill" id="bookingCount">0 bookings</span>
+                  <button class="ghost-button compact" id="downloadQuickView" type="button">Download</button>
+                </div>
+              </div>
+              <div class="details-list" id="detailsList"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="dashboardView" aria-labelledby="pageTitle">
+          <section class="dashboard-guide">
+            <div>
+              <p class="eyebrow">Selected month workspace</p>
+              <h3 id="dashboardGuideTitle">Month Overview</h3>
+            </div>
+            <div class="dashboard-guide-actions">
+              <span>Use the month selector on the left to update every card.</span>
+              <button class="ghost-button compact" id="showDashboardSections" type="button">Show all sections</button>
+            </div>
+          </section>
+
+          <section class="dashboard-section dashboard-year">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Overall year outlook</p>
+                <h3 id="overallTitle">Year Summary</h3>
+              </div>
+            </div>
+            <div class="overview-card">
+              <article class="hero-kpi">
+                <span>Upcoming payments to collect</span>
+                <strong id="overallUpcomingPayments">RM 0</strong>
+              </article>
+              <div class="supporting-kpis">
+                <article class="mini-kpi"><span>Year Accommodation Fees</span><strong id="overallRevenue">RM 0</strong></article>
+                <article class="mini-kpi"><span>Year Total to Receive</span><strong id="overallTotalToReceive">RM 0</strong></article>
+                <article class="mini-kpi"><span>Year Received</span><strong id="overallPaid">RM 0</strong></article>
+                <article class="mini-kpi warning"><span>Year Balance</span><strong id="overallBalance">RM 0</strong></article>
+                <article class="mini-kpi"><span>Deposit Held</span><strong id="overallDepositHeld">RM 0</strong></article>
+                <article class="mini-kpi warning"><span>Refund Pending</span><strong id="overallRefundPending">RM 0</strong></article>
+              </div>
+            </div>
+          </section>
+
+          <section class="dashboard-section dashboard-month">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Selected month income</p>
+                <h3 id="monthlyTitle">Monthly Collection Summary</h3>
+              </div>
+            </div>
+            <div class="overview-card monthly-card">
+              <article class="hero-kpi calm">
+                <span>Monthly accommodation fees</span>
+                <strong id="kpiRevenue">RM 0</strong>
+              </article>
+              <div class="supporting-kpis">
+                <article class="mini-kpi"><span>Total to Receive</span><strong id="kpiTotalToReceive">RM 0</strong></article>
+                <article class="mini-kpi"><span>Amount Received</span><strong id="kpiPaid">RM 0</strong></article>
+                <article class="mini-kpi warning"><span>Balance</span><strong id="kpiBalance">RM 0</strong></article>
+                <article class="mini-kpi"><span>Deposit Held</span><strong id="kpiDepositHeld">RM 0</strong></article>
+                <article class="mini-kpi warning"><span>Refund Pending</span><strong id="kpiRefundPending">RM 0</strong></article>
+                <article class="mini-kpi"><span>Bookings</span><strong id="kpiBookings">0</strong></article>
+              </div>
+            </div>
+          </section>
+
+          <section class="dashboard-section dashboard-profit">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Selected month profit</p>
+                <h3 id="profitTitle">Monthly Profit View</h3>
+              </div>
+            </div>
+            <div class="profit-layout">
+              <div class="profit-summary">
+                <article class="hero-kpi profit-kpi">
+                  <span>Estimated net profit</span>
+                  <strong id="netProfitOut">RM 0</strong>
+                  <small>Accommodation fees minus operating expenses</small>
+                </article>
+                <article class="mini-kpi"><span>Total Expenses</span><strong id="totalExpensesOut">RM 0</strong><small>For selected month</small></article>
+                <article class="mini-kpi"><span>Recurring Commitments</span><strong id="fixedCommitmentsOut">RM 0</strong><small>Loans and fixed monthly costs</small></article>
+              </div>
+              <div class="pnl-breakdown-card">
+                <h4>Selected Month Cost Breakdown</h4>
+                <div class="pnl-breakdown-list" id="commitmentBreakdownSummary"></div>
+              </div>
+            </div>
+            <details class="one-off-block">
+              <summary>
+                <span>
+                  <span class="eyebrow">Single month costs</span>
+                  <strong>One-off Monthly Costs</strong>
+                </span>
+                <span class="summary-amount" id="oneOffTotalOut">RM 0</span>
+              </summary>
+              <div class="one-off-editor">
+                <div class="one-off-list" id="oneOffCostList"></div>
+                <button class="ghost-button compact" id="addOneOffCost" type="button">+ Cost</button>
+              </div>
+            </details>
+            <details class="commitments-block">
+              <summary>
+                <span>
+                  <span class="eyebrow">Recurring monthly commitments</span>
+                  <strong>Manage Fixed Costs & Loans</strong>
+                </span>
+                <button class="ghost-button compact" id="addCommitment" type="button">+ Commitment</button>
+              </summary>
+              <div class="commitment-editor">
+                <div class="commitment-list" id="commitmentList"></div>
+                <details class="annual-commitments">
+                  <summary>
+                    <span>
+                      <span class="eyebrow">Annual edit view</span>
+                      <strong>Edit monthly amounts for the whole year</strong>
+                    </span>
+                  </summary>
+                  <div class="table-scroll annual-table-wrap">
+                    <table class="compact-table annual-commitment-table">
+                      <thead>
+                        <tr>
+                          <th>Commitment</th>
+                          <th>Jan</th>
+                          <th>Feb</th>
+                          <th>Mar</th>
+                          <th>Apr</th>
+                          <th>May</th>
+                          <th>Jun</th>
+                          <th>Jul</th>
+                          <th>Aug</th>
+                          <th>Sep</th>
+                          <th>Oct</th>
+                          <th>Nov</th>
+                          <th>Dec</th>
+                        </tr>
+                      </thead>
+                      <tbody id="annualCommitmentRows"></tbody>
+                    </table>
+                  </div>
+                </details>
+              </div>
+            </details>
+          </section>
+
+          <section class="dashboard-section dashboard-pnl">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Monthly P&L tabulation</p>
+                <h3 id="pnlTitle">Profit & Loss by Month</h3>
+              </div>
+              <button class="primary-button" id="printOwnerReport" type="button">Owner Report PDF</button>
+            </div>
+            <div class="pnl-cards" id="pnlCards"></div>
+            <details class="table-panel report-drawer pnl-drawer">
+              <summary>
+                <span>
+                  <span class="eyebrow">All months</span>
+                  <strong>Detailed P&L Table</strong>
+                </span>
+              </summary>
+              <div class="table-scroll pnl-table-wrap">
+                <table class="compact-table">
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th>Accommodation Fees</th>
+                      <th>Recurring Commitments</th>
+                      <th>Total Expenses</th>
+                      <th>Net Profit</th>
+                      <th>Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pnlRows"></tbody>
+                </table>
+              </div>
+            </details>
+          </section>
+
+          <section class="dashboard-section dashboard-performance">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Selected month stay performance</p>
+                <h3 id="occupancyTitle">Occupancy & Nightly Rates</h3>
+              </div>
+            </div>
+            <div class="performance-grid">
+              <article class="performance-hero">
+                <span>Occupancy Rate</span>
+                <strong id="occupancyRate">0%</strong>
+                <small><b id="bookedNights">0</b> booked nights out of <b id="availableNights">0</b> available nights</small>
+              </article>
+              <article class="mini-kpi"><span>Weekday Nights</span><strong id="weekdayNights">0</strong><small>Monday to Thursday</small></article>
+              <article class="mini-kpi"><span>Weekend Nights</span><strong id="weekendNights">0</strong><small>Friday to Sunday</small></article>
+              <article class="mini-kpi"><span>Avg Weekday Nightly Rate</span><strong id="avgWeekdayRate">RM 0</strong><small>Accommodation fees only</small></article>
+              <article class="mini-kpi"><span>Avg Weekend Nightly Rate</span><strong id="avgWeekendRate">RM 0</strong><small>Friday, Saturday, Sunday</small></article>
+            </div>
+          </section>
+
+          <div class="dashboard-grid dashboard-charts">
+            <section class="chart-panel">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Earnings tracker</p>
+                  <h3>Accommodation Fees by Month</h3>
+                </div>
+              </div>
+              <div class="bar-chart" id="incomeChart"></div>
+            </section>
+
+            <section class="chart-panel">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Selected month channel mix</p>
+                  <h3 id="channelMixTitle">Direct vs Airbnb</h3>
+                </div>
+              </div>
+              <div class="channel-list" id="channelList"></div>
+            </section>
+          </div>
+
+          <section class="table-panel dashboard-upcoming">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Next stays</p>
+                <h3>Upcoming Arrivals</h3>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="compact-table">
+                <thead>
+                  <tr>
+                    <th>Guest</th>
+                    <th>Type</th>
+                    <th>Check-in</th>
+                    <th>Nights</th>
+                    <th>Balance</th>
+                    <th>Full Received</th>
+                    <th>Deposit Held</th>
+                    <th>Refund</th>
+                  </tr>
+                </thead>
+                <tbody id="upcomingRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <details class="table-panel report-drawer dashboard-monthly-table">
+            <summary>
+              <span>
+                <span class="eyebrow">All months</span>
+                <strong>Full Monthly Table</strong>
+              </span>
+            </summary>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Bookings</th>
+                    <th>Accommodation Fees</th>
+                    <th>Expenses</th>
+                    <th>Net Profit</th>
+                    <th>Total to Receive</th>
+                    <th>Received</th>
+                    <th>Balance</th>
+                    <th>Occupancy</th>
+                    <th>Deposit Held</th>
+                    <th>Refund Pending</th>
+                    <th>Booked Nights</th>
+                  </tr>
+                </thead>
+                <tbody id="summaryRows"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+
+        <section class="view" id="bookingsView" aria-labelledby="pageTitle">
+          <section class="workspace-guide">
+            <div>
+              <p class="eyebrow">Booking operations</p>
+              <h3>Manage stays, payments, deposits and guest messages</h3>
+            </div>
+            <button class="primary-button" id="addFromBookingsGuide" type="button">+ Booking</button>
+          </section>
+
+          <section class="table-panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Editable source</p>
+                <h3>All Bookings</h3>
+              </div>
+              <button class="primary-button" id="addFromTable" type="button">+ Booking</button>
+            </div>
+            <div class="booking-toolbar">
+              <label>
+                <span>Search</span>
+                <input id="bookingSearch" type="search" placeholder="Guest name or prefix" />
+              </label>
+              <details class="filter-drawer">
+                <summary>Filters</summary>
+                <div class="filter-grid">
+                  <label>
+                    <span>Channel</span>
+                    <select id="channelFilter">
+                      <option value="All">All</option>
+                      <option value="Direct">Direct</option>
+                      <option value="Airbnb">Airbnb</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Payment</span>
+                    <select id="paymentFilter">
+                      <option value="All">All</option>
+                      <option value="Due">Balance due</option>
+                      <option value="Paid">Fully paid</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Deposit</span>
+                    <select id="depositFilter">
+                      <option value="All">All</option>
+                      <option value="Unpaid">Deposit unpaid</option>
+                      <option value="Held">Held</option>
+                      <option value="RefundDue">Refund due</option>
+                      <option value="Refunded">Refunded</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Channel</th>
+                    <th>Record Type</th>
+                    <th>Guest</th>
+                    <th>Contact</th>
+                    <th>Prefix</th>
+                    <th>Arrival</th>
+                    <th>Nights</th>
+                    <th>Accommodation Fees</th>
+                    <th>Damage Deposit</th>
+                    <th>Total to Receive</th>
+                    <th>Received</th>
+                    <th>Full Received</th>
+                    <th>Balance</th>
+                    <th>Refunded</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="bookingRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="table-panel message-panel">
+            <div class="message-hero">
+              <div>
+                <p class="eyebrow">WhatsApp-ready helper</p>
+                <h3>Check-in Message</h3>
+                <p>Select a booking, confirm the details, then copy or open WhatsApp with the message already prepared.</p>
+              </div>
+              <div class="message-code-card">
+                <span>Confirmation Code</span>
+                <strong id="messageCodeDisplay">SV-DDMM-A08</strong>
+              </div>
+            </div>
+            <div class="message-layout">
+              <div class="message-form">
+                <label>Booking
+                  <select id="messageBookingSelect"></select>
+                </label>
+                <label>Guest Name
+                  <input id="messageGuestName" placeholder="Guest name" />
+                </label>
+                <label>Title
+                  <select id="messageGuestTitle">
+                    <option>Mr</option>
+                    <option>Ms</option>
+                  </select>
+                </label>
+                <label>Guest WhatsApp Number
+                  <input id="messagePhone" placeholder="60123456789" />
+                </label>
+                <label>Confirmation Code
+                  <input id="messageSecurityCode" readonly placeholder="Auto generated" />
+                </label>
+                <label>Check-in Time
+                  <input id="messageCheckinTime" value="3:00 PM" />
+                </label>
+                <label>Villa Address / Map Note
+                  <input id="messageAddress" placeholder="Paste address or Google Maps note" />
+                </label>
+              </div>
+              <div class="message-preview-wrap">
+                <label>Message Preview
+                  <textarea id="checkinMessagePreview" rows="12"></textarea>
+                </label>
+                <div class="message-actions">
+                  <button class="ghost-button" id="copyCheckinMessage" type="button">Copy Message</button>
+                  <button class="primary-button" id="openWhatsappMessage" type="button">Open WhatsApp</button>
+                </div>
+                <p class="helper-text">WhatsApp will open with the message pre-filled. You still need to press send in WhatsApp.</p>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="documentsView" aria-labelledby="pageTitle">
+          <section class="documents-hero">
+            <div>
+              <p class="eyebrow">Villa documents</p>
+              <h3>Quotations, Invoices & Official Receipts</h3>
+              <p>Create customer-ready A4 documents for Sunrise Villa Ventures and Windmill Villa Ventures, then keep every saved copy in one searchable archive.</p>
+            </div>
+            <div class="document-hero-card">
+              <span>Current Document No.</span>
+              <strong id="documentCodePreview">SVV-0501-QA08</strong>
+              <small>Generated from issuer, check-in date, document type, nights, and booking source.</small>
+            </div>
+          </section>
+
+          <div class="documents-layout">
+            <form class="document-builder" id="documentForm">
+              <input id="documentId" type="hidden" />
+
+              <section class="document-form-section">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Step 1</p>
+                    <h3>Document Setup</h3>
+                  </div>
+                </div>
+                <div class="form-grid two-col">
+                  <label>Document Type
+                    <select id="docType" required>
+                      <option>Quotation</option>
+                      <option>Invoice</option>
+                      <option>Official Receipt</option>
+                    </select>
+                  </label>
+                  <label>Issuer Company
+                    <select id="docIssuer" required>
+                      <option>Sunrise Villa Ventures</option>
+                      <option>Windmill Villa Ventures</option>
+                    </select>
+                  </label>
+                  <label>Document Date
+                    <input id="docDate" type="date" required />
+                  </label>
+                  <label>Status
+                    <select id="docStatus">
+                      <option>Draft</option>
+                      <option>Sent</option>
+                      <option>Paid</option>
+                      <option>Amended</option>
+                      <option>Cancelled</option>
+                      <option>Deposit Refunded</option>
+                    </select>
+                  </label>
+                  <label class="wide-field">Booking Source
+                    <select id="docBookingType">
+                      <option value="Direct Booking">Direct Booking</option>
+                      <option value="Airbnb Booking">Airbnb Booking</option>
+                    </select>
+                    <small>Used internally for the document number only.</small>
+                  </label>
+                </div>
+              </section>
+
+              <section class="document-form-section">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Step 2</p>
+                    <h3>Guest Details</h3>
+                  </div>
+                </div>
+                <div class="form-grid two-col">
+                  <label>Guest / Customer Name
+                    <input id="docGuestName" required placeholder="Example: Michelle Tan" />
+                  </label>
+                  <label>Company to Claim / Bill To
+                    <input id="docBillTo" placeholder="Company name or guest name" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="document-form-section">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Step 3</p>
+                    <h3>Stay & Pricing</h3>
+                  </div>
+                </div>
+                <div class="form-grid two-col">
+                  <label>Property / Villa Name
+                    <input id="docProperty" required placeholder="Sunrise Villa" />
+                  </label>
+                  <label>Check-in Date
+                    <input id="docCheckIn" type="date" required />
+                  </label>
+                  <label>Check-out Date
+                    <input id="docCheckOut" type="date" required />
+                  </label>
+                  <label>Number of Nights
+                    <input id="docNights" type="number" min="1" step="1" required />
+                  </label>
+                  <label>Accommodation Fee
+                    <input id="docAccommodationFee" type="number" min="0" step="0.01" required />
+                  </label>
+                  <label>Refundable Damage Security Deposit
+                    <input id="docDepositAmount" type="number" min="0" step="0.01" />
+                  </label>
+                  <label class="wide-field">Remarks
+                    <textarea id="docRemarks" rows="3" placeholder="Optional payment terms, claim notes, or booking remarks"></textarea>
+                  </label>
+                </div>
+              </section>
+
+              <section class="document-form-section receipt-only" id="receiptPaymentSection">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Step 4</p>
+                    <h3>Receipt Payment Details</h3>
+                  </div>
+                  <button class="ghost-button compact" id="addPaymentRow" type="button">+ Payment</button>
+                </div>
+                <div class="payment-rows" id="paymentRows"></div>
+              </section>
+
+              <section class="document-form-section action-section">
+                <div class="document-actions">
+                  <button class="primary-button" id="generateDocument" type="button">Generate Preview</button>
+                  <button class="primary-button warm" id="saveDocument" type="button">Save / Update</button>
+                  <button class="ghost-button" id="newDocument" type="button">New</button>
+                  <button class="ghost-button" id="duplicateDocument" type="button">Duplicate</button>
+                  <button class="ghost-button" id="printDocument" type="button">Print / PDF</button>
+                </div>
+              </section>
+            </form>
+
+            <section class="document-preview-shell">
+              <div class="section-heading compact-heading">
+                <div>
+                  <p class="eyebrow">Preview</p>
+                  <h3>A4 Document</h3>
+                </div>
+              </div>
+              <div class="document-preview-paper" id="documentPreview"></div>
+            </section>
+          </div>
+
+          <section class="table-panel document-archive">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Saved database</p>
+                <h3>Document Archive</h3>
+              </div>
+            </div>
+            <div class="booking-toolbar">
+              <label>
+                <span>Search</span>
+                <input id="documentSearch" type="search" placeholder="Guest, code, company, property, or date" />
+              </label>
+              <label>
+                <span>Type</span>
+                <select id="documentTypeFilter">
+                  <option value="All">All</option>
+                  <option>Quotation</option>
+                  <option>Invoice</option>
+                  <option>Official Receipt</option>
+                </select>
+              </label>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Document No.</th>
+                    <th>Type</th>
+                    <th>Issuer</th>
+                    <th>Guest</th>
+                    <th>Bill To</th>
+                    <th>Stay</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="documentArchiveRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="taxView" aria-labelledby="pageTitle">
+          <section class="tax-hero">
+            <div>
+              <p class="eyebrow">Planning workspace</p>
+              <h3>Enterprise to Sdn. Bhd. Tax Plan</h3>
+              <p>Estimate the split between enterprise income, company profit, director salary, and personal income tax before you confirm the final numbers.</p>
+            </div>
+            <div class="tax-disclaimer">Planning estimate only. Confirm final treatment, deductions, CP204/PCB and filing with your accountant or tax agent.</div>
+          </section>
+
+          <section class="dashboard-section">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Structure change</p>
+                <h3>Business Timeline</h3>
+              </div>
+            </div>
+            <div class="tax-form-grid">
+              <label>Tax Year
+                <input id="taxYearInput" type="number" min="2024" max="2035" step="1" />
+              </label>
+              <label>Sdn. Bhd. Starts
+                <input id="sdnStartInput" type="month" />
+              </label>
+              <label>Enterprise Expenses
+                <input id="enterpriseExpenseInput" type="number" min="0" step="1" />
+              </label>
+              <label>Sdn. Bhd. Expenses
+                <input id="sdnExpenseInput" type="number" min="0" step="1" />
+              </label>
+              <label>Monthly Salary From Sdn. Bhd.
+                <input id="salaryInput" type="number" min="0" step="1" />
+              </label>
+              <label>Personal Reliefs
+                <input id="personalReliefInput" type="number" min="0" step="1" />
+              </label>
+            </div>
+          </section>
+
+          <section class="tax-summary-grid">
+            <article class="tax-card">
+              <span>Enterprise Net Profit</span>
+              <strong id="enterpriseProfitOut">RM 0</strong>
+              <small id="enterpriseRevenueOut">Accommodation fees: RM 0</small>
+            </article>
+            <article class="tax-card">
+              <span>Sdn. Bhd. Taxable Profit</span>
+              <strong id="sdnProfitOut">RM 0</strong>
+              <small id="sdnRevenueOut">Accommodation fees: RM 0</small>
+            </article>
+            <article class="tax-card">
+              <span>Annual Director Salary</span>
+              <strong id="salaryOut">RM 0</strong>
+              <small id="salaryMonthsOut">0 months planned</small>
+            </article>
+            <article class="tax-card warning">
+              <span>Estimated Total Tax</span>
+              <strong id="totalTaxOut">RM 0</strong>
+              <small>Company + personal estimate</small>
+            </article>
+          </section>
+
+          <div class="tax-split-grid">
+            <section class="chart-panel">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Company side</p>
+                  <h3>Sdn. Bhd. Tax Estimate</h3>
+                </div>
+              </div>
+              <div class="tax-breakdown">
+                <div><span>Accommodation fees after transition</span><strong id="sdnGrossOut">RM 0</strong></div>
+                <div><span>Less expenses</span><strong id="sdnExpenseOut">RM 0</strong></div>
+                <div><span>Less director salary</span><strong id="salaryDeductionOut">RM 0</strong></div>
+                <div><span>Estimated company tax</span><strong id="companyTaxOut">RM 0</strong></div>
+              </div>
+            </section>
+
+            <section class="chart-panel">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Personal side</p>
+                  <h3>Personal Income Tax Estimate</h3>
+                </div>
+              </div>
+              <div class="tax-breakdown">
+                <div><span>Enterprise profit</span><strong id="personalEnterpriseOut">RM 0</strong></div>
+                <div><span>Salary income</span><strong id="personalSalaryOut">RM 0</strong></div>
+                <div><span>Less reliefs</span><strong id="reliefOut">RM 0</strong></div>
+                <div><span>Estimated personal tax</span><strong id="personalTaxOut">RM 0</strong></div>
+              </div>
+            </section>
+          </div>
+
+          <section class="dashboard-section">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Preparation notes</p>
+                <h3>Things To Prepare</h3>
+              </div>
+            </div>
+            <div class="tax-checklist">
+              <label><input id="taxNoteBooks" type="checkbox" /> Separate enterprise and Sdn. Bhd. income/expenses from the transition month</label>
+              <label><input id="taxNoteSalary" type="checkbox" /> Confirm director salary, EPF/SOCSO/EIS and monthly PCB approach</label>
+              <label><input id="taxNoteCp204" type="checkbox" /> Ask accountant about Sdn. Bhd. CP204 tax estimate and instalments</label>
+              <label><input id="taxNoteDocs" type="checkbox" /> Keep receipts, Airbnb statements, bank records and owner withdrawals clearly filed</label>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="bookingDialog">
+      <form method="dialog" class="booking-form" id="bookingForm">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">Booking details</p>
+            <h3 id="dialogTitle">Add Booking</h3>
+          </div>
+          <button class="icon-button" id="closeBookingDialog" type="button" title="Close">×</button>
+        </div>
+        <input id="bookingId" type="hidden" />
+        <div class="form-sections">
+          <section class="form-section">
+            <h4>Guest</h4>
+            <div class="form-grid two-col">
+              <div class="form-field">
+                <span>Channel</span>
+                <input id="channelInput" type="hidden" value="Direct" required />
+                <div class="booking-channel-choice" role="group" aria-label="Booking channel">
+                  <button class="booking-channel-option active" type="button" data-form-channel="Direct" aria-pressed="true">Direct</button>
+                  <button class="booking-channel-option" type="button" data-form-channel="Airbnb" aria-pressed="false">Airbnb</button>
+                </div>
+              </div>
+              <div class="guest-name-fields">
+                <label>Title
+                  <select id="guestTitleInput">
+                    <option>Mr</option>
+                    <option>Ms</option>
+                  </select>
+                </label>
+                <label>Guest Name
+                  <input id="guestInput" required placeholder="Example: Amira Tan" />
+                </label>
+              </div>
+              <label class="checkbox-label wide-field">
+                <input id="excludeCalculationsInput" type="checkbox" />
+                Influencer / complimentary stay (record only, exclude from calculations)
+              </label>
+              <label class="wide-field">Guest Contact
+                <input id="contactInput" placeholder="Phone or email" />
+              </label>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h4>Stay</h4>
+            <div class="form-grid two-col">
+              <label>Date of Arrival
+                <input id="arrivalInput" type="date" required />
+              </label>
+              <label>Nights of Stay
+                <input id="nightsInput" type="number" min="1" step="1" required />
+              </label>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h4>Payment</h4>
+            <div class="form-grid two-col">
+              <label>Accommodation Fees
+                <input id="revenueInput" type="number" min="0" step="0.01" required />
+              </label>
+              <label>Amount Received
+                <input id="paidInput" type="number" min="0" step="0.01" required />
+              </label>
+              <label>Damage Deposit Amount
+                <input id="depositAmountInput" type="number" min="0" step="0.01" value="500" />
+              </label>
+              <label class="checkbox-label">
+                <input id="depositPaidInput" type="checkbox" />
+                Damage deposit received
+              </label>
+              <label class="checkbox-label">
+                <input id="depositRefundedInput" type="checkbox" />
+                Damage deposit refunded
+              </label>
+            </div>
+          </section>
+        </div>
+        <div class="dialog-actions">
+          <button class="ghost-button" id="cancelBookingDialog" type="button">Cancel</button>
+          <button class="primary-button" id="saveBooking" value="default" type="submit">Save Booking</button>
+        </div>
+      </form>
+    </dialog>
+
+    <section class="owner-report-paper" id="ownerReportPrint" aria-label="Owner monthly report"></section>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
