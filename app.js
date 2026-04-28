@@ -1210,6 +1210,7 @@ function syncCloudAuthUi() {
   if (!ui.form || !ui.logout) return;
   const isLoggedIn = Boolean(cloudUser);
   ui.appShell?.classList.toggle("private-locked", !isLoggedIn);
+  if (ui.appShell) ui.appShell.hidden = !isLoggedIn;
   ui.form.classList.toggle("hidden", isLoggedIn);
   ui.logout.classList.toggle("hidden", !isLoggedIn);
   if (isLoggedIn) {
