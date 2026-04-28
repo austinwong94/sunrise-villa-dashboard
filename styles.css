@@ -45,10 +45,187 @@ button {
   cursor: pointer;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.cloud-auth {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 420px);
+  gap: 46px;
+  align-items: center;
+  padding: clamp(24px, 6vw, 80px);
+  background:
+    linear-gradient(180deg, rgba(255, 209, 102, 0.42), rgba(255, 246, 238, 0) 360px),
+    radial-gradient(circle at 18% 24%, rgba(255, 209, 102, 0.34), transparent 28%),
+    linear-gradient(135deg, #7a3650 0%, #c54f80 46%, #ffd9a1 100%);
+  color: white;
+}
+
+.cloud-auth:has(+ .app-shell:not(.private-locked)) {
+  min-height: auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px 22px;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #fffaf2;
+  color: var(--ink);
+  border-bottom: 1px solid rgba(122, 54, 80, 0.16);
+  box-shadow: 0 8px 22px rgba(116, 54, 83, 0.08);
+}
+
+.login-brand {
+  max-width: 620px;
+}
+
+.login-brand .brand-mark {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 24px;
+  color: white;
+}
+
+.login-kicker {
+  display: inline-flex;
+  margin-bottom: 12px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.login-brand h1 {
+  margin: 0;
+  font-size: clamp(42px, 7vw, 74px);
+  line-height: 0.94;
+  letter-spacing: 0;
+}
+
+.login-brand p {
+  max-width: 500px;
+  margin: 18px 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.login-card {
+  width: 100%;
+  padding: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  border-radius: 18px;
+  background: rgba(255, 250, 250, 0.92);
+  color: var(--ink);
+  box-shadow: 0 26px 60px rgba(67, 30, 50, 0.24);
+  backdrop-filter: blur(14px);
+}
+
+.login-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.login-card-head strong {
+  display: block;
+  font-size: 18px;
+}
+
+.login-card-head p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.cloud-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #c79a35;
+  box-shadow: 0 0 0 4px rgba(247, 168, 75, 0.18);
+}
+
+.cloud-auth[data-status="connected"] .cloud-dot {
+  background: #2f9b68;
+  box-shadow: 0 0 0 4px rgba(47, 155, 104, 0.16);
+}
+
+.cloud-auth[data-status="syncing"] .cloud-dot {
+  background: var(--amber);
+}
+
+.cloud-auth[data-status="error"] .cloud-dot {
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgba(200, 63, 94, 0.14);
+}
+
+.cloud-login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.cloud-login-form input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: white;
+}
+
+.cloud-login-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cloud-auth:has(+ .app-shell:not(.private-locked)) .login-brand {
+  display: none;
+}
+
+.cloud-auth:has(+ .app-shell:not(.private-locked)) .login-card {
+  width: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.cloud-auth:has(+ .app-shell:not(.private-locked)) .login-card-head {
+  margin: 0;
+}
+
+.cloud-auth:has(+ .app-shell:not(.private-locked)) .login-card-head strong {
+  font-size: 13px;
+}
+
+.cloud-auth:has(+ .app-shell:not(.private-locked)) .login-card-head p {
+  font-size: 12px;
+}
+
+.compact {
+  min-height: 36px;
+  padding-inline: 12px;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 290px minmax(0, 1fr);
+}
+
+.app-shell.private-locked {
+  display: none;
 }
 
 .sidebar {
@@ -2503,6 +2680,24 @@ dialog::backdrop {
 }
 
 @media (max-width: 700px) {
+  .cloud-auth,
+  .cloud-login-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .cloud-auth {
+    display: grid;
+  }
+
+  .cloud-login-form {
+    display: grid;
+  }
+
+  .cloud-login-form input {
+    width: 100%;
+  }
+
   .main,
   .sidebar {
     padding: 16px;

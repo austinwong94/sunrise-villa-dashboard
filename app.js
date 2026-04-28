@@ -3,6 +3,16 @@ const TAX_PLAN_KEY = "sunrise-villa-tax-plan-v1";
 const DOCUMENTS_KEY = "sunrise-villa-documents-v1";
 const PROFIT_KEY = "sunrise-villa-profit-v1";
 const SETTINGS_KEY = "sunrise-villa-settings-v1";
+const SUPABASE_URL = "https://nigzeyamrzrozftbujmm.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Hs81yUXxrGC4ydDZ7nWGsQ_MlCtxqED";
+const CLOUD_DATA_TYPE = "full_app_backup";
+const CLOUD_RECORD_KEY = "sunrise-villa-main";
+
+let supabaseClient = null;
+let cloudUser = null;
+let cloudRecordId = "";
+let cloudSaveTimer = null;
+let isRestoringCloudData = false;
 
 const issuers = {
   "Sunrise Villa Ventures": {
@@ -243,6 +253,7 @@ function normalizeBooking(booking) {
 
 function saveBookings() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
+  scheduleCloudSave();
 }
 
 function defaultTaxPlan() {
@@ -281,6 +292,7 @@ function loadTaxPlan() {
 
 function saveTaxPlan() {
   localStorage.setItem(TAX_PLAN_KEY, JSON.stringify(taxPlan));
+  scheduleCloudSave();
 }
 
 function loadDocuments() {
@@ -336,6 +348,7 @@ function normalizePayment(payment) {
 
 function saveDocuments() {
   localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(documents));
+  scheduleCloudSave();
 }
 
 function defaultProfitMonth() {
@@ -397,6 +410,7 @@ function expenseTotalFor(monthValue) {
 
 function saveProfitData() {
   localStorage.setItem(PROFIT_KEY, JSON.stringify(profitData));
+  scheduleCloudSave();
 }
 
 function defaultAppSettings() {
@@ -432,6 +446,7 @@ function loadAppSettings() {
 
 function saveAppSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
+  scheduleCloudSave();
 }
 
 function normalizeCommitment(commitment = {}) {
@@ -1168,6 +1183,150 @@ function allAppData() {
     appSettings,
   };
 }
+
+function cloudEls() {
+  return {
+    panel: document.querySelector("#cloudAuthPanel"),
+    appShell: document.querySelector("#appShell"),
+    form: document.querySelector("#cloudLoginForm"),
+    email: document.querySelector("#cloudEmail"),
+    password: document.querySelector("#cloudPassword"),
+    logout: document.querySelector("#cloudLogout"),
+    title: document.querySelector("#cloudStatusTitle"),
+    text: document.querySelector("#cloudStatusText"),
+    dot: document.querySelector("#cloudStatusDot"),
+  };
+}
+
+function setCloudStatus(mode, title, text) {
+  const ui = cloudEls();
+  ui.panel?.dataset && (ui.panel.dataset.status = mode);
+  if (ui.title) ui.title.textContent = title;
+  if (ui.text) ui.text.textContent = text;
+}
+
+function syncCloudAuthUi() {
+  const ui = cloudEls();
+  if (!ui.form || !ui.logout) return;
+  const isLoggedIn = Boolean(cloudUser);
+  ui.appShell?.classList.toggle("private-locked", !isLoggedIn);
+  ui.form.classList.toggle("hidden", isLoggedIn);
+  ui.logout.classList.toggle("hidden", !isLoggedIn);
+  if (isLoggedIn) {
+    setCloudStatus("connected", "Cloud storage connected", `Signed in as ${cloudUser.email}. Changes save to Supabase automatically.`);
+  } else {
+    setCloudStatus("offline", "Cloud storage not connected", "Log in to save bookings, documents, expenses, and settings to Supabase.");
+  }
+}
+
+function initSupabaseClient() {
+  if (!window.supabase?.createClient) {
+    setCloudStatus("error", "Supabase library not loaded", "Check your internet connection, then refresh this page.");
+    return null;
+  }
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  return supabaseClient;
+}
+
+function scheduleCloudSave() {
+  if (isRestoringCloudData || !supabaseClient || !cloudUser) return;
+  window.clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = window.setTimeout(saveCloudSnapshot, 700);
+}
+
+async function saveCloudSnapshot() {
+  if (!supabaseClient || !cloudUser) return;
+  const payload = {
+    user_id: cloudUser.id,
+    data_type: CLOUD_DATA_TYPE,
+    record_key: CLOUD_RECORD_KEY,
+    data: allAppData(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const request = cloudRecordId
+    ? supabaseClient.from("app_data").update(payload).eq("id", cloudRecordId).select("id").single()
+    : supabaseClient.from("app_data").insert(payload).select("id").single();
+
+  const { data, error } = await request;
+  if (error) {
+    setCloudStatus("error", "Cloud save failed", error.message || "Supabase could not save the latest changes.");
+    return;
+  }
+  cloudRecordId = data?.id || cloudRecordId;
+  setCloudStatus("connected", "Cloud storage connected", `Saved to Supabase at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`);
+}
+
+async function loadCloudSnapshot() {
+  if (!supabaseClient || !cloudUser) return;
+  setCloudStatus("syncing", "Loading cloud data", "Checking Supabase for your latest Sunrise Villa data.");
+  const { data, error } = await supabaseClient
+    .from("app_data")
+    .select("id, data, updated_at")
+    .eq("data_type", CLOUD_DATA_TYPE)
+    .eq("record_key", CLOUD_RECORD_KEY)
+    .eq("user_id", cloudUser.id)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    setCloudStatus("error", "Cloud load failed", error.message || "Supabase could not load your saved data.");
+    return;
+  }
+
+  if (data?.data) {
+    cloudRecordId = data.id;
+    isRestoringCloudData = true;
+    restoreAppData(data.data);
+    isRestoringCloudData = false;
+    setCloudStatus("connected", "Cloud storage connected", "Loaded your latest Supabase data.");
+    return;
+  }
+
+  setCloudStatus("syncing", "Creating first cloud backup", "No cloud data found yet, so the current website data will be saved now.");
+  await saveCloudSnapshot();
+}
+
+async function initCloudStorage() {
+  const client = initSupabaseClient();
+  syncCloudAuthUi();
+  if (!client) return;
+
+  const { data } = await client.auth.getSession();
+  cloudUser = data.session?.user || null;
+  syncCloudAuthUi();
+  if (cloudUser) await loadCloudSnapshot();
+
+  client.auth.onAuthStateChange((_event, session) => {
+    cloudUser = session?.user || null;
+    if (!cloudUser) cloudRecordId = "";
+    syncCloudAuthUi();
+    if (cloudUser) loadCloudSnapshot();
+  });
+}
+
+cloudEls().form?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!supabaseClient) initSupabaseClient();
+  if (!supabaseClient) return;
+  const ui = cloudEls();
+  setCloudStatus("syncing", "Logging in", "Connecting to Supabase.");
+  const { error } = await supabaseClient.auth.signInWithPassword({
+    email: ui.email.value.trim(),
+    password: ui.password.value,
+  });
+  if (error) {
+    setCloudStatus("error", "Login failed", error.message || "Check your Supabase email and password.");
+    return;
+  }
+  ui.password.value = "";
+});
+
+cloudEls().logout?.addEventListener("click", async () => {
+  if (!supabaseClient) return;
+  await supabaseClient.auth.signOut();
+});
 
 function downloadBackup() {
   appSettings = { ...appSettings, lastBackupAt: new Date().toISOString() };
@@ -2769,3 +2928,4 @@ els.documentArchiveRows?.addEventListener("click", (event) => {
 fillDocumentForm(defaultDocumentDraft());
 setView(activeView);
 renderAll();
+initCloudStorage();
