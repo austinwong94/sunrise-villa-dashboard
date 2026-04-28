@@ -24,6 +24,12 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background:
@@ -32,6 +38,7 @@ body {
     var(--page);
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
   letter-spacing: 0;
 }
 
@@ -222,6 +229,8 @@ button {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 290px minmax(0, 1fr);
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .app-shell.private-locked {
@@ -424,7 +433,9 @@ button {
 
 .main {
   min-width: 0;
+  max-width: 100%;
   padding: 24px;
+  overflow-x: clip;
 }
 
 .topbar {
@@ -436,7 +447,8 @@ button {
 }
 
 .topbar h2 {
-  font-size: 30px;
+  font-size: 28px;
+  line-height: 1.08;
 }
 
 .eyebrow {
@@ -595,6 +607,7 @@ button {
   grid-template-columns: minmax(0, 1.16fr) minmax(520px, 0.84fr);
   gap: 16px;
   align-items: start;
+  min-width: 0;
 }
 
 .calendar-panel,
@@ -602,6 +615,7 @@ button {
 .chart-panel,
 .table-panel,
 .preview-panel {
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -624,18 +638,18 @@ button {
 }
 
 .weekday-row span {
-  padding: 12px 10px;
+  padding: 11px 8px;
   text-align: center;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .calendar-grid {
-  min-height: 700px;
+  min-height: min(700px, 72vh);
 }
 
 .day-cell {
-  min-height: 118px;
+  min-height: 108px;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   padding: 9px 0;
@@ -662,6 +676,7 @@ button {
 
 .date-number {
   font-weight: 800;
+  font-size: 15px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -670,12 +685,12 @@ button {
 
 .booking-chip {
   border-radius: 0;
-  padding: 7px 9px;
-  font-size: 12px;
+  padding: 6px 8px;
+  font-size: 11px;
   line-height: 1.2;
   color: var(--ink);
   border: 1px solid transparent;
-  min-height: 43px;
+  min-height: 38px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -774,26 +789,30 @@ button {
   padding: 12px;
   max-height: 760px;
   overflow: auto;
+  min-width: 0;
 }
 
 .quick-view-card {
   border: 1px solid var(--line);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   background: white;
 }
 
 .quick-view-table {
   width: 100%;
-  min-width: 900px;
+  min-width: 980px;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .quick-view-table th,
 .quick-view-table td {
-  padding: 10px 9px;
+  padding: 9px 8px;
   border-bottom: 1px solid var(--line);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.18;
 }
 
 .quick-view-table th {
@@ -1494,15 +1513,17 @@ button {
 
 .message-panel {
   margin-top: 16px;
+  padding: 16px;
+  overflow: hidden;
 }
 
 .message-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
+  gap: 14px;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 16px;
+  margin-bottom: 14px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
@@ -1515,9 +1536,16 @@ button {
   margin: 0;
 }
 
+.message-hero h3 {
+  font-size: 20px;
+  line-height: 1.12;
+}
+
 .message-hero p:not(.eyebrow) {
   color: var(--muted);
   margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .message-code-card {
@@ -1537,18 +1565,33 @@ button {
 }
 
 .message-code-card strong {
-  font-size: 22px;
+  font-size: 20px;
+  line-height: 1.05;
 }
 
 .message-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr);
-  gap: 16px;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: 14px;
+  align-items: stretch;
 }
 
 .message-preview-wrap {
   display: grid;
   gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.message-form {
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
 }
 
 .helper-text {
@@ -1562,6 +1605,7 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  justify-content: flex-start;
 }
 
 .annual-commitments {
@@ -2010,6 +2054,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   min-width: 760px;
+  font-size: 13px;
 }
 
 .compact-table {
@@ -2019,14 +2064,14 @@ table {
 th,
 td {
   border-bottom: 1px solid var(--line);
-  padding: 11px 12px;
+  padding: 10px 11px;
   text-align: left;
   vertical-align: middle;
 }
 
 th {
   background: #fff0f6;
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
   color: var(--navy);
 }
@@ -2166,13 +2211,14 @@ td.actions {
 }
 
 .bookings-table {
-  min-width: 1180px;
+  min-width: 1040px;
   table-layout: fixed;
+  font-size: 12px;
 }
 
 .bookings-table th,
 .bookings-table td {
-  padding: 11px 10px;
+  padding: 9px 8px;
 }
 
 .bookings-table th {
@@ -2182,24 +2228,24 @@ td.actions {
 }
 
 .bookings-table td {
-  height: 58px;
+  height: 52px;
   line-height: 1.18;
 }
 
 .bookings-table [data-col="channel"] {
-  width: 92px;
+  width: 84px;
 }
 
 .bookings-table [data-col="record"] {
-  width: 112px;
+  width: 96px;
 }
 
 .bookings-table [data-col="guest"] {
-  width: 150px;
+  width: 136px;
 }
 
 .bookings-table [data-col="contact"] {
-  width: 130px;
+  width: 116px;
 }
 
 .bookings-table [data-col="prefix"] {
@@ -2207,7 +2253,7 @@ td.actions {
 }
 
 .bookings-table [data-col="arrival"] {
-  width: 108px;
+  width: 92px;
 }
 
 .bookings-table [data-col="nights"] {
@@ -2220,11 +2266,11 @@ td.actions {
 .bookings-table [data-col="total"],
 .bookings-table [data-col="received"],
 .bookings-table [data-col="balance"] {
-  width: 128px;
+  width: 112px;
 }
 
 .bookings-table [data-col="full"] {
-  width: 128px;
+  width: 108px;
 }
 
 .bookings-table [data-col="refund"] {
@@ -2232,7 +2278,7 @@ td.actions {
 }
 
 .bookings-table [data-col="actions"] {
-  width: 132px;
+  width: 118px;
 }
 
 .bookings-table .hidden-col {
@@ -2786,6 +2832,7 @@ dialog::backdrop {
   .sidebar {
     position: static;
     min-height: 0;
+    padding: 18px 20px;
   }
 
   .nav-tabs {
@@ -2799,6 +2846,48 @@ dialog::backdrop {
   .tax-hero,
   .tax-split-grid {
     grid-template-columns: 1fr;
+  }
+
+  .main {
+    padding: 18px;
+  }
+
+  .topbar h2 {
+    font-size: 26px;
+  }
+
+  .calendar-grid {
+    min-height: min(620px, 68vh);
+  }
+
+  .day-cell {
+    min-height: 92px;
+    gap: 5px;
+  }
+
+  .date-number {
+    font-size: 14px;
+    padding: 0 7px;
+  }
+
+  .booking-chip {
+    min-height: 34px;
+    padding: 5px 7px;
+    font-size: 10.5px;
+  }
+
+  .stay-segment.start,
+  .stay-segment.single {
+    margin-left: 7px;
+  }
+
+  .stay-segment.end,
+  .stay-segment.single {
+    margin-right: 7px;
+  }
+
+  .details-list {
+    max-height: none;
   }
 
   .document-preview-shell {
@@ -2915,6 +3004,11 @@ dialog::backdrop {
     padding: 6px;
   }
 
+  .weekday-row span {
+    padding: 9px 4px;
+    font-size: 11px;
+  }
+
   .booking-chip {
     font-size: 11px;
     padding: 5px;
@@ -2922,6 +3016,14 @@ dialog::backdrop {
 
   .booking-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .message-panel {
+    padding: 12px;
+  }
+
+  .message-code-card {
+    width: 100%;
   }
 
   .filter-drawer {
