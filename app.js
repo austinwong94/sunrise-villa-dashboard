@@ -66,6 +66,7 @@ const els = {
   detailMonth: document.querySelector("#detailMonth"),
   bookingCount: document.querySelector("#bookingCount"),
   detailsList: document.querySelector("#detailsList"),
+  quickColumnControls: document.querySelector("#quickColumnControls"),
   downloadQuickView: document.querySelector("#downloadQuickView"),
   bookingRows: document.querySelector("#bookingRows"),
   bookingsTable: document.querySelector("#bookingsTable"),
@@ -427,6 +428,13 @@ function defaultAppSettings() {
       refund: true,
     },
     bookingColumnWidths: {},
+    quickColumns: {
+      deposit: false,
+      total: false,
+      full: false,
+      refund: false,
+    },
+    quickColumnWidths: {},
     commitments: defaultCommitments,
     message: {
       checkinTime: "3:00 PM",
@@ -448,6 +456,8 @@ function loadAppSettings() {
       dashboardHidden: { ...fallback.dashboardHidden, ...(parsed.dashboardHidden || {}) },
       bookingColumns: { ...fallback.bookingColumns, ...(parsed.bookingColumns || {}) },
       bookingColumnWidths: { ...fallback.bookingColumnWidths, ...(parsed.bookingColumnWidths || {}) },
+      quickColumns: { ...fallback.quickColumns, ...(parsed.quickColumns || {}) },
+      quickColumnWidths: { ...fallback.quickColumnWidths, ...(parsed.quickColumnWidths || {}) },
       commitments: Array.isArray(parsed.commitments) ? parsed.commitments.map(normalizeCommitment) : fallback.commitments,
       message: { ...fallback.message, ...(parsed.message || {}) },
     };
@@ -646,6 +656,51 @@ function fullReceivedControl(booking) {
       <span>${isFull ? "Full" : "Mark full"}</span>
     </label>
   `;
+}
+
+const quickColumnOptions = [
+  { key: "guest", label: "Guest", locked: true },
+  { key: "type", label: "Type" },
+  { key: "checkin", label: "Check-in", locked: true },
+  { key: "nights", label: "Nights", locked: true },
+  { key: "revenue", label: "Accommodation" },
+  { key: "deposit", label: "Deposit" },
+  { key: "total", label: "Total" },
+  { key: "received", label: "Received" },
+  { key: "full", label: "Full received" },
+  { key: "balance", label: "Balance", locked: true },
+  { key: "refund", label: "Refund" },
+];
+
+function isQuickColumnVisible(key) {
+  const column = quickColumnOptions.find((item) => item.key === key);
+  if (column?.locked) return true;
+  return appSettings.quickColumns?.[key] !== false;
+}
+
+function quickCell(col, content, extraClass = "") {
+  const hidden = isQuickColumnVisible(col) ? "" : " hidden-col";
+  return `<td data-col="${col}" class="${`${extraClass}${hidden}`.trim()}">${content}</td>`;
+}
+
+function renderQuickColumnControls() {
+  if (!els.quickColumnControls) return;
+  els.quickColumnControls.innerHTML = quickColumnOptions
+    .filter((column) => !column.locked)
+    .map(
+      (column) => `
+        <label class="column-toggle">
+          <input type="checkbox" data-quick-column="${column.key}" ${isQuickColumnVisible(column.key) ? "checked" : ""} />
+          <span>${column.label}</span>
+        </label>
+      `,
+    )
+    .join("");
+  document.querySelectorAll("#quickViewTable [data-col]").forEach((cell) => {
+    cell.classList.toggle("hidden-col", !isQuickColumnVisible(cell.dataset.col));
+  });
+  applyTableColumnWidths("#quickViewTable", appSettings.quickColumnWidths || {});
+  setupTableColumnResizers("#quickViewTable", "quick");
 }
 
 function setDepositRefunded(id, refunded) {
@@ -1040,25 +1095,26 @@ function renderDetails() {
 
   if (!monthBookings.length) {
     els.detailsList.innerHTML = `<div class="empty-state">No bookings for this month.</div>`;
+    renderQuickColumnControls();
     return;
   }
 
   els.detailsList.innerHTML = `
     <div class="quick-view-card">
-      <table class="quick-view-table" aria-label="Quick booking list">
+      <table class="quick-view-table" id="quickViewTable" aria-label="Quick booking list">
         <thead>
           <tr>
-            <th>Guest</th>
-            <th>Type</th>
-            <th>Check-in</th>
-            <th>Nights</th>
-            <th>Accommodation Fees</th>
-            <th>Damage Deposit</th>
-            <th>Total to Receive</th>
-            <th>Received</th>
-            <th>Full Received</th>
-            <th>Balance</th>
-            <th>Refund</th>
+            <th data-col="guest">Guest</th>
+            <th data-col="type">Type</th>
+            <th data-col="checkin">Check-in</th>
+            <th data-col="nights">Nights</th>
+            <th data-col="revenue">Accommodation Fees</th>
+            <th data-col="deposit">Damage Deposit</th>
+            <th data-col="total">Total to Receive</th>
+            <th data-col="received">Received</th>
+            <th data-col="full">Full Received</th>
+            <th data-col="balance">Balance</th>
+            <th data-col="refund">Refund</th>
           </tr>
         </thead>
         <tbody>
@@ -1068,7 +1124,7 @@ function renderDetails() {
               const channelClass = booking.channel.toLowerCase();
               return `
                 <tr>
-                  <td>
+                  ${quickCell("guest", `
                     <div class="guest-cell">
                       <span class="guest-code">${prefixFor(booking.guest)}</span>
                       <span class="guest-meta">
@@ -1076,17 +1132,17 @@ function renderDetails() {
                         <span>${shortDate(departureFor(booking))} out</span>
                       </span>
                     </div>
-                  </td>
-                  <td>${channelBadgeFor(booking)}</td>
-                  <td><strong>${quickDate(booking.arrival)}</strong></td>
-                  <td><strong>${booking.nights}</strong></td>
-                  <td class="amount-cell">${money(booking.revenue)}</td>
-                  <td class="amount-cell">${money(booking.depositAmount)}</td>
-                  <td class="amount-cell">${money(totalToReceiveFor(booking))}</td>
-                  <td class="amount-cell">${money(booking.paid)}</td>
-                  <td>${fullReceivedControl(booking)}</td>
-                  <td class="amount-cell ${balance > 0 ? "balance-due" : ""}">${money(balance)}</td>
-                  <td>${refundControl(booking)}</td>
+                  `)}
+                  ${quickCell("type", channelBadgeFor(booking))}
+                  ${quickCell("checkin", `<strong>${quickDate(booking.arrival)}</strong>`)}
+                  ${quickCell("nights", `<strong>${booking.nights}</strong>`)}
+                  ${quickCell("revenue", money(booking.revenue), "amount-cell")}
+                  ${quickCell("deposit", money(booking.depositAmount), "amount-cell")}
+                  ${quickCell("total", money(totalToReceiveFor(booking)), "amount-cell")}
+                  ${quickCell("received", money(booking.paid), "amount-cell")}
+                  ${quickCell("full", fullReceivedControl(booking))}
+                  ${quickCell("balance", money(balance), `amount-cell ${balance > 0 ? "balance-due" : ""}`)}
+                  ${quickCell("refund", refundControl(booking))}
                 </tr>
               `;
             })
@@ -1100,6 +1156,7 @@ function renderDetails() {
       </div>
     </div>
   `;
+  renderQuickColumnControls();
 }
 
 function drawQuickViewImage() {
@@ -1536,6 +1593,8 @@ function restoreAppData(data) {
           ...data.appSettings,
           bookingColumns: { ...defaultAppSettings().bookingColumns, ...(data.appSettings.bookingColumns || {}) },
           bookingColumnWidths: { ...defaultAppSettings().bookingColumnWidths, ...(data.appSettings.bookingColumnWidths || {}) },
+          quickColumns: { ...defaultAppSettings().quickColumns, ...(data.appSettings.quickColumns || {}) },
+          quickColumnWidths: { ...defaultAppSettings().quickColumnWidths, ...(data.appSettings.quickColumnWidths || {}) },
           message: { ...defaultAppSettings().message, ...(data.appSettings.message || {}) },
         }
       : appSettings;
@@ -1655,13 +1714,12 @@ function renderBookingColumnControls() {
   document.querySelectorAll("#bookingsTable [data-col]").forEach((cell) => {
     cell.classList.toggle("hidden-col", !isBookingColumnVisible(cell.dataset.col));
   });
-  applyBookingColumnWidths();
-  setupBookingColumnResizers();
+  applyTableColumnWidths("#bookingsTable", appSettings.bookingColumnWidths || {});
+  setupTableColumnResizers("#bookingsTable", "booking");
 }
 
-function applyBookingColumnWidths() {
-  const widths = appSettings.bookingColumnWidths || {};
-  document.querySelectorAll("#bookingsTable [data-col]").forEach((cell) => {
+function applyTableColumnWidths(tableSelector, widths) {
+  document.querySelectorAll(`${tableSelector} [data-col]`).forEach((cell) => {
     const width = Number(widths[cell.dataset.col] || 0);
     if (width > 0) {
       cell.style.width = `${width}px`;
@@ -1675,8 +1733,8 @@ function applyBookingColumnWidths() {
 
 let activeColumnResize = null;
 
-function setupBookingColumnResizers() {
-  document.querySelectorAll("#bookingsTable thead th[data-col]").forEach((th) => {
+function setupTableColumnResizers(tableSelector, tableType) {
+  document.querySelectorAll(`${tableSelector} thead th[data-col]`).forEach((th) => {
     if (th.dataset.resizeReady) return;
     th.dataset.resizeReady = "true";
     const handle = document.createElement("span");
@@ -1685,6 +1743,8 @@ function setupBookingColumnResizers() {
     handle.addEventListener("mousedown", (event) => {
       event.preventDefault();
       activeColumnResize = {
+        tableType,
+        tableSelector,
         key: th.dataset.col,
         startX: event.clientX,
         startWidth: th.getBoundingClientRect().width,
@@ -1698,14 +1758,15 @@ function setupBookingColumnResizers() {
 document.addEventListener("mousemove", (event) => {
   if (!activeColumnResize) return;
   const nextWidth = Math.max(64, Math.min(260, Math.round(activeColumnResize.startWidth + event.clientX - activeColumnResize.startX)));
+  const key = activeColumnResize.tableType === "quick" ? "quickColumnWidths" : "bookingColumnWidths";
   appSettings = {
     ...appSettings,
-    bookingColumnWidths: {
-      ...(appSettings.bookingColumnWidths || {}),
+    [key]: {
+      ...(appSettings[key] || {}),
       [activeColumnResize.key]: nextWidth,
     },
   };
-  applyBookingColumnWidths();
+  applyTableColumnWidths(activeColumnResize.tableSelector, appSettings[key] || {});
 });
 
 document.addEventListener("mouseup", () => {
@@ -2739,6 +2800,20 @@ els.bookingColumnControls?.addEventListener("change", (event) => {
   };
   saveAppSettings();
   renderBookingsTable();
+});
+
+els.quickColumnControls?.addEventListener("change", (event) => {
+  const key = event.target.dataset.quickColumn;
+  if (!key) return;
+  appSettings = {
+    ...appSettings,
+    quickColumns: {
+      ...(appSettings.quickColumns || {}),
+      [key]: event.target.checked,
+    },
+  };
+  saveAppSettings();
+  renderDetails();
 });
 
 [
