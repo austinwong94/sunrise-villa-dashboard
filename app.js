@@ -68,6 +68,8 @@ const els = {
   detailsList: document.querySelector("#detailsList"),
   downloadQuickView: document.querySelector("#downloadQuickView"),
   bookingRows: document.querySelector("#bookingRows"),
+  bookingsTable: document.querySelector("#bookingsTable"),
+  bookingColumnControls: document.querySelector("#bookingColumnControls"),
   bookingSearch: document.querySelector("#bookingSearch"),
   channelFilter: document.querySelector("#channelFilter"),
   paymentFilter: document.querySelector("#paymentFilter"),
@@ -417,6 +419,14 @@ function defaultAppSettings() {
   return {
     lastBackupAt: "",
     dashboardHidden: {},
+    bookingColumns: {
+      record: false,
+      prefix: false,
+      contact: true,
+      full: true,
+      refund: true,
+    },
+    bookingColumnWidths: {},
     commitments: defaultCommitments,
     message: {
       checkinTime: "3:00 PM",
@@ -436,6 +446,8 @@ function loadAppSettings() {
       ...fallback,
       ...parsed,
       dashboardHidden: { ...fallback.dashboardHidden, ...(parsed.dashboardHidden || {}) },
+      bookingColumns: { ...fallback.bookingColumns, ...(parsed.bookingColumns || {}) },
+      bookingColumnWidths: { ...fallback.bookingColumnWidths, ...(parsed.bookingColumnWidths || {}) },
       commitments: Array.isArray(parsed.commitments) ? parsed.commitments.map(normalizeCommitment) : fallback.commitments,
       message: { ...fallback.message, ...(parsed.message || {}) },
     };
@@ -789,7 +801,7 @@ function quickDate(iso) {
 }
 
 function prefixFor(name) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   return (parts[0] || "").slice(0, 2).toUpperCase();
 }
@@ -1519,7 +1531,13 @@ function restoreAppData(data) {
       : taxPlan;
     profitData = data.profitData && typeof data.profitData === "object" ? data.profitData : profitData;
     appSettings = data.appSettings
-      ? { ...defaultAppSettings(), ...data.appSettings, message: { ...defaultAppSettings().message, ...(data.appSettings.message || {}) } }
+      ? {
+          ...defaultAppSettings(),
+          ...data.appSettings,
+          bookingColumns: { ...defaultAppSettings().bookingColumns, ...(data.appSettings.bookingColumns || {}) },
+          bookingColumnWidths: { ...defaultAppSettings().bookingColumnWidths, ...(data.appSettings.bookingColumnWidths || {}) },
+          message: { ...defaultAppSettings().message, ...(data.appSettings.message || {}) },
+        }
       : appSettings;
   }
   saveBookings();
@@ -1591,6 +1609,111 @@ function renderMessageGenerator() {
   if (current && bookings.some((booking) => booking.id === current)) els.messageBookingSelect.value = current;
   fillMessageFromBooking(false);
 }
+
+const bookingColumnOptions = [
+  { key: "channel", label: "Channel", locked: true },
+  { key: "record", label: "Record type" },
+  { key: "guest", label: "Guest", locked: true },
+  { key: "contact", label: "Contact" },
+  { key: "prefix", label: "Prefix" },
+  { key: "arrival", label: "Arrival", locked: true },
+  { key: "nights", label: "Nights", locked: true },
+  { key: "revenue", label: "Accommodation" },
+  { key: "deposit", label: "Deposit" },
+  { key: "total", label: "Total" },
+  { key: "received", label: "Received" },
+  { key: "full", label: "Full received" },
+  { key: "balance", label: "Balance", locked: true },
+  { key: "refund", label: "Refund" },
+  { key: "actions", label: "Actions", locked: true },
+];
+
+function isBookingColumnVisible(key) {
+  const column = bookingColumnOptions.find((item) => item.key === key);
+  if (column?.locked) return true;
+  return appSettings.bookingColumns?.[key] !== false;
+}
+
+function bookingCell(col, content, extraClass = "") {
+  const hidden = isBookingColumnVisible(col) ? "" : " hidden-col";
+  return `<td data-col="${col}" class="${`${extraClass}${hidden}`.trim()}">${content}</td>`;
+}
+
+function renderBookingColumnControls() {
+  if (!els.bookingColumnControls) return;
+  els.bookingColumnControls.innerHTML = bookingColumnOptions
+    .filter((column) => !column.locked)
+    .map(
+      (column) => `
+        <label class="column-toggle">
+          <input type="checkbox" data-booking-column="${column.key}" ${isBookingColumnVisible(column.key) ? "checked" : ""} />
+          <span>${column.label}</span>
+        </label>
+      `,
+    )
+    .join("");
+  document.querySelectorAll("#bookingsTable [data-col]").forEach((cell) => {
+    cell.classList.toggle("hidden-col", !isBookingColumnVisible(cell.dataset.col));
+  });
+  applyBookingColumnWidths();
+  setupBookingColumnResizers();
+}
+
+function applyBookingColumnWidths() {
+  const widths = appSettings.bookingColumnWidths || {};
+  document.querySelectorAll("#bookingsTable [data-col]").forEach((cell) => {
+    const width = Number(widths[cell.dataset.col] || 0);
+    if (width > 0) {
+      cell.style.width = `${width}px`;
+      cell.style.minWidth = `${width}px`;
+    } else {
+      cell.style.width = "";
+      cell.style.minWidth = "";
+    }
+  });
+}
+
+let activeColumnResize = null;
+
+function setupBookingColumnResizers() {
+  document.querySelectorAll("#bookingsTable thead th[data-col]").forEach((th) => {
+    if (th.dataset.resizeReady) return;
+    th.dataset.resizeReady = "true";
+    const handle = document.createElement("span");
+    handle.className = "column-resize-handle";
+    handle.setAttribute("aria-hidden", "true");
+    handle.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      activeColumnResize = {
+        key: th.dataset.col,
+        startX: event.clientX,
+        startWidth: th.getBoundingClientRect().width,
+      };
+      document.body.classList.add("resizing-column");
+    });
+    th.appendChild(handle);
+  });
+}
+
+document.addEventListener("mousemove", (event) => {
+  if (!activeColumnResize) return;
+  const nextWidth = Math.max(64, Math.min(260, Math.round(activeColumnResize.startWidth + event.clientX - activeColumnResize.startX)));
+  appSettings = {
+    ...appSettings,
+    bookingColumnWidths: {
+      ...(appSettings.bookingColumnWidths || {}),
+      [activeColumnResize.key]: nextWidth,
+    },
+  };
+  applyBookingColumnWidths();
+});
+
+document.addEventListener("mouseup", () => {
+  if (!activeColumnResize) return;
+  activeColumnResize = null;
+  document.body.classList.remove("resizing-column");
+  saveAppSettings();
+});
 
 function setupDashboardToggles() {
   document.querySelectorAll("#dashboardView .dashboard-section").forEach((section, index) => {
@@ -1813,28 +1936,29 @@ function renderBookingsTable() {
       const balance = balanceFor(booking);
       return `
         <tr>
-          <td>${channelBadgeFor(booking)}</td>
-          <td>${isExcludedBooking(booking) ? `<span class="channel-badge influencer">Record only</span>` : `<span class="channel-badge direct">Financial</span>`}</td>
-          <td>${escapeHtml(booking.guest)}</td>
-          <td>${escapeHtml(booking.contact || "-")}</td>
-          <td><strong>${prefixFor(booking.guest)}</strong></td>
-          <td>${shortDate(booking.arrival)}</td>
-          <td>${booking.nights}</td>
-          <td>${money(booking.revenue)}</td>
-          <td>${money(booking.depositAmount)}</td>
-          <td>${money(totalToReceiveFor(booking))}</td>
-          <td>${money(booking.paid)}</td>
-          <td>${fullReceivedControl(booking)}</td>
-          <td class="${balance > 0 ? "balance-due" : ""}">${money(balance)}</td>
-          <td>${refundControl(booking)}</td>
-          <td class="actions">
+          ${bookingCell("channel", channelBadgeFor(booking))}
+          ${bookingCell("record", isExcludedBooking(booking) ? `<span class="channel-badge influencer">Record only</span>` : `<span class="channel-badge direct">Financial</span>`)}
+          ${bookingCell("guest", escapeHtml(booking.guest), "booking-guest-cell")}
+          ${bookingCell("contact", escapeHtml(booking.contact || "-"), "contact-cell")}
+          ${bookingCell("prefix", `<strong>${prefixFor(booking.guest)}</strong>`)}
+          ${bookingCell("arrival", shortDate(booking.arrival), "date-cell")}
+          ${bookingCell("nights", booking.nights)}
+          ${bookingCell("revenue", money(booking.revenue), "money-cell")}
+          ${bookingCell("deposit", money(booking.depositAmount), "money-cell")}
+          ${bookingCell("total", money(totalToReceiveFor(booking)), "money-cell")}
+          ${bookingCell("received", money(booking.paid), "money-cell")}
+          ${bookingCell("full", fullReceivedControl(booking))}
+          ${bookingCell("balance", money(balance), balance > 0 ? "money-cell balance-due" : "money-cell")}
+          ${bookingCell("refund", refundControl(booking))}
+          ${bookingCell("actions", `
             <button class="small-action" type="button" data-edit="${booking.id}">Edit</button>
             <button class="small-action danger" type="button" data-delete="${booking.id}">Delete</button>
-          </td>
+          `, "actions")}
         </tr>
       `;
     })
     .join("") || `<tr><td colspan="15" class="empty-row">No bookings match these filters.</td></tr>`;
+  renderBookingColumnControls();
 }
 
 function renderOwnerReport() {
@@ -2601,6 +2725,20 @@ document.querySelector("#importJson").addEventListener("change", async (event) =
 [els.bookingSearch, els.channelFilter, els.paymentFilter, els.depositFilter].forEach((control) => {
   control?.addEventListener("input", renderBookingsTable);
   control?.addEventListener("change", renderBookingsTable);
+});
+
+els.bookingColumnControls?.addEventListener("change", (event) => {
+  const key = event.target.dataset.bookingColumn;
+  if (!key) return;
+  appSettings = {
+    ...appSettings,
+    bookingColumns: {
+      ...(appSettings.bookingColumns || {}),
+      [key]: event.target.checked,
+    },
+  };
+  saveAppSettings();
+  renderBookingsTable();
 });
 
 [

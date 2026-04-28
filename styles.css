@@ -2049,7 +2049,7 @@ td.actions {
 
 .booking-toolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto;
+  grid-template-columns: minmax(240px, 1fr) auto auto;
   gap: 10px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
@@ -2120,6 +2120,171 @@ td.actions {
   border-radius: 8px;
   background: white;
   box-shadow: var(--shadow);
+}
+
+.column-grid {
+  position: absolute;
+  right: 0;
+  z-index: 6;
+  width: min(360px, calc(100vw - 48px));
+  margin-top: 8px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.column-toggle {
+  min-height: 34px;
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 8px !important;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--ink) !important;
+  text-transform: none !important;
+  font-size: 12px !important;
+}
+
+.column-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--teal);
+}
+
+.bookings-table-wrap {
+  max-width: 100%;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.bookings-table {
+  min-width: 1180px;
+  table-layout: fixed;
+}
+
+.bookings-table th,
+.bookings-table td {
+  padding: 11px 10px;
+}
+
+.bookings-table th {
+  line-height: 1.1;
+  position: relative;
+  user-select: none;
+}
+
+.bookings-table td {
+  height: 58px;
+  line-height: 1.18;
+}
+
+.bookings-table [data-col="channel"] {
+  width: 92px;
+}
+
+.bookings-table [data-col="record"] {
+  width: 112px;
+}
+
+.bookings-table [data-col="guest"] {
+  width: 150px;
+}
+
+.bookings-table [data-col="contact"] {
+  width: 130px;
+}
+
+.bookings-table [data-col="prefix"] {
+  width: 72px;
+}
+
+.bookings-table [data-col="arrival"] {
+  width: 108px;
+}
+
+.bookings-table [data-col="nights"] {
+  width: 70px;
+  text-align: center;
+}
+
+.bookings-table [data-col="revenue"],
+.bookings-table [data-col="deposit"],
+.bookings-table [data-col="total"],
+.bookings-table [data-col="received"],
+.bookings-table [data-col="balance"] {
+  width: 128px;
+}
+
+.bookings-table [data-col="full"] {
+  width: 128px;
+}
+
+.bookings-table [data-col="refund"] {
+  width: 116px;
+}
+
+.bookings-table [data-col="actions"] {
+  width: 132px;
+}
+
+.bookings-table .hidden-col {
+  display: none;
+}
+
+.bookings-table .money-cell {
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.bookings-table .booking-guest-cell,
+.bookings-table .contact-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.bookings-table .date-cell {
+  white-space: normal;
+}
+
+.bookings-table th[data-col="actions"],
+.bookings-table td.actions {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: white;
+  box-shadow: -8px 0 16px rgba(116, 54, 83, 0.06);
+}
+
+.bookings-table th[data-col="actions"] {
+  background: #fff0f6;
+}
+
+.column-resize-handle {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  bottom: 8px;
+  width: 8px;
+  cursor: col-resize;
+  border-right: 2px solid transparent;
+}
+
+.column-resize-handle:hover,
+body.resizing-column .column-resize-handle {
+  border-right-color: rgba(217, 79, 131, 0.55);
+}
+
+body.resizing-column {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .small-action {
@@ -2768,6 +2933,12 @@ dialog::backdrop {
   }
 
   .filter-grid {
+    position: static;
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .column-grid {
     position: static;
     width: 100%;
     grid-template-columns: 1fr;

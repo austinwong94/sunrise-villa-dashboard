@@ -453,6 +453,10 @@
                 <span>Search</span>
                 <input id="bookingSearch" type="search" placeholder="Guest name or prefix" />
               </label>
+              <details class="filter-drawer column-drawer">
+                <summary>Columns</summary>
+                <div class="column-grid" id="bookingColumnControls"></div>
+              </details>
               <details class="filter-drawer">
                 <summary>Filters</summary>
                 <div class="filter-grid">
@@ -485,25 +489,25 @@
                 </div>
               </details>
             </div>
-            <div class="table-scroll">
-              <table>
+            <div class="table-scroll bookings-table-wrap">
+              <table class="bookings-table" id="bookingsTable">
                 <thead>
                   <tr>
-                    <th>Channel</th>
-                    <th>Record Type</th>
-                    <th>Guest</th>
-                    <th>Contact</th>
-                    <th>Prefix</th>
-                    <th>Arrival</th>
-                    <th>Nights</th>
-                    <th>Accommodation Fees</th>
-                    <th>Damage Deposit</th>
-                    <th>Total to Receive</th>
-                    <th>Received</th>
-                    <th>Full Received</th>
-                    <th>Balance</th>
-                    <th>Refunded</th>
-                    <th></th>
+                    <th data-col="channel">Channel</th>
+                    <th data-col="record">Record Type</th>
+                    <th data-col="guest">Guest</th>
+                    <th data-col="contact">Contact</th>
+                    <th data-col="prefix">Prefix</th>
+                    <th data-col="arrival">Arrival</th>
+                    <th data-col="nights">Nights</th>
+                    <th data-col="revenue">Accommodation Fees</th>
+                    <th data-col="deposit">Damage Deposit</th>
+                    <th data-col="total">Total to Receive</th>
+                    <th data-col="received">Received</th>
+                    <th data-col="full">Full Received</th>
+                    <th data-col="balance">Balance</th>
+                    <th data-col="refund">Refunded</th>
+                    <th data-col="actions"></th>
                   </tr>
                 </thead>
                 <tbody id="bookingRows"></tbody>
