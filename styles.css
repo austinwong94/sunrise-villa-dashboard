@@ -2395,18 +2395,19 @@ td.actions {
 
 .booking-toolbar {
   display: grid;
-  grid-template-columns: minmax(160px, 0.32fr) minmax(240px, 1fr) auto auto;
+  grid-template-columns: minmax(250px, 0.42fr) minmax(220px, 1fr) 108px 108px;
   gap: 10px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
   background: var(--surface-soft);
-  align-items: start;
+  align-items: end;
 }
 
 .booking-toolbar label,
 .filter-grid label {
   display: grid;
   gap: 6px;
+  min-width: 0;
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
@@ -2420,6 +2421,8 @@ td.actions {
 .booking-toolbar input,
 .booking-toolbar select,
 .filter-grid select {
+  width: 100%;
+  min-width: 0;
   min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2430,10 +2433,12 @@ td.actions {
 
 .filter-drawer {
   position: relative;
+  align-self: end;
 }
 
 .filter-drawer summary {
   min-height: 38px;
+  width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;

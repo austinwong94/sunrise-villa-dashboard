@@ -83,6 +83,7 @@ const els = {
   downloadQuickView: document.querySelector("#downloadQuickView"),
   bookingRows: document.querySelector("#bookingRows"),
   bookingsTable: document.querySelector("#bookingsTable"),
+  bookingTableTitle: document.querySelector("#bookingTableTitle"),
   bookingColumnControls: document.querySelector("#bookingColumnControls"),
   bookingMonthFilter: document.querySelector("#bookingMonthFilter"),
   bookingSearch: document.querySelector("#bookingSearch"),
@@ -2355,6 +2356,9 @@ function renderBookingsTable() {
   const search = els.bookingSearch?.value.trim().toLowerCase() || "";
   const monthFilter = els.bookingMonthFilter?.value || appSettings.bookingMonthFilter || "Selected";
   const effectiveMonth = monthFilter === "Selected" ? selectedMonth : monthFilter;
+  if (els.bookingTableTitle) {
+    els.bookingTableTitle.textContent = effectiveMonth === "All" ? "All Bookings" : `${monthLabel(effectiveMonth)} Bookings`;
+  }
   const channel = els.channelFilter?.value || "All";
   const payment = els.paymentFilter?.value || "All";
   const deposit = els.depositFilter?.value || "All";
@@ -2999,6 +3003,15 @@ function renderMonthButtons() {
   }).join("");
 }
 
+function setSelectedMonth(monthValue, syncBookingFilter = true) {
+  selectedMonth = monthValue;
+  if (syncBookingFilter) {
+    appSettings = { ...appSettings, bookingMonthFilter: "Selected" };
+    if (els.bookingMonthFilter) els.bookingMonthFilter.value = "Selected";
+    saveAppSettings();
+  }
+}
+
 function renderAll() {
   els.monthPicker.value = selectedMonth;
   renderMonthButtons();
@@ -3022,26 +3035,26 @@ document.querySelectorAll(".nav-button").forEach((button) => {
 });
 
 els.monthPicker.addEventListener("change", () => {
-  selectedMonth = els.monthPicker.value;
+  setSelectedMonth(els.monthPicker.value);
   renderAll();
 });
 
 els.monthButtonGrid?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-month-value]");
   if (!button) return;
-  selectedMonth = button.dataset.monthValue;
+  setSelectedMonth(button.dataset.monthValue);
   renderAll();
 });
 
 els.prevMonth.addEventListener("click", () => {
   const [year, month] = selectedMonth.split("-").map(Number);
-  selectedMonth = `${year - 1}-${String(month).padStart(2, "0")}`;
+  setSelectedMonth(`${year - 1}-${String(month).padStart(2, "0")}`);
   renderAll();
 });
 
 els.nextMonth.addEventListener("click", () => {
   const [year, month] = selectedMonth.split("-").map(Number);
-  selectedMonth = `${year + 1}-${String(month).padStart(2, "0")}`;
+  setSelectedMonth(`${year + 1}-${String(month).padStart(2, "0")}`);
   renderAll();
 });
 
@@ -3117,7 +3130,7 @@ els.form.addEventListener("submit", (event) => {
     ? bookings.map((booking) => (booking.id === id ? nextBooking : booking))
     : [...bookings, nextBooking];
 
-  selectedMonth = nextBooking.arrival.slice(0, 7);
+  setSelectedMonth(nextBooking.arrival.slice(0, 7));
   saveBookings();
   els.dialog.close();
   renderAll();
