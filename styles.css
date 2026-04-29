@@ -11,6 +11,11 @@
   --amber: #f7a84b;
   --coral: #ff7c73;
   --sun: #ffd166;
+  --direct-soft: #fff9df;
+  --direct-line: #f0d982;
+  --direct-ink: #725018;
+  --airbnb-soft: #fde8f1;
+  --airbnb-line: #efabc8;
   --red: #c83f5e;
   --blue-soft: #fff0f5;
   --green-soft: #e9f8ee;
@@ -570,19 +575,19 @@ button {
   order: 0;
 }
 
-#dashboardView.active > .dashboard-month {
-  order: 1;
-}
-
-#dashboardView.active > .dashboard-profit {
+#dashboardView.active > .dashboard-year {
   order: 2;
 }
 
-#dashboardView.active > .dashboard-performance {
+#dashboardView.active > .dashboard-month {
+  order: 2;
+}
+
+#dashboardView.active > .dashboard-profit {
   order: 3;
 }
 
-#dashboardView.active > .dashboard-pnl {
+#dashboardView.active > .dashboard-performance {
   order: 4;
 }
 
@@ -590,16 +595,12 @@ button {
   order: 5;
 }
 
-#dashboardView.active > .dashboard-upcoming {
+#dashboardView.active > .dashboard-monthly-table {
   order: 6;
 }
 
-#dashboardView.active > .dashboard-year {
-  order: 7;
-}
-
-#dashboardView.active > .dashboard-monthly-table {
-  order: 8;
+#dashboardView.active > .dashboard-pnl {
+  order: 9;
 }
 
 .calendar-layout {
@@ -699,13 +700,13 @@ button {
 }
 
 .booking-chip.direct {
-  background: var(--green-soft);
-  border-color: #a8dfb6;
+  background: var(--direct-soft);
+  border-color: var(--direct-line);
 }
 
 .booking-chip.airbnb {
-  background: var(--amber-soft);
-  border-color: #efabc8;
+  background: var(--airbnb-soft);
+  border-color: var(--airbnb-line);
 }
 
 .booking-chip strong {
@@ -863,6 +864,22 @@ button {
   white-space: nowrap;
 }
 
+.quick-view-table .quick-section-row td {
+  padding: 10px 12px;
+  background: linear-gradient(90deg, rgba(255, 249, 223, 0.96), rgba(255, 240, 245, 0.82));
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.quick-view-table .quick-section-row.past td {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  border-top: 2px solid var(--line);
+}
+
 .quick-view-table tr:last-child td {
   border-bottom: none;
 }
@@ -915,15 +932,15 @@ button {
 }
 
 .channel-badge.direct {
-  background: var(--green-soft);
-  color: #23633a;
-  border-color: #a8dfb6;
+  background: var(--direct-soft);
+  color: var(--direct-ink);
+  border-color: var(--direct-line);
 }
 
 .channel-badge.airbnb {
-  background: var(--amber-soft);
+  background: var(--airbnb-soft);
   color: var(--navy);
-  border-color: #efabc8;
+  border-color: var(--airbnb-line);
 }
 
 .channel-badge.influencer,
@@ -1087,6 +1104,15 @@ button {
   line-height: 1.15;
 }
 
+.dashboard-guide-note {
+  max-width: 620px;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
 .dashboard-guide-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1096,6 +1122,36 @@ button {
   color: var(--muted);
   font-size: 13px;
   font-weight: 750;
+}
+
+.dashboard-mode-choice {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.dashboard-mode-option {
+  min-height: 32px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.dashboard-mode-option.active {
+  background: var(--direct-soft);
+  border-color: var(--direct-line);
+  color: var(--direct-ink);
+}
+
+#dashboardView.mode-monthly [data-dashboard-scope="annual"],
+#dashboardView.mode-annual [data-dashboard-scope="monthly"] {
+  display: none;
 }
 
 .workspace-guide .primary-button {
@@ -1260,7 +1316,7 @@ button {
 
 .expense-grid label,
 .message-form label,
-.message-preview-wrap label {
+.message-template-card label {
   display: grid;
   gap: 6px;
   color: var(--muted);
@@ -1273,7 +1329,7 @@ button {
 .expense-grid textarea,
 .message-form input,
 .message-form select,
-.message-preview-wrap textarea {
+.message-template-card textarea {
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1284,7 +1340,7 @@ button {
 }
 
 .expense-grid textarea,
-.message-preview-wrap textarea {
+.message-template-card textarea {
   min-height: 82px;
   padding: 10px;
   resize: vertical;
@@ -1557,70 +1613,55 @@ button {
   overflow: hidden;
 }
 
-.message-hero {
+.message-flow-tabs {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
-  gap: 14px;
-  align-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin-bottom: 14px;
-  padding: 14px;
+  padding: 5px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(255, 209, 102, 0.28), rgba(255, 240, 245, 0.94)),
-    var(--surface);
+  background: rgba(255, 255, 255, 0.72);
 }
 
-.message-hero h3,
-.message-hero p {
-  margin: 0;
-}
-
-.message-hero h3 {
-  font-size: 20px;
-  line-height: 1.12;
-}
-
-.message-hero p:not(.eyebrow) {
+.message-flow-tab {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
   color: var(--muted);
-  margin-top: 6px;
-  font-size: 13px;
-  line-height: 1.45;
+  font-weight: 900;
 }
 
-.message-code-card {
-  display: grid;
-  gap: 6px;
-  padding: 14px;
-  border-radius: 8px;
-  border: 1px solid rgba(217, 79, 131, 0.22);
-  background: white;
-}
-
-.message-code-card span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-.message-code-card strong {
-  font-size: 20px;
-  line-height: 1.05;
+.message-flow-tab.active {
+  border-color: var(--direct-line);
+  background: linear-gradient(135deg, var(--direct-soft), rgba(255, 240, 245, 0.82));
+  color: var(--navy);
 }
 
 .message-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
-  gap: 14px;
-  align-items: stretch;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
+  gap: 16px;
+  align-items: start;
 }
 
-.message-preview-wrap {
+#messagesView.message-mode-quote .message-layout {
+  grid-template-columns: 1fr;
+}
+
+#messagesView.message-mode-quote .message-details-card,
+#messagesView.message-mode-quote .checkin-flow-card,
+#messagesView.message-mode-checkin .quote-card {
+  display: none;
+}
+
+.message-details-card,
+.message-template-card {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-soft);
@@ -1628,10 +1669,138 @@ button {
 
 .message-form {
   align-content: start;
-  padding: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.message-template-stack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.message-template-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.message-template-head h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.message-template-card textarea {
+  min-height: 184px;
+  resize: vertical;
+}
+
+.quote-card {
+  border-color: rgba(247, 168, 75, 0.36);
+  background:
+    linear-gradient(135deg, rgba(255, 249, 223, 0.9), rgba(255, 240, 245, 0.72)),
+    var(--surface-soft);
+}
+
+.quote-lead-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(247, 168, 75, 0.42);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.quote-lead-panel h4 {
+  margin: 2px 0 0;
+  font-size: 16px;
+  line-height: 1.18;
+}
+
+.quote-lead-grid {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.35fr) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 10px;
+}
+
+.quote-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quote-lead-grid label,
+.quote-grid label,
+.message-template-card label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.quote-lead-grid input,
+.quote-lead-grid select,
+.quote-grid input,
+.message-template-card textarea {
+  min-height: 40px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface-soft);
+  padding: 0 10px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+}
+
+.message-template-card textarea {
+  padding: 10px;
+  line-height: 1.45;
+}
+
+.quote-grid input[readonly] {
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--red);
+  font-weight: 850;
+}
+
+.quote-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quote-summary-strip span {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.quote-summary-strip strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .helper-text {
@@ -1646,6 +1815,39 @@ button {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-start;
+}
+
+.manual-copy-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--direct-line);
+  border-radius: 8px;
+  background: var(--direct-soft);
+}
+
+.manual-copy-box.hidden {
+  display: none;
+}
+
+.manual-copy-box label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.manual-copy-box textarea {
+  min-height: 130px;
+  border: 1px solid var(--direct-line);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+  line-height: 1.45;
 }
 
 .annual-commitments {
@@ -2117,8 +2319,18 @@ th {
 }
 
 td.actions {
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
+}
+
+.bookings-table .booking-month-row td {
+  padding: 10px 14px;
+  background: linear-gradient(90deg, rgba(255, 249, 223, 0.98), rgba(255, 240, 245, 0.86));
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  border-top: 2px solid var(--line);
 }
 
 .table-muted {
@@ -2134,7 +2346,7 @@ td.actions {
 
 .booking-toolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto auto;
+  grid-template-columns: minmax(160px, 0.32fr) minmax(240px, 1fr) auto auto;
   gap: 10px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
@@ -2150,6 +2362,10 @@ td.actions {
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.booking-month-field select {
+  font-weight: 800;
 }
 
 .booking-toolbar input,
@@ -2378,13 +2594,21 @@ body.resizing-column {
   border: 1px solid var(--line);
   background: white;
   border-radius: 6px;
-  min-height: 32px;
-  padding: 0 10px;
-  margin-left: 6px;
+  min-height: 28px;
+  padding: 0 8px;
+  margin: 2px 4px 2px 0;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .small-action.danger {
   color: var(--red);
+}
+
+.small-action.send-action {
+  background: var(--direct-soft);
+  border-color: var(--direct-line);
+  color: var(--direct-ink);
 }
 
 canvas {
@@ -2496,16 +2720,25 @@ dialog::backdrop {
 }
 
 .booking-channel-option.active {
-  border-color: rgba(217, 79, 131, 0.45);
-  background: var(--green-soft);
-  color: var(--navy);
-  box-shadow: inset 0 0 0 2px rgba(217, 79, 131, 0.08);
+  border-color: var(--direct-line);
+  background: var(--direct-soft);
+  color: var(--direct-ink);
+  box-shadow: inset 0 0 0 2px rgba(239, 200, 90, 0.12);
 }
 
 .booking-channel-option[data-form-channel="Airbnb"].active {
-  border-color: #efcf87;
-  background: var(--amber-soft);
-  color: #a76012;
+  border-color: var(--airbnb-line);
+  background: var(--airbnb-soft);
+  color: var(--navy);
+}
+
+.title-choice,
+.nights-choice {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nights-choice {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .guest-name-fields {
@@ -2877,14 +3110,13 @@ dialog::backdrop {
   }
 
   .nav-tabs {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .calendar-layout,
   .dashboard-grid,
   .documents-hero,
   .documents-layout,
-  .tax-hero,
   .tax-split-grid {
     grid-template-columns: 1fr;
   }
@@ -2939,8 +3171,9 @@ dialog::backdrop {
   .profit-layout,
   .dashboard-guide,
   .workspace-guide,
-  .message-hero,
   .message-layout,
+  .message-template-head,
+  .quote-summary-strip,
   .commitment-row,
   .one-off-row {
     grid-template-columns: 1fr;
@@ -2968,6 +3201,8 @@ dialog::backdrop {
 
   .expense-grid,
   .message-form,
+  .quote-lead-grid,
+  .quote-grid,
   .tax-form-grid,
   .tax-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3031,6 +3266,9 @@ dialog::backdrop {
   .payment-row,
   .expense-grid,
   .message-form,
+  .quote-lead-grid,
+  .quote-grid,
+  .quote-summary-strip,
   .tax-form-grid,
   .tax-summary-grid {
     grid-template-columns: 1fr;
@@ -3061,10 +3299,6 @@ dialog::backdrop {
 
   .message-panel {
     padding: 12px;
-  }
-
-  .message-code-card {
-    width: 100%;
   }
 
   .filter-drawer {

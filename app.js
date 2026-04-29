@@ -50,6 +50,17 @@ const defaultCommitments = [
   { id: "cc-hlb", name: "HLB Credit Card Loan", amount: 1667, category: "CC Loan", expires: "2028-01" },
 ];
 
+const GUIDE_LINK = "https://bit.ly/sunrisevilla-guest-guide";
+
+const defaultMessageTemplates = {
+  quote:
+    "Hi {guest},\n\nThanks for your interest in Sunrise Villa. Here are the payment details for your stay:\n\nBooking Details:\nCheck-in: {quoteCheckIn}\nCheck-out: {quoteCheckOut}\n\nPayment Breakdown:\nAccommodation Fee: {quoteAccommodationFee}\nCleaning Fee: {quoteCleaningFee}\nDamage Security Deposit: {quoteDamageDeposit} (Refundable)\nSpecial Discount: {quoteDiscount}\nTotal: {quoteActualCharge} + {quoteDamageDeposit}\n\nPayment Terms:\n• A 50% Deposit (Non-Refundable) + Damage Security Deposit (Refundable) are required to secure your booking.\n• Full payment must be made 28 days before arrival.\n\nBank Details:\nBank Name: RHB Bank\nAccount Name: Sunrise Villa Venture\nAccount Number: 2-06021-0006145-4\n\nKindly send the transfer receipt via WhatsApp for confirmation. Thanks",
+  checkin:
+    "Hi {guest},\n\nWe are excited to welcome you to Sunrise Villa. Here are the arrival details for a smooth check-in:\n\n#Confirmation Code: {code}\n\n#Address: {address}\n\n#Google Maps Link: {mapsLink}\n\n#Finding Us: We are located right behind McDonald's at Genting Sempah R&R.\n\n#Steps to Access:\n1. Drive up the slope to the guardhouse.\n2. Show your reservation details and Confirmation Code to the guards.\n3. Fill in the required guest information at the guardhouse.\n4. Continue driving until you reach the top T-junction. Look for the coconut tree as your landmark.\n\n#Guest Guide (MUST READ): {guideLink}\n\nPlease read the guest guide before arrival. Thank you, and we look forward to hosting you.",
+  guide:
+    "Hi {guest},\n\nHere is the Sunrise Villa Guest Guide for your stay:\n\n{guideLink}\n\nPlease read it before arrival so your check-in and stay will be smooth. Thank you.",
+};
+
 let bookings = loadBookings();
 let documents = loadDocuments();
 let profitData = loadProfitData();
@@ -71,6 +82,7 @@ const els = {
   bookingRows: document.querySelector("#bookingRows"),
   bookingsTable: document.querySelector("#bookingsTable"),
   bookingColumnControls: document.querySelector("#bookingColumnControls"),
+  bookingMonthFilter: document.querySelector("#bookingMonthFilter"),
   bookingSearch: document.querySelector("#bookingSearch"),
   channelFilter: document.querySelector("#channelFilter"),
   paymentFilter: document.querySelector("#paymentFilter"),
@@ -82,6 +94,7 @@ const els = {
   channelMixTitle: document.querySelector("#channelMixTitle"),
   sideRevenue: document.querySelector("#sideRevenue"),
   sideTotalToReceive: document.querySelector("#sideTotalToReceive"),
+  sideRefundPending: document.querySelector("#sideRefundPending"),
   sideBalance: document.querySelector("#sideBalance"),
   sideUpcomingPayments: document.querySelector("#sideUpcomingPayments"),
   sideNights: document.querySelector("#sideNights"),
@@ -145,6 +158,7 @@ const els = {
   contactInput: document.querySelector("#contactInput"),
   arrivalInput: document.querySelector("#arrivalInput"),
   nightsInput: document.querySelector("#nightsInput"),
+  nightsManualInput: document.querySelector("#nightsManualInput"),
   revenueInput: document.querySelector("#revenueInput"),
   paidInput: document.querySelector("#paidInput"),
   depositAmountInput: document.querySelector("#depositAmountInput"),
@@ -159,10 +173,39 @@ const els = {
   messageSecurityCode: document.querySelector("#messageSecurityCode"),
   messageCheckinTime: document.querySelector("#messageCheckinTime"),
   messageAddress: document.querySelector("#messageAddress"),
+  messageMapsLink: document.querySelector("#messageMapsLink"),
+  messageGuideLink: document.querySelector("#messageGuideLink"),
+  checkinTemplateInput: document.querySelector("#checkinTemplateInput"),
+  guideTemplateInput: document.querySelector("#guideTemplateInput"),
+  quoteTemplateInput: document.querySelector("#quoteTemplateInput"),
+  quoteGuestTitle: document.querySelector("#quoteGuestTitle"),
+  quoteGuestName: document.querySelector("#quoteGuestName"),
+  quotePhone: document.querySelector("#quotePhone"),
+  quoteCheckIn: document.querySelector("#quoteCheckIn"),
+  quoteCheckOut: document.querySelector("#quoteCheckOut"),
+  quoteWeekdayNights: document.querySelector("#quoteWeekdayNights"),
+  quoteWeekendNights: document.querySelector("#quoteWeekendNights"),
+  quoteHolidayNights: document.querySelector("#quoteHolidayNights"),
+  quoteWeekdayRate: document.querySelector("#quoteWeekdayRate"),
+  quoteWeekendRate: document.querySelector("#quoteWeekendRate"),
+  quoteHolidayRate: document.querySelector("#quoteHolidayRate"),
+  quoteCleaningFee: document.querySelector("#quoteCleaningFee"),
+  quoteDamageDeposit: document.querySelector("#quoteDamageDeposit"),
+  quoteActualCharge: document.querySelector("#quoteActualCharge"),
+  quoteDiscount: document.querySelector("#quoteDiscount"),
+  quoteStandardTotal: document.querySelector("#quoteStandardTotal"),
+  quoteGuestTotal: document.querySelector("#quoteGuestTotal"),
+  quoteTotalNights: document.querySelector("#quoteTotalNights"),
   messageCodeDisplay: document.querySelector("#messageCodeDisplay"),
-  checkinMessagePreview: document.querySelector("#checkinMessagePreview"),
   copyCheckinMessage: document.querySelector("#copyCheckinMessage"),
+  copyGuideMessage: document.querySelector("#copyGuideMessage"),
+  copyQuoteMessage: document.querySelector("#copyQuoteMessage"),
   openWhatsappMessage: document.querySelector("#openWhatsappMessage"),
+  openGuideMessage: document.querySelector("#openGuideMessage"),
+  openQuoteMessage: document.querySelector("#openQuoteMessage"),
+  messageCopyStatus: document.querySelector("#messageCopyStatus"),
+  manualCopyBox: document.querySelector("#manualCopyBox"),
+  manualCopyText: document.querySelector("#manualCopyText"),
   documentForm: document.querySelector("#documentForm"),
   documentId: document.querySelector("#documentId"),
   documentCodePreview: document.querySelector("#documentCodePreview"),
@@ -420,6 +463,8 @@ function defaultAppSettings() {
   return {
     lastBackupAt: "",
     dashboardHidden: {},
+    dashboardMode: "monthly",
+    bookingMonthFilter: "Selected",
     bookingColumns: {
       record: false,
       prefix: false,
@@ -440,6 +485,8 @@ function defaultAppSettings() {
       checkinTime: "3:00 PM",
       address: "No. 59, Jalan Rimba 2, Taman Puncak Rimba, 28750 Bentong, Pahang",
       mapsLink: "https://g.co/kgs/DYpYPSh",
+      guideLink: GUIDE_LINK,
+      templates: defaultMessageTemplates,
     },
   };
 }
@@ -454,12 +501,14 @@ function loadAppSettings() {
       ...fallback,
       ...parsed,
       dashboardHidden: { ...fallback.dashboardHidden, ...(parsed.dashboardHidden || {}) },
+      dashboardMode: parsed.dashboardMode === "annual" ? "annual" : "monthly",
+      bookingMonthFilter: parsed.bookingMonthFilter || fallback.bookingMonthFilter,
       bookingColumns: { ...fallback.bookingColumns, ...(parsed.bookingColumns || {}) },
       bookingColumnWidths: { ...fallback.bookingColumnWidths, ...(parsed.bookingColumnWidths || {}) },
       quickColumns: { ...fallback.quickColumns, ...(parsed.quickColumns || {}) },
       quickColumnWidths: { ...fallback.quickColumnWidths, ...(parsed.quickColumnWidths || {}) },
       commitments: Array.isArray(parsed.commitments) ? parsed.commitments.map(normalizeCommitment) : fallback.commitments,
-      message: { ...fallback.message, ...(parsed.message || {}) },
+      message: { ...fallback.message, ...(parsed.message || {}), templates: { ...defaultMessageTemplates, ...(parsed.message?.templates || {}) } },
     };
   } catch {
     return fallback;
@@ -855,6 +904,14 @@ function quickDate(iso) {
   return `${date.toLocaleDateString("en-MY", { month: "short" })} ${day}${suffix}`;
 }
 
+function quoteDate(iso) {
+  if (!iso) return "-";
+  const date = dateObj(iso);
+  const day = date.getDate();
+  const suffix = day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th";
+  return `${date.toLocaleDateString("en-MY", { month: "short" })} ${day}${suffix}, ${date.getFullYear()}`;
+}
+
 function prefixFor(name) {
 const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -916,6 +973,38 @@ function titledGuestName(booking) {
 function syncBookingChannelChoice() {
   document.querySelectorAll("[data-form-channel]").forEach((button) => {
     const isActive = button.dataset.formChannel === els.channelInput.value;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function syncGuestTitleChoice() {
+  document.querySelectorAll("[data-title-choice]").forEach((button) => {
+    const isActive = button.dataset.titleChoice === els.guestTitleInput.value;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function setNightsChoice(value) {
+  const numeric = Number(value);
+  if (value === "manual" || numeric > 3) {
+    els.nightsManualInput?.classList.remove("hidden");
+    if (els.nightsManualInput) els.nightsManualInput.value = numeric > 3 ? numeric : els.nightsManualInput.value || 4;
+    els.nightsInput.value = els.nightsManualInput?.value || 4;
+  } else {
+    els.nightsManualInput?.classList.add("hidden");
+    if (els.nightsManualInput) els.nightsManualInput.value = "";
+    els.nightsInput.value = String(numeric || 1);
+  }
+  syncNightsChoice();
+}
+
+function syncNightsChoice() {
+  const value = Number(els.nightsInput.value || 1);
+  document.querySelectorAll("[data-nights-choice]").forEach((button) => {
+    const choice = button.dataset.nightsChoice;
+    const isActive = choice === "manual" ? value > 3 : Number(choice) === value;
     button.classList.toggle("active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
@@ -1018,9 +1107,29 @@ function setView(view) {
     calendar: "Monthly Calendar",
     dashboard: "Income Dashboard",
     bookings: "Bookings",
+    messages: "Guest Messages",
     documents: "Villa Documents",
     tax: "Tax Plan",
   }[view];
+}
+
+function setMessageFlow(flow) {
+  const mode = flow === "checkin" ? "checkin" : "quote";
+  const messagesView = document.querySelector("#messagesView");
+  messagesView?.classList.toggle("message-mode-quote", mode === "quote");
+  messagesView?.classList.toggle("message-mode-checkin", mode === "checkin");
+  document.querySelectorAll("[data-message-flow]").forEach((button) => {
+    const active = button.dataset.messageFlow === mode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  if (els.messageCopyStatus) {
+    els.messageCopyStatus.textContent =
+      mode === "quote"
+        ? "Quick Quotation is for enquiries before the booking is saved."
+        : "Check-in Flow uses confirmed bookings already saved in your database.";
+  }
+  els.manualCopyBox?.classList.add("hidden");
 }
 
 function staySegmentClass(booking, dayIso) {
@@ -1099,6 +1208,40 @@ function renderDetails() {
     return;
   }
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcomingBookings = monthBookings.filter((booking) => dateObj(departureFor(booking)) >= today);
+  const pastBookings = monthBookings.filter((booking) => dateObj(departureFor(booking)) < today);
+  const bookingRows = (items) =>
+    items
+      .map((booking) => {
+        const balance = balanceFor(booking);
+        return `
+          <tr>
+            ${quickCell("guest", `
+              <div class="guest-cell">
+                <span class="guest-code">${prefixFor(booking.guest)}</span>
+                <span class="guest-meta">
+                  <strong>${escapeHtml(booking.guest)}</strong>
+                  <span>${shortDate(departureFor(booking))} out</span>
+                </span>
+              </div>
+            `)}
+            ${quickCell("type", channelBadgeFor(booking))}
+            ${quickCell("checkin", `<strong>${quickDate(booking.arrival)}</strong>`)}
+            ${quickCell("nights", `<strong>${booking.nights}</strong>`)}
+            ${quickCell("revenue", money(booking.revenue), "amount-cell")}
+            ${quickCell("deposit", money(booking.depositAmount), "amount-cell")}
+            ${quickCell("total", money(totalToReceiveFor(booking)), "amount-cell")}
+            ${quickCell("received", money(booking.paid), "amount-cell")}
+            ${quickCell("full", fullReceivedControl(booking))}
+            ${quickCell("balance", money(balance), `amount-cell ${balance > 0 ? "balance-due" : ""}`)}
+            ${quickCell("refund", refundControl(booking))}
+          </tr>
+        `;
+      })
+      .join("");
+
   els.detailsList.innerHTML = `
     <div class="quick-view-card">
       <table class="quick-view-table" id="quickViewTable" aria-label="Quick booking list">
@@ -1118,35 +1261,10 @@ function renderDetails() {
           </tr>
         </thead>
         <tbody>
-          ${monthBookings
-            .map((booking) => {
-              const balance = balanceFor(booking);
-              const channelClass = booking.channel.toLowerCase();
-              return `
-                <tr>
-                  ${quickCell("guest", `
-                    <div class="guest-cell">
-                      <span class="guest-code">${prefixFor(booking.guest)}</span>
-                      <span class="guest-meta">
-                        <strong>${escapeHtml(booking.guest)}</strong>
-                        <span>${shortDate(departureFor(booking))} out</span>
-                      </span>
-                    </div>
-                  `)}
-                  ${quickCell("type", channelBadgeFor(booking))}
-                  ${quickCell("checkin", `<strong>${quickDate(booking.arrival)}</strong>`)}
-                  ${quickCell("nights", `<strong>${booking.nights}</strong>`)}
-                  ${quickCell("revenue", money(booking.revenue), "amount-cell")}
-                  ${quickCell("deposit", money(booking.depositAmount), "amount-cell")}
-                  ${quickCell("total", money(totalToReceiveFor(booking)), "amount-cell")}
-                  ${quickCell("received", money(booking.paid), "amount-cell")}
-                  ${quickCell("full", fullReceivedControl(booking))}
-                  ${quickCell("balance", money(balance), `amount-cell ${balance > 0 ? "balance-due" : ""}`)}
-                  ${quickCell("refund", refundControl(booking))}
-                </tr>
-              `;
-            })
-            .join("")}
+          <tr class="quick-section-row"><td colspan="11">Upcoming / Current Guests</td></tr>
+          ${upcomingBookings.length ? bookingRows(upcomingBookings) : `<tr><td colspan="11" class="empty-row">No upcoming guests for this selected month.</td></tr>`}
+          <tr class="quick-section-row past"><td colspan="11">Past Guests</td></tr>
+          ${pastBookings.length ? bookingRows(pastBookings) : `<tr><td colspan="11" class="empty-row">No past guests for this selected month.</td></tr>`}
         </tbody>
       </table>
       <div class="quick-summary">
@@ -1591,11 +1709,13 @@ function restoreAppData(data) {
       ? {
           ...defaultAppSettings(),
           ...data.appSettings,
+          dashboardMode: data.appSettings.dashboardMode === "annual" ? "annual" : "monthly",
+          bookingMonthFilter: data.appSettings.bookingMonthFilter || defaultAppSettings().bookingMonthFilter,
           bookingColumns: { ...defaultAppSettings().bookingColumns, ...(data.appSettings.bookingColumns || {}) },
           bookingColumnWidths: { ...defaultAppSettings().bookingColumnWidths, ...(data.appSettings.bookingColumnWidths || {}) },
           quickColumns: { ...defaultAppSettings().quickColumns, ...(data.appSettings.quickColumns || {}) },
           quickColumnWidths: { ...defaultAppSettings().quickColumnWidths, ...(data.appSettings.quickColumnWidths || {}) },
-          message: { ...defaultAppSettings().message, ...(data.appSettings.message || {}) },
+          message: { ...defaultAppSettings().message, ...(data.appSettings.message || {}), templates: { ...defaultMessageTemplates, ...(data.appSettings.message?.templates || {}) } },
         }
       : appSettings;
   }
@@ -1611,15 +1731,161 @@ function formatPhoneForWhatsapp(value) {
   return String(value || "").replace(/[^\d]/g, "");
 }
 
+function templateValuesForBooking(booking = selectedMessageBooking()) {
+  const title = booking?.guestTitle === "Ms" ? "Ms" : "Mr";
+  const guestName = String(booking?.guest || els.messageGuestName?.value || "Guest").trim();
+  const guest = guestName === "Guest" ? guestName : `${title} ${guestName}`;
+  return templateValues({ guest, booking });
+}
+
+function templateValuesForQuote() {
+  const title = els.quoteGuestTitle?.value === "Ms" ? "Ms" : "Mr";
+  const name = String(els.quoteGuestName?.value || "Guest").trim();
+  const guest = name === "Guest" ? guest : `${title} ${name}`;
+  return templateValues({ guest, booking: null });
+}
+
+function templateValues({ guest, booking }) {
+  const quote = quoteCalculation();
+  return {
+    guest,
+    code: booking ? bookingConfirmationCode(booking) : "SV-DDMM-A08",
+    address: els.messageAddress?.value?.trim() || appSettings.message.address,
+    mapsLink: els.messageMapsLink?.value?.trim() || appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh",
+    checkinTime: els.messageCheckinTime?.value || appSettings.message.checkinTime || "3:00 PM",
+    guideLink: els.messageGuideLink?.value?.trim() || appSettings.message.guideLink || GUIDE_LINK,
+    quoteCheckIn: quoteDate(quote.checkIn),
+    quoteCheckOut: quoteDate(quote.checkOut),
+    quoteAccommodationFee: money(quote.accommodationFee),
+    quoteCleaningFee: money(quote.cleaningFee),
+    quoteDamageDeposit: money(quote.damageDeposit),
+    quoteDiscount: money(quote.discount),
+    quoteActualCharge: money(quote.actualCharge),
+    quoteStandardTotal: money(quote.standardTotal),
+    quoteTotalNights: quote.totalNights,
+  };
+}
+
+function applyTemplate(template, values) {
+  return String(template || "")
+    .replaceAll("{guest}", values.guest)
+    .replaceAll("{code}", values.code)
+    .replaceAll("{address}", values.address)
+    .replaceAll("{mapsLink}", values.mapsLink)
+    .replaceAll("{checkinTime}", values.checkinTime)
+    .replaceAll("{guideLink}", values.guideLink)
+    .replaceAll("{quoteCheckIn}", values.quoteCheckIn)
+    .replaceAll("{quoteCheckOut}", values.quoteCheckOut)
+    .replaceAll("{quoteAccommodationFee}", values.quoteAccommodationFee)
+    .replaceAll("{quoteCleaningFee}", values.quoteCleaningFee)
+    .replaceAll("{quoteDamageDeposit}", values.quoteDamageDeposit)
+    .replaceAll("{quoteDiscount}", values.quoteDiscount)
+    .replaceAll("{quoteActualCharge}", values.quoteActualCharge)
+    .replaceAll("{quoteStandardTotal}", values.quoteStandardTotal)
+    .replaceAll("{quoteTotalNights}", values.quoteTotalNights);
+}
+
 function messageBookingOptions() {
-  const sorted = [...bookings].sort((a, b) => a.arrival.localeCompare(b.arrival));
-  return sorted
-    .map((booking) => `<option value="${booking.id}">${escapeHtml(shortDate(booking.arrival))} · ${escapeHtml(booking.guest)}</option>`)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcoming = [...bookings]
+    .filter((booking) => dateObj(departureFor(booking)) >= today)
+    .sort((a, b) => a.arrival.localeCompare(b.arrival));
+  const groups = upcoming.reduce((acc, booking) => {
+    const monthValue = booking.arrival.slice(0, 7);
+    if (!acc.has(monthValue)) acc.set(monthValue, []);
+    acc.get(monthValue).push(booking);
+    return acc;
+  }, new Map());
+  return [...groups]
+    .map(
+      ([monthValue, items]) => `
+        <optgroup label="${escapeHtml(monthLabel(monthValue))}">
+          ${items.map((booking) => `<option value="${booking.id}">${escapeHtml(quickDate(booking.arrival))} · ${escapeHtml(booking.guest)}</option>`).join("")}
+        </optgroup>
+      `,
+    )
     .join("");
 }
 
 function selectedMessageBooking() {
-  return bookings.find((booking) => booking.id === els.messageBookingSelect?.value) || [...bookings].sort((a, b) => a.arrival.localeCompare(b.arrival))[0];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (
+    bookings.find((booking) => booking.id === els.messageBookingSelect?.value) ||
+    [...bookings]
+      .filter((booking) => dateObj(departureFor(booking)) >= today)
+      .sort((a, b) => a.arrival.localeCompare(b.arrival))[0]
+  );
+}
+
+function quoteNightBreakdown(checkIn, checkOut) {
+  let weekday = 0;
+  let weekend = 0;
+  if (!checkIn || !checkOut) return { weekday, weekend };
+  for (let stayDate = dateObj(checkIn); stayDate < dateObj(checkOut); stayDate = addDays(stayDate, 1)) {
+    if (isWeekendNight(isoDate(stayDate))) weekend += 1;
+    else weekday += 1;
+  }
+  return { weekday, weekend };
+}
+
+function quoteCalculation() {
+  const checkIn = els.quoteCheckIn?.value || "";
+  const checkOut = els.quoteCheckOut?.value || "";
+  const weekdayNights = Math.max(0, Number(els.quoteWeekdayNights?.value || 0));
+  const weekendNights = Math.max(0, Number(els.quoteWeekendNights?.value || 0));
+  const holidayNights = Math.max(0, Number(els.quoteHolidayNights?.value || 0));
+  const weekdayRate = Math.max(0, Number(els.quoteWeekdayRate?.value || 2488));
+  const weekendRate = Math.max(0, Number(els.quoteWeekendRate?.value || 2888));
+  const holidayRate = Math.max(0, Number(els.quoteHolidayRate?.value || 3688));
+  const cleaningFee = Math.max(0, Number(els.quoteCleaningFee?.value || 200));
+  const damageDeposit = Math.max(0, Number(els.quoteDamageDeposit?.value || 500));
+  const chargeableHolidayNights = Math.min(holidayNights, weekdayNights + weekendNights);
+  const weekdayHolidayNights = Math.min(chargeableHolidayNights, weekdayNights);
+  const weekendHolidayNights = Math.max(0, chargeableHolidayNights - weekdayHolidayNights);
+  const chargeableWeekdayNights = Math.max(0, weekdayNights - weekdayHolidayNights);
+  const chargeableWeekendNights = Math.max(0, weekendNights - weekendHolidayNights);
+  const accommodationFee = chargeableWeekdayNights * weekdayRate + chargeableWeekendNights * weekendRate + chargeableHolidayNights * holidayRate;
+  const standardTotal = accommodationFee + cleaningFee;
+  const actualCharge = Math.max(0, Number(els.quoteActualCharge?.value || standardTotal));
+  const discount = Math.max(0, standardTotal - actualCharge);
+  return {
+    checkIn,
+    checkOut,
+    weekdayNights,
+    weekendNights,
+    holidayNights,
+    weekdayRate,
+    weekendRate,
+    holidayRate,
+    cleaningFee,
+    damageDeposit,
+    accommodationFee,
+    standardTotal,
+    actualCharge,
+    discount,
+    totalNights: weekdayNights + weekendNights,
+  };
+}
+
+function syncQuoteNightsFromDates(forceActualCharge = false) {
+  if (!els.quoteCheckIn || !els.quoteCheckOut) return;
+  const breakdown = quoteNightBreakdown(els.quoteCheckIn.value, els.quoteCheckOut.value);
+  if (els.quoteWeekdayNights) els.quoteWeekdayNights.value = breakdown.weekday;
+  if (els.quoteWeekendNights) els.quoteWeekendNights.value = breakdown.weekend;
+  if (els.quoteHolidayNights && !els.quoteHolidayNights.value) els.quoteHolidayNights.value = 0;
+  renderQuickQuote(forceActualCharge);
+}
+
+function renderQuickQuote(forceActualCharge = false) {
+  const initial = quoteCalculation();
+  if (forceActualCharge && els.quoteActualCharge) els.quoteActualCharge.value = initial.standardTotal;
+  const quote = quoteCalculation();
+  if (els.quoteDiscount) els.quoteDiscount.value = quote.discount.toFixed(0);
+  if (els.quoteStandardTotal) els.quoteStandardTotal.textContent = money(quote.standardTotal);
+  if (els.quoteGuestTotal) els.quoteGuestTotal.textContent = `${money(quote.actualCharge)} + ${money(quote.damageDeposit)}`;
+  if (els.quoteTotalNights) els.quoteTotalNights.textContent = quote.totalNights;
 }
 
 function fillMessageFromBooking(force = false) {
@@ -1632,30 +1898,116 @@ function fillMessageFromBooking(force = false) {
   els.messageSecurityCode.value = bookingConfirmationCode(booking);
   if (els.messageCodeDisplay) els.messageCodeDisplay.textContent = bookingConfirmationCode(booking);
   if (force || !els.messageAddress.value) els.messageAddress.value = appSettings.message.address || "";
+  if (els.messageMapsLink && (force || !els.messageMapsLink.value)) els.messageMapsLink.value = appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh";
+  if (els.messageGuideLink && (force || !els.messageGuideLink.value)) els.messageGuideLink.value = appSettings.message.guideLink || GUIDE_LINK;
+  renderQuickQuote(false);
   renderCheckinMessage();
 }
 
 function checkinMessageText() {
-  const booking = selectedMessageBooking();
-  const title = els.messageGuestTitle?.value || booking?.guestTitle || "Mr";
-  const guestName = els.messageGuestName?.value.trim() || booking?.guest || "Guest";
-  const guest = guestName === "Guest" ? guestName : `${title} ${guestName}`;
-  const securityCode = booking ? bookingConfirmationCode(booking) : "SV-DDMM-A08";
-  const address = els.messageAddress?.value.trim() || appSettings.message.address;
-  const mapsLink = appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh";
-  return `Hi ${guest},\n\nWe are excited to welcome you to Sunrise Villa. Here are the arrival details for a smooth check-in:\n\n#Confirmation Code: ${securityCode}\n\n#Address: ${address}\n\n#Google Maps Link: ${mapsLink}\n\n#Finding Us: We are located right behind McDonald's at Genting Sempah R&R.\n\n#Steps to Access:\n1. Drive up the slope to the guardhouse.\n2. Show your reservation details and Confirmation Code to the guards.\n3. Fill in the required guest information at the guardhouse.\n4. Continue driving until you reach the top T-junction. Look for the coconut tree as your landmark.\n\n#Guest Guide (MUST READ): https://bit.ly/sunrisevilla-guest-guide\n\nPlease read the guest guide before arrival. Thank you, and we look forward to hosting you.`;
+  return applyTemplate(appSettings.message.templates?.checkin || defaultMessageTemplates.checkin, templateValuesForBooking());
+}
+
+function checkinMessageTextForBooking(booking) {
+  return applyTemplate(appSettings.message.templates?.checkin || defaultMessageTemplates.checkin, templateValuesForBooking(booking));
+}
+
+function guestGuideMessageTextForBooking(booking) {
+  return applyTemplate(appSettings.message.templates?.guide || defaultMessageTemplates.guide, templateValuesForBooking(booking));
+}
+
+function quoteMessageText() {
+  return applyTemplate(appSettings.message.templates?.quote || defaultMessageTemplates.quote, templateValuesForQuote());
+}
+
+function openWhatsappMessage(phoneValue, text) {
+  const phone = formatPhoneForWhatsapp(phoneValue || "");
+  if (!phone) {
+    window.alert("Add the guest WhatsApp number first.");
+    return;
+  }
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  const opened = window.open(url, "_blank", "noopener");
+  if (!opened) window.location.href = url;
+}
+
+function openWhatsappForBooking(booking, template) {
+  const text = template === "guide" ? guestGuideMessageTextForBooking(booking) : checkinMessageTextForBooking(booking);
+  openWhatsappMessage(booking?.contact || "", text);
+}
+
+function openWhatsappForQuote() {
+  openWhatsappMessage(els.quotePhone?.value || "", quoteMessageText());
+}
+
+function fallbackCopyText(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "0";
+  textarea.style.width = "1px";
+  textarea.style.height = "1px";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return fallbackCopyText(text);
+}
+
+function showManualCopy(text) {
+  if (!els.manualCopyBox || !els.manualCopyText) return;
+  els.manualCopyBox.classList.remove("hidden");
+  els.manualCopyText.value = text;
+  els.manualCopyText.focus();
+  els.manualCopyText.select();
+  els.manualCopyText.setSelectionRange(0, els.manualCopyText.value.length);
+}
+
+async function copyMessageWithFeedback(text, button, defaultLabel) {
+  renderCheckinMessage();
+  els.manualCopyBox?.classList.add("hidden");
+  try {
+    const copied = await copyTextToClipboard(text);
+    if (!copied) throw new Error("Copy blocked");
+    button.textContent = "Copied";
+    if (els.messageCopyStatus) els.messageCopyStatus.textContent = "Message copied. You can paste it into WhatsApp now.";
+  } catch {
+    showManualCopy(text);
+    button.textContent = "Select to Copy";
+    if (els.messageCopyStatus) els.messageCopyStatus.textContent = "Copy was blocked by the browser, so I selected the message for manual copy.";
+  }
+  window.setTimeout(() => {
+    button.textContent = defaultLabel;
+  }, 1600);
 }
 
 function renderCheckinMessage() {
-  if (!els.checkinMessagePreview) return;
   if (els.messageCodeDisplay) els.messageCodeDisplay.textContent = selectedMessageBooking() ? bookingConfirmationCode(selectedMessageBooking()) : "SV-DDMM-A08";
-  els.checkinMessagePreview.value = checkinMessageText();
   appSettings = {
     ...appSettings,
     message: {
       checkinTime: els.messageCheckinTime?.value || "3:00 PM",
       address: els.messageAddress?.value || "",
-      mapsLink: appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh",
+      mapsLink: els.messageMapsLink?.value || appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh",
+      guideLink: els.messageGuideLink?.value || appSettings.message.guideLink || GUIDE_LINK,
+      templates: {
+        quote: els.quoteTemplateInput?.value || defaultMessageTemplates.quote,
+        checkin: els.checkinTemplateInput?.value || defaultMessageTemplates.checkin,
+        guide: els.guideTemplateInput?.value || defaultMessageTemplates.guide,
+      },
     },
   };
   saveAppSettings();
@@ -1665,7 +2017,10 @@ function renderMessageGenerator() {
   if (!els.messageBookingSelect) return;
   const current = els.messageBookingSelect.value;
   els.messageBookingSelect.innerHTML = messageBookingOptions() || `<option value="">No bookings yet</option>`;
-  if (current && bookings.some((booking) => booking.id === current)) els.messageBookingSelect.value = current;
+  if (current && [...els.messageBookingSelect.options].some((option) => option.value === current)) els.messageBookingSelect.value = current;
+  if (els.quoteTemplateInput && !els.quoteTemplateInput.value) els.quoteTemplateInput.value = appSettings.message.templates?.quote || defaultMessageTemplates.quote;
+  if (els.checkinTemplateInput && !els.checkinTemplateInput.value) els.checkinTemplateInput.value = appSettings.message.templates?.checkin || defaultMessageTemplates.checkin;
+  if (els.guideTemplateInput && !els.guideTemplateInput.value) els.guideTemplateInput.value = appSettings.message.templates?.guide || defaultMessageTemplates.guide;
   fillMessageFromBooking(false);
 }
 
@@ -1801,6 +2156,20 @@ function applyDashboardToggles() {
   });
 }
 
+function applyDashboardMode() {
+  const mode = appSettings.dashboardMode === "annual" ? "annual" : "monthly";
+  const dashboard = document.querySelector("#dashboardView");
+  if (dashboard) {
+    dashboard.classList.toggle("mode-annual", mode === "annual");
+    dashboard.classList.toggle("mode-monthly", mode === "monthly");
+  }
+  document.querySelectorAll("[data-dashboard-mode]").forEach((button) => {
+    const isActive = button.dataset.dashboardMode === mode;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
 function renderDashboard() {
   const totals = totalsFor(selectedMonth);
   const selectedPerformance = stayPerformanceForMonth(selectedMonth);
@@ -1812,9 +2181,10 @@ function renderDashboard() {
   const overall = totalsForBookings(bookingsForYear(year));
   const upcomingPayments = upcomingPaymentsThroughYearEnd(year);
   const dashboardGuideTitle = document.querySelector("#dashboardGuideTitle");
-  if (dashboardGuideTitle) dashboardGuideTitle.textContent = `${monthLabel(selectedMonth)} Operations`;
+  if (dashboardGuideTitle) dashboardGuideTitle.textContent = appSettings.dashboardMode === "annual" ? `${year} Annual Dashboard` : `${monthLabel(selectedMonth)} Monthly Dashboard`;
   els.sideRevenue.textContent = money(totals.revenue);
-  els.sideTotalToReceive.textContent = money(totals.totalToReceive);
+  if (els.sideTotalToReceive) els.sideTotalToReceive.textContent = money(totals.totalToReceive);
+  if (els.sideRefundPending) els.sideRefundPending.textContent = money(totals.refundPending);
   els.sideBalance.textContent = money(totals.balance);
   els.sideUpcomingPayments.textContent = money(upcomingPayments);
   els.sideNights.textContent = totals.nights;
@@ -1933,25 +2303,27 @@ function renderDashboard() {
     .sort((a, b) => a.arrival.localeCompare(b.arrival))
     .slice(0, 6);
 
-  els.upcomingRows.innerHTML = upcoming.length
-    ? upcoming
-        .map((booking) => {
-          const balance = balanceFor(booking);
-          return `
-          <tr>
-            <td><strong>${escapeHtml(booking.guest)}</strong><br><span class="table-muted">${prefixFor(booking.guest)}</span></td>
-            <td><span class="channel-badge ${booking.channel.toLowerCase()}">${escapeHtml(booking.channel)}</span></td>
-            <td>${shortDate(booking.arrival)}</td>
-            <td>${booking.nights}</td>
-            <td class="${balance > 0 ? "balance-due" : ""}">${money(balance)}</td>
-            <td>${fullReceivedControl(booking)}</td>
-            <td>${money(booking.depositAmount)}</td>
-            <td>${refundControl(booking)}</td>
-          </tr>
-        `;
-        })
-        .join("")
-    : `<tr><td colspan="8" class="empty-row">No upcoming arrivals.</td></tr>`;
+  if (els.upcomingRows) {
+    els.upcomingRows.innerHTML = upcoming.length
+      ? upcoming
+          .map((booking) => {
+            const balance = balanceFor(booking);
+            return `
+            <tr>
+              <td><strong>${escapeHtml(booking.guest)}</strong><br><span class="table-muted">${prefixFor(booking.guest)}</span></td>
+              <td><span class="channel-badge ${booking.channel.toLowerCase()}">${escapeHtml(booking.channel)}</span></td>
+              <td>${shortDate(booking.arrival)}</td>
+              <td>${booking.nights}</td>
+              <td class="${balance > 0 ? "balance-due" : ""}">${money(balance)}</td>
+              <td>${fullReceivedControl(booking)}</td>
+              <td>${money(booking.depositAmount)}</td>
+              <td>${refundControl(booking)}</td>
+            </tr>
+          `;
+          })
+          .join("")
+      : `<tr><td colspan="8" class="empty-row">No upcoming arrivals.</td></tr>`;
+  }
 
   const direct = calculationBookings(bookingsForMonth(selectedMonth)).filter((booking) => booking.channel === "Direct");
   const airbnb = calculationBookings(bookingsForMonth(selectedMonth)).filter((booking) => booking.channel === "Airbnb");
@@ -1973,7 +2345,10 @@ function renderDashboard() {
 }
 
 function renderBookingsTable() {
+  renderBookingMonthFilter();
   const search = els.bookingSearch?.value.trim().toLowerCase() || "";
+  const monthFilter = els.bookingMonthFilter?.value || appSettings.bookingMonthFilter || "Selected";
+  const effectiveMonth = monthFilter === "Selected" ? selectedMonth : monthFilter;
   const channel = els.channelFilter?.value || "All";
   const payment = els.paymentFilter?.value || "All";
   const deposit = els.depositFilter?.value || "All";
@@ -1981,6 +2356,7 @@ function renderBookingsTable() {
     .filter((booking) => {
       const balance = balanceFor(booking);
       const haystack = `${booking.guest} ${booking.contact} ${prefixFor(booking.guest)} ${booking.channel} ${isExcludedBooking(booking) ? "influencer complimentary free record only" : "financial"}`.toLowerCase();
+      if (effectiveMonth !== "All" && !bookingMonthOverlap(booking, effectiveMonth)) return false;
       if (search && !haystack.includes(search)) return false;
       if (channel !== "All" && booking.channel !== channel) return false;
       if (payment === "Due" && balance <= 0) return false;
@@ -1992,10 +2368,17 @@ function renderBookingsTable() {
       return true;
     })
     .sort((a, b) => a.arrival.localeCompare(b.arrival));
-  els.bookingRows.innerHTML = sorted
+  let currentMonthHeader = "";
+  const bookingRowHtml = sorted
     .map((booking) => {
       const balance = balanceFor(booking);
+      const monthValue = booking.arrival.slice(0, 7);
+      const monthHeader =
+        effectiveMonth === "All" && monthValue !== currentMonthHeader
+          ? ((currentMonthHeader = monthValue), `<tr class="booking-month-row"><td colspan="15">${escapeHtml(monthLabel(monthValue))}</td></tr>`)
+          : "";
       return `
+        ${monthHeader}
         <tr>
           ${bookingCell("channel", channelBadgeFor(booking))}
           ${bookingCell("record", isExcludedBooking(booking) ? `<span class="channel-badge influencer">Record only</span>` : `<span class="channel-badge direct">Financial</span>`)}
@@ -2018,8 +2401,21 @@ function renderBookingsTable() {
         </tr>
       `;
     })
-    .join("") || `<tr><td colspan="15" class="empty-row">No bookings match these filters.</td></tr>`;
+    .join("");
+  els.bookingRows.innerHTML = bookingRowHtml || `<tr><td colspan="15" class="empty-row">No bookings match these filters.</td></tr>`;
   renderBookingColumnControls();
+}
+
+function renderBookingMonthFilter() {
+  if (!els.bookingMonthFilter) return;
+  const current = els.bookingMonthFilter.value || appSettings.bookingMonthFilter || "Selected";
+  const months = Array.from(new Set([selectedMonth, ...bookings.map((booking) => booking.arrival?.slice(0, 7)).filter(Boolean)])).sort();
+  els.bookingMonthFilter.innerHTML = [
+    `<option value="Selected">Selected month (${monthLabel(selectedMonth)})</option>`,
+    `<option value="All">All months</option>`,
+    ...months.map((monthValue) => `<option value="${monthValue}">${monthLabel(monthValue)}</option>`),
+  ].join("");
+  els.bookingMonthFilter.value = [...months, "All", "Selected"].includes(current) ? current : "Selected";
 }
 
 function renderOwnerReport() {
@@ -2162,11 +2558,12 @@ function openBookingDialog(booking = null) {
   els.channelInput.value = booking?.channel || "Direct";
   syncBookingChannelChoice();
   if (els.guestTitleInput) els.guestTitleInput.value = booking?.guestTitle === "Ms" ? "Ms" : "Mr";
+  syncGuestTitleChoice();
   els.guestInput.value = booking?.guest || "";
   els.contactInput.value = booking?.contact || "";
   els.excludeCalculationsInput.checked = Boolean(booking?.excludeFromCalculations);
   els.arrivalInput.value = booking?.arrival || `${selectedMonth}-01`;
-  els.nightsInput.value = booking?.nights || 1;
+  setNightsChoice(booking?.nights || 1);
   els.revenueInput.value = booking?.revenue || 0;
   els.paidInput.value = booking?.paid || 0;
   els.depositAmountInput.value = booking?.depositAmount ?? defaultDepositForChannel(els.channelInput.value);
@@ -2310,7 +2707,7 @@ function renderDocumentPreview(doc = formDocument()) {
   const isReceipt = normalized.type === "Official Receipt";
   const totalPayments = paymentTotalFor(normalized);
   const balance = Math.max(0, normalized.totalAmount - totalPayments);
-  els.documentCodePreview.textContent = normalized.code;
+  if (els.documentCodePreview) els.documentCodePreview.textContent = normalized.code;
   els.documentPreview.innerHTML = `
     <div class="doc-paper-head">
       <div>
@@ -2435,7 +2832,7 @@ function renderDocuments() {
   if (!els.documentForm) return;
   updateReceiptVisibility();
   const current = formDocument();
-  els.documentCodePreview.textContent = current.code;
+  if (els.documentCodePreview) els.documentCodePreview.textContent = current.code;
   renderDocumentArchive();
 }
 
@@ -2588,6 +2985,7 @@ function renderAll() {
   renderDocuments();
   renderTaxPlan();
   setupDashboardToggles();
+  applyDashboardMode();
 }
 
 document.querySelectorAll(".nav-button").forEach((button) => {
@@ -2625,6 +3023,16 @@ els.showDashboardSections?.addEventListener("click", () => {
   applyDashboardToggles();
 });
 
+document.querySelectorAll("[data-dashboard-mode]").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    const modeButton = event.currentTarget;
+    appSettings = { ...appSettings, dashboardMode: modeButton.dataset.dashboardMode === "annual" ? "annual" : "monthly" };
+    saveAppSettings();
+    applyDashboardMode();
+    renderAll();
+  });
+});
+
 document.querySelectorAll("[data-form-channel]").forEach((button) => {
   button.addEventListener("click", () => {
     els.channelInput.value = button.dataset.formChannel;
@@ -2632,6 +3040,23 @@ document.querySelectorAll("[data-form-channel]").forEach((button) => {
     applyChannelDepositDefault();
   });
 });
+
+document.querySelectorAll("[data-title-choice]").forEach((button) => {
+  button.addEventListener("click", () => {
+    els.guestTitleInput.value = button.dataset.titleChoice;
+    syncGuestTitleChoice();
+  });
+});
+
+document.querySelectorAll("[data-nights-choice]").forEach((button) => {
+  button.addEventListener("click", () => setNightsChoice(button.dataset.nightsChoice));
+});
+
+els.nightsManualInput?.addEventListener("input", () => {
+  els.nightsInput.value = Math.max(4, Number(els.nightsManualInput.value || 4));
+  syncNightsChoice();
+});
+
 els.excludeCalculationsInput?.addEventListener("change", applyExcludedBookingDefaults);
 
 els.form.addEventListener("submit", (event) => {
@@ -2695,7 +3120,7 @@ els.detailsList.addEventListener("change", (event) => {
   if (refundId) setDepositRefunded(refundId, event.target.checked);
 });
 
-els.upcomingRows.addEventListener("change", (event) => {
+els.upcomingRows?.addEventListener("change", (event) => {
   const fullReceivedId = event.target.dataset.fullReceived;
   if (fullReceivedId) setFullReceived(fullReceivedId, event.target.checked);
   const refundId = event.target.dataset.refundToggle;
@@ -2783,9 +3208,15 @@ document.querySelector("#importJson").addEventListener("change", async (event) =
   event.target.value = "";
 });
 
-[els.bookingSearch, els.channelFilter, els.paymentFilter, els.depositFilter].forEach((control) => {
+[els.bookingMonthFilter, els.bookingSearch, els.channelFilter, els.paymentFilter, els.depositFilter].forEach((control) => {
   control?.addEventListener("input", renderBookingsTable);
-  control?.addEventListener("change", renderBookingsTable);
+  control?.addEventListener("change", () => {
+    if (control === els.bookingMonthFilter) {
+      appSettings = { ...appSettings, bookingMonthFilter: els.bookingMonthFilter.value };
+      saveAppSettings();
+    }
+    renderBookingsTable();
+  });
 });
 
 els.bookingColumnControls?.addEventListener("change", (event) => {
@@ -2923,32 +3354,71 @@ els.restoreBackup?.addEventListener("change", async (event) => {
 
 els.messageBookingSelect?.addEventListener("change", () => fillMessageFromBooking(true));
 
-[els.messageGuestTitle, els.messageGuestName, els.messagePhone, els.messageSecurityCode, els.messageCheckinTime, els.messageAddress].forEach((control) => {
+document.querySelectorAll("[data-message-flow]").forEach((button) => {
+  button.addEventListener("click", () => setMessageFlow(button.dataset.messageFlow));
+});
+
+[els.messageGuestTitle, els.messageGuestName, els.messagePhone, els.messageSecurityCode, els.messageCheckinTime, els.messageAddress, els.messageMapsLink, els.messageGuideLink, els.quoteGuestTitle, els.quoteGuestName, els.quotePhone, els.quoteTemplateInput, els.checkinTemplateInput, els.guideTemplateInput].forEach((control) => {
   control?.addEventListener("input", renderCheckinMessage);
   control?.addEventListener("change", renderCheckinMessage);
 });
 
-els.copyCheckinMessage?.addEventListener("click", async () => {
+[
+  els.quoteWeekdayNights,
+  els.quoteWeekendNights,
+  els.quoteHolidayNights,
+  els.quoteWeekdayRate,
+  els.quoteWeekendRate,
+  els.quoteHolidayRate,
+  els.quoteCleaningFee,
+  els.quoteDamageDeposit,
+  els.quoteActualCharge,
+].forEach((control) => {
+  control?.addEventListener("input", () => {
+    renderQuickQuote(false);
+    renderCheckinMessage();
+  });
+});
+
+[els.quoteCheckIn, els.quoteCheckOut].forEach((control) => {
+  control?.addEventListener("change", () => {
+    syncQuoteNightsFromDates(true);
+    renderCheckinMessage();
+  });
+});
+
+els.copyQuoteMessage?.addEventListener("click", async () => {
+  renderQuickQuote(false);
   renderCheckinMessage();
-  try {
-    await navigator.clipboard.writeText(els.checkinMessagePreview.value);
-    els.copyCheckinMessage.textContent = "Copied";
-    window.setTimeout(() => {
-      els.copyCheckinMessage.textContent = "Copy";
-    }, 1200);
-  } catch {
-    els.checkinMessagePreview.select();
-    document.execCommand("copy");
-  }
+  await copyMessageWithFeedback(quoteMessageText(), els.copyQuoteMessage, "Copy Quote");
+});
+
+els.copyCheckinMessage?.addEventListener("click", async () => {
+  await copyMessageWithFeedback(checkinMessageText(), els.copyCheckinMessage, "Copy Check-in");
+});
+
+els.copyGuideMessage?.addEventListener("click", async () => {
+  const booking = selectedMessageBooking();
+  const message = booking ? guestGuideMessageTextForBooking(booking) : applyTemplate(appSettings.message.templates?.guide || defaultMessageTemplates.guide, templateValuesForBooking());
+  await copyMessageWithFeedback(message, els.copyGuideMessage, "Copy Guide");
 });
 
 els.openWhatsappMessage?.addEventListener("click", () => {
   renderCheckinMessage();
-  const phone = formatPhoneForWhatsapp(els.messagePhone.value);
-  const url = phone
-    ? `https://wa.me/${phone}?text=${encodeURIComponent(els.checkinMessagePreview.value)}`
-    : `https://wa.me/?text=${encodeURIComponent(els.checkinMessagePreview.value)}`;
-  window.open(url, "_blank");
+  const booking = selectedMessageBooking();
+  if (booking) openWhatsappForBooking(booking, "checkin");
+});
+
+els.openQuoteMessage?.addEventListener("click", () => {
+  renderQuickQuote(false);
+  renderCheckinMessage();
+  openWhatsappForQuote();
+});
+
+els.openGuideMessage?.addEventListener("click", () => {
+  renderCheckinMessage();
+  const booking = selectedMessageBooking();
+  if (booking) openWhatsappForBooking(booking, "guide");
 });
 
 els.addCommitment?.addEventListener("click", (event) => {
@@ -3140,6 +3610,7 @@ els.documentArchiveRows?.addEventListener("click", (event) => {
 });
 
 fillDocumentForm(defaultDocumentDraft());
+setMessageFlow("quote");
 setView(activeView);
 renderAll();
 initCloudStorage();

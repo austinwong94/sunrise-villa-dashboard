@@ -59,6 +59,10 @@
             <span aria-hidden="true">☷</span>
             Bookings
           </button>
+          <button class="nav-button" data-view="messages" type="button">
+            <span aria-hidden="true">✉</span>
+            Messages
+          </button>
           <button class="nav-button" data-view="documents" type="button">
             <span aria-hidden="true">▤</span>
             Documents
@@ -90,8 +94,8 @@
               <strong id="sideRevenue">RM 0</strong>
             </div>
             <div>
-              <span>Month Total to Receive</span>
-              <strong id="sideTotalToReceive">RM 0</strong>
+              <span>Refund Pending</span>
+              <strong id="sideRefundPending">RM 0</strong>
             </div>
             <div>
               <span>Month Balance</span>
@@ -168,16 +172,19 @@
         <section class="view" id="dashboardView" aria-labelledby="pageTitle">
           <section class="dashboard-guide">
             <div>
-              <p class="eyebrow">Selected month workspace</p>
+              <p class="eyebrow">Performance workspace</p>
               <h3 id="dashboardGuideTitle">Month Overview</h3>
             </div>
             <div class="dashboard-guide-actions">
-              <span>Use the month selector on the left to update every card.</span>
+              <div class="dashboard-mode-choice" role="group" aria-label="Dashboard view">
+                <button class="dashboard-mode-option active" type="button" data-dashboard-mode="monthly">Monthly</button>
+                <button class="dashboard-mode-option" type="button" data-dashboard-mode="annual">Annual</button>
+              </div>
               <button class="ghost-button compact" id="showDashboardSections" type="button">Show all sections</button>
             </div>
           </section>
 
-          <section class="dashboard-section dashboard-year">
+          <section class="dashboard-section dashboard-year" data-dashboard-scope="annual">
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Overall year outlook</p>
@@ -200,7 +207,7 @@
             </div>
           </section>
 
-          <section class="dashboard-section dashboard-month">
+          <section class="dashboard-section dashboard-month" data-dashboard-scope="monthly">
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Selected month income</p>
@@ -223,7 +230,7 @@
             </div>
           </section>
 
-          <section class="dashboard-section dashboard-profit">
+          <section class="dashboard-section dashboard-profit" data-dashboard-scope="monthly">
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Selected month profit</p>
@@ -302,7 +309,7 @@
             </details>
           </section>
 
-          <section class="dashboard-section dashboard-pnl">
+          <section class="dashboard-section dashboard-pnl" data-dashboard-scope="annual">
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Monthly P&L tabulation</p>
@@ -336,7 +343,7 @@
             </details>
           </section>
 
-          <section class="dashboard-section dashboard-performance">
+          <section class="dashboard-section dashboard-performance" data-dashboard-scope="monthly">
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Selected month stay performance</p>
@@ -357,7 +364,7 @@
           </section>
 
           <div class="dashboard-grid dashboard-charts">
-            <section class="chart-panel">
+            <section class="chart-panel" data-dashboard-scope="annual">
               <div class="section-heading">
                 <div>
                   <p class="eyebrow">Earnings tracker</p>
@@ -367,7 +374,7 @@
               <div class="bar-chart" id="incomeChart"></div>
             </section>
 
-            <section class="chart-panel">
+            <section class="chart-panel" data-dashboard-scope="monthly">
               <div class="section-heading">
                 <div>
                   <p class="eyebrow">Selected month channel mix</p>
@@ -378,33 +385,7 @@
             </section>
           </div>
 
-          <section class="table-panel dashboard-upcoming">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">Next stays</p>
-                <h3>Upcoming Arrivals</h3>
-              </div>
-            </div>
-            <div class="table-scroll">
-              <table class="compact-table">
-                <thead>
-                  <tr>
-                    <th>Guest</th>
-                    <th>Type</th>
-                    <th>Check-in</th>
-                    <th>Nights</th>
-                    <th>Balance</th>
-                    <th>Full Received</th>
-                    <th>Deposit Held</th>
-                    <th>Refund</th>
-                  </tr>
-                </thead>
-                <tbody id="upcomingRows"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <details class="table-panel report-drawer dashboard-monthly-table">
+          <details class="table-panel report-drawer dashboard-monthly-table" data-dashboard-scope="annual">
             <summary>
               <span>
                 <span class="eyebrow">All months</span>
@@ -436,14 +417,6 @@
         </section>
 
         <section class="view" id="bookingsView" aria-labelledby="pageTitle">
-          <section class="workspace-guide">
-            <div>
-              <p class="eyebrow">Booking operations</p>
-              <h3>Manage stays, payments, deposits and guest messages</h3>
-            </div>
-            <button class="primary-button" id="addFromBookingsGuide" type="button">+ Booking</button>
-          </section>
-
           <section class="table-panel">
             <div class="section-heading">
               <div>
@@ -453,6 +426,12 @@
               <button class="primary-button" id="addFromTable" type="button">+ Booking</button>
             </div>
             <div class="booking-toolbar">
+              <label class="booking-month-field">
+                <span>Month</span>
+                <select id="bookingMonthFilter">
+                  <option value="All">All months</option>
+                </select>
+              </label>
               <label>
                 <span>Search</span>
                 <input id="bookingSearch" type="search" placeholder="Guest name or prefix" />
@@ -519,55 +498,181 @@
             </div>
           </section>
 
+        </section>
+
+        <section class="view message-mode-quote" id="messagesView" aria-labelledby="pageTitle">
           <section class="table-panel message-panel">
-            <div class="message-hero">
-              <div>
-                <p class="eyebrow">WhatsApp-ready helper</p>
-                <h3>Check-in Message</h3>
-                <p>Select a booking, confirm the details, then copy or open WhatsApp with the message already prepared.</p>
-              </div>
-              <div class="message-code-card">
-                <span>Confirmation Code</span>
-                <strong id="messageCodeDisplay">SV-DDMM-A08</strong>
-              </div>
+            <div class="message-flow-tabs" role="tablist" aria-label="Message workflow">
+              <button class="message-flow-tab active" type="button" data-message-flow="quote">Quick Quotation</button>
+              <button class="message-flow-tab" type="button" data-message-flow="checkin">Check-in Flow</button>
             </div>
+
             <div class="message-layout">
-              <div class="message-form">
-                <label>Booking
-                  <select id="messageBookingSelect"></select>
-                </label>
-                <label>Guest Name
-                  <input id="messageGuestName" placeholder="Guest name" />
-                </label>
-                <label>Title
-                  <select id="messageGuestTitle">
-                    <option>Mr</option>
-                    <option>Ms</option>
-                  </select>
-                </label>
-                <label>Guest WhatsApp Number
-                  <input id="messagePhone" placeholder="60123456789" />
-                </label>
-                <label>Confirmation Code
-                  <input id="messageSecurityCode" readonly placeholder="Auto generated" />
-                </label>
-                <label>Check-in Time
-                  <input id="messageCheckinTime" value="3:00 PM" />
-                </label>
-                <label>Villa Address / Map Note
-                  <input id="messageAddress" placeholder="Paste address or Google Maps note" />
-                </label>
-              </div>
-              <div class="message-preview-wrap">
-                <label>Message Preview
-                  <textarea id="checkinMessagePreview" rows="12"></textarea>
-                </label>
-                <div class="message-actions">
-                  <button class="ghost-button" id="copyCheckinMessage" type="button">Copy Message</button>
-                  <button class="primary-button" id="openWhatsappMessage" type="button">Open WhatsApp</button>
+              <section class="message-details-card">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Step 1</p>
+                    <h3>Confirmed Booking Details</h3>
+                  </div>
                 </div>
-                <p class="helper-text">WhatsApp will open with the message pre-filled. You still need to press send in WhatsApp.</p>
-              </div>
+                <div class="message-form">
+                  <label>Booking
+                    <select id="messageBookingSelect"></select>
+                  </label>
+                  <label>Title
+                    <select id="messageGuestTitle">
+                      <option>Mr</option>
+                      <option>Ms</option>
+                    </select>
+                  </label>
+                  <label>Guest Name
+                    <input id="messageGuestName" placeholder="Guest name" />
+                  </label>
+                  <label>Guest WhatsApp Number
+                    <input id="messagePhone" placeholder="60123456789" />
+                  </label>
+                  <label>Confirmation Code
+                    <input id="messageSecurityCode" readonly placeholder="Auto generated" />
+                  </label>
+                  <label>Check-in Time
+                    <input id="messageCheckinTime" value="3:00 PM" />
+                  </label>
+                  <label>Villa Address / Map Note
+                    <input id="messageAddress" placeholder="Paste address or Google Maps note" />
+                  </label>
+                  <label>Google Maps Link
+                    <input id="messageMapsLink" placeholder="https://g.co/kgs/DYpYPSh" />
+                  </label>
+                  <label>Guest Guide Link
+                    <input id="messageGuideLink" placeholder="https://bit.ly/sunrisevilla-guest-guide" />
+                  </label>
+                </div>
+                <p class="helper-text">Used for confirmed guest check-in and guide messages: {guest}, {code}, {address}, {mapsLink}, {checkinTime}, {guideLink}</p>
+              </section>
+
+              <section class="message-template-stack">
+                <article class="message-template-card quote-card">
+                  <div class="message-template-head">
+                    <div>
+                      <p class="eyebrow">Before booking</p>
+                      <h3>Quick Quotation Message</h3>
+                    </div>
+                    <div class="message-actions">
+                      <button class="ghost-button" id="copyQuoteMessage" type="button">Copy Quote</button>
+                      <button class="primary-button warm" id="openQuoteMessage" type="button">Send Quote</button>
+                    </div>
+                  </div>
+                  <div class="quote-lead-panel">
+                    <div>
+                      <p class="eyebrow">Quotation lead</p>
+                      <h4>Guest details before booking is confirmed</h4>
+                    </div>
+                    <div class="quote-lead-grid">
+                      <label>Title
+                        <select id="quoteGuestTitle">
+                          <option>Mr</option>
+                          <option>Ms</option>
+                        </select>
+                      </label>
+                      <label>Guest Name
+                        <input id="quoteGuestName" placeholder="Eva" />
+                      </label>
+                      <label>Guest WhatsApp Number
+                        <input id="quotePhone" placeholder="60123456789" />
+                      </label>
+                    </div>
+                  </div>
+                  <div class="quote-grid">
+                    <label>Check-in
+                      <input id="quoteCheckIn" type="date" />
+                    </label>
+                    <label>Check-out
+                      <input id="quoteCheckOut" type="date" />
+                    </label>
+                    <label>Weekday Nights
+                      <input id="quoteWeekdayNights" type="number" min="0" step="1" />
+                    </label>
+                    <label>Weekend Nights
+                      <input id="quoteWeekendNights" type="number" min="0" step="1" />
+                    </label>
+                    <label>Public Holiday Nights
+                      <input id="quoteHolidayNights" type="number" min="0" step="1" value="0" />
+                    </label>
+                    <label>Weekday Rate
+                      <input id="quoteWeekdayRate" type="number" min="0" step="1" value="2488" />
+                    </label>
+                    <label>Weekend Rate
+                      <input id="quoteWeekendRate" type="number" min="0" step="1" value="2888" />
+                    </label>
+                    <label>Public Holiday Rate
+                      <input id="quoteHolidayRate" type="number" min="0" step="1" value="3688" />
+                    </label>
+                    <label>Cleaning Fee
+                      <input id="quoteCleaningFee" type="number" min="0" step="1" value="200" />
+                    </label>
+                    <label>Damage Deposit
+                      <input id="quoteDamageDeposit" type="number" min="0" step="1" value="500" />
+                    </label>
+                    <label>Actual Stay Charge
+                      <input id="quoteActualCharge" type="number" min="0" step="1" />
+                    </label>
+                    <label>Special Discount
+                      <input id="quoteDiscount" type="number" min="0" step="1" readonly />
+                    </label>
+                  </div>
+                  <div class="quote-summary-strip">
+                    <span>Standard total <strong id="quoteStandardTotal">RM 0.00</strong></span>
+                    <span>Guest pays <strong id="quoteGuestTotal">RM 0.00 + RM 500.00</strong></span>
+                    <span>Total nights <strong id="quoteTotalNights">0</strong></span>
+                  </div>
+                  <label>
+                    <span>Quick Quote Template</span>
+                    <textarea id="quoteTemplateInput" rows="13"></textarea>
+                  </label>
+                  <p class="helper-text">Quote placeholders: {guest}, {quoteCheckIn}, {quoteCheckOut}, {quoteAccommodationFee}, {quoteCleaningFee}, {quoteDamageDeposit}, {quoteDiscount}, {quoteActualCharge}, {quoteStandardTotal}, {quoteTotalNights}</p>
+                </article>
+
+                <article class="message-template-card checkin-flow-card">
+                  <div class="message-template-head">
+                    <div>
+                      <p class="eyebrow">After booking</p>
+                      <h3>Check-in Template</h3>
+                    </div>
+                    <div class="message-actions">
+                      <button class="ghost-button" id="copyCheckinMessage" type="button">Copy Check-in</button>
+                      <button class="primary-button" id="openWhatsappMessage" type="button">Send Check-in</button>
+                    </div>
+                  </div>
+                  <label>
+                    <span class="sr-only">Check-in Template</span>
+                    <textarea id="checkinTemplateInput" rows="12"></textarea>
+                  </label>
+                </article>
+
+                <article class="message-template-card checkin-flow-card">
+                  <div class="message-template-head">
+                    <div>
+                      <p class="eyebrow">After booking</p>
+                      <h3>Guest Guide Template</h3>
+                    </div>
+                    <div class="message-actions">
+                      <button class="ghost-button" id="copyGuideMessage" type="button">Copy Guide</button>
+                      <button class="primary-button warm" id="openGuideMessage" type="button">Send Guide</button>
+                    </div>
+                  </div>
+                  <label>
+                    <span class="sr-only">Guest Guide Template</span>
+                    <textarea id="guideTemplateInput" rows="7"></textarea>
+                  </label>
+                </article>
+                <p class="helper-text" id="messageCopyStatus" aria-live="polite">Send opens WhatsApp with the guest number and prepared text. You still press Send in WhatsApp.</p>
+                <div class="manual-copy-box hidden" id="manualCopyBox">
+                  <label>Copy manually
+                    <textarea id="manualCopyText" rows="7" readonly></textarea>
+                  </label>
+                  <p class="helper-text">Your browser blocked one-click copy. The message is selected above, press Cmd+C or Ctrl+C.</p>
+                </div>
+              </section>
             </div>
           </section>
         </section>
@@ -577,12 +682,6 @@
             <div>
               <p class="eyebrow">Villa documents</p>
               <h3>Quotations, Invoices & Official Receipts</h3>
-              <p>Create customer-ready A4 documents for Sunrise Villa Ventures and Windmill Villa Ventures, then keep every saved copy in one searchable archive.</p>
-            </div>
-            <div class="document-hero-card">
-              <span>Current Document No.</span>
-              <strong id="documentCodePreview">SVV-0501-QA08</strong>
-              <small>Generated from issuer, check-in date, document type, nights, and booking source.</small>
             </div>
           </section>
 
@@ -760,15 +859,6 @@
         </section>
 
         <section class="view" id="taxView" aria-labelledby="pageTitle">
-          <section class="tax-hero">
-            <div>
-              <p class="eyebrow">Planning workspace</p>
-              <h3>Enterprise to Sdn. Bhd. Tax Plan</h3>
-              <p>Estimate the split between enterprise income, company profit, director salary, and personal income tax before you confirm the final numbers.</p>
-            </div>
-            <div class="tax-disclaimer">Planning estimate only. Confirm final treatment, deductions, CP204/PCB and filing with your accountant or tax agent.</div>
-          </section>
-
           <section class="dashboard-section">
             <div class="section-heading">
               <div>
@@ -894,12 +984,14 @@
                 </div>
               </div>
               <div class="guest-name-fields">
-                <label>Title
-                  <select id="guestTitleInput">
-                    <option>Mr</option>
-                    <option>Ms</option>
-                  </select>
-                </label>
+                <div class="form-field">
+                  <span>Title</span>
+                  <input id="guestTitleInput" type="hidden" value="Mr" />
+                  <div class="booking-channel-choice title-choice" role="group" aria-label="Guest title">
+                    <button class="booking-channel-option active" type="button" data-title-choice="Mr" aria-pressed="true">Mr</button>
+                    <button class="booking-channel-option" type="button" data-title-choice="Ms" aria-pressed="false">Ms</button>
+                  </div>
+                </div>
                 <label>Guest Name
                   <input id="guestInput" required placeholder="Example: Amira Tan" />
                 </label>
@@ -920,9 +1012,17 @@
               <label>Date of Arrival
                 <input id="arrivalInput" type="date" required />
               </label>
-              <label>Nights of Stay
-                <input id="nightsInput" type="number" min="1" step="1" required />
-              </label>
+              <div class="form-field">
+                <span>Nights of Stay</span>
+                <input id="nightsInput" type="hidden" value="1" required />
+                <div class="booking-channel-choice nights-choice" role="group" aria-label="Nights of stay">
+                  <button class="booking-channel-option active" type="button" data-nights-choice="1" aria-pressed="true">1</button>
+                  <button class="booking-channel-option" type="button" data-nights-choice="2" aria-pressed="false">2</button>
+                  <button class="booking-channel-option" type="button" data-nights-choice="3" aria-pressed="false">3</button>
+                  <button class="booking-channel-option" type="button" data-nights-choice="manual" aria-pressed="false">Manual</button>
+                </div>
+                <input class="hidden" id="nightsManualInput" type="number" min="4" step="1" placeholder="Enter nights" />
+              </div>
             </div>
           </section>
 
