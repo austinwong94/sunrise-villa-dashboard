@@ -74,12 +74,16 @@
         </nav>
 
         <section class="month-switcher" aria-label="Month selector">
-          <button class="icon-button" id="prevMonth" type="button" title="Previous month">‹</button>
-          <label for="monthPicker">
-            <span>Month</span>
-            <input id="monthPicker" type="month" />
-          </label>
-          <button class="icon-button" id="nextMonth" type="button" title="Next month">›</button>
+          <button class="icon-button" id="prevMonth" type="button" title="Previous year">‹</button>
+          <div class="month-picker-panel">
+            <div class="month-picker-head">
+              <span>Year</span>
+              <strong id="monthYearLabel">2026</strong>
+            </div>
+            <div class="month-button-grid" id="monthButtonGrid" aria-label="Select month"></div>
+            <input class="sr-only" id="monthPicker" type="month" tabindex="-1" aria-hidden="true" />
+          </div>
+          <button class="icon-button" id="nextMonth" type="button" title="Next year">›</button>
         </section>
 
         <section class="sidebar-panel focus-panel">

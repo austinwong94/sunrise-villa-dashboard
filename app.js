@@ -70,6 +70,8 @@ let activeView = "calendar";
 
 const els = {
   monthPicker: document.querySelector("#monthPicker"),
+  monthButtonGrid: document.querySelector("#monthButtonGrid"),
+  monthYearLabel: document.querySelector("#monthYearLabel"),
   prevMonth: document.querySelector("#prevMonth"),
   nextMonth: document.querySelector("#nextMonth"),
   pageTitle: document.querySelector("#pageTitle"),
@@ -887,6 +889,10 @@ function nightsBetween(checkIn, checkOut) {
 function monthLabel(monthValue) {
   const [year, month] = monthValue.split("-").map(Number);
   return new Date(year, month - 1, 1).toLocaleDateString("en-MY", { month: "long", year: "numeric" });
+}
+
+function shortMonthName(monthIndex) {
+  return new Date(2026, monthIndex, 1).toLocaleDateString("en-MY", { month: "short" });
 }
 
 function shortDate(iso) {
@@ -2974,8 +2980,28 @@ function renderTaxPlan() {
   els.personalTaxOut.textContent = money(personalTax);
 }
 
+function renderMonthButtons() {
+  if (!els.monthButtonGrid) return;
+  const [year, selectedMonthNumber] = selectedMonth.split("-").map(Number);
+  if (els.monthYearLabel) els.monthYearLabel.textContent = String(year);
+  els.monthButtonGrid.innerHTML = Array.from({ length: 12 }, (_, index) => {
+    const monthNumber = index + 1;
+    const monthValue = `${year}-${String(monthNumber).padStart(2, "0")}`;
+    const monthTotals = totalsFor(monthValue);
+    const isActive = monthNumber === selectedMonthNumber;
+    const hasBookings = monthTotals.bookings > 0;
+    return `
+      <button class="month-button ${isActive ? "active" : ""} ${hasBookings ? "has-bookings" : ""}" type="button" data-month-value="${monthValue}" aria-pressed="${isActive}">
+        <span>${shortMonthName(index)}</span>
+        ${hasBookings ? `<small>${monthTotals.bookings}</small>` : ""}
+      </button>
+    `;
+  }).join("");
+}
+
 function renderAll() {
   els.monthPicker.value = selectedMonth;
+  renderMonthButtons();
   renderCalendar();
   renderDetails();
   renderDashboard();
@@ -3000,15 +3026,22 @@ els.monthPicker.addEventListener("change", () => {
   renderAll();
 });
 
+els.monthButtonGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-month-value]");
+  if (!button) return;
+  selectedMonth = button.dataset.monthValue;
+  renderAll();
+});
+
 els.prevMonth.addEventListener("click", () => {
   const [year, month] = selectedMonth.split("-").map(Number);
-  selectedMonth = isoDate(new Date(year, month - 2, 1)).slice(0, 7);
+  selectedMonth = `${year - 1}-${String(month).padStart(2, "0")}`;
   renderAll();
 });
 
 els.nextMonth.addEventListener("click", () => {
   const [year, month] = selectedMonth.split("-").map(Number);
-  selectedMonth = isoDate(new Date(year, month, 1)).slice(0, 7);
+  selectedMonth = `${year + 1}-${String(month).padStart(2, "0")}`;
   renderAll();
 });
 
