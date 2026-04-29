@@ -1971,13 +1971,14 @@ async function copyTextToClipboard(text) {
     await navigator.clipboard.writeText(text);
     return true;
   }
-  return fallbackCopyText(text);
+  return false;
 }
 
 function showManualCopy(text) {
   if (!els.manualCopyBox || !els.manualCopyText) return;
   els.manualCopyBox.classList.remove("hidden");
   els.manualCopyText.value = text;
+  els.manualCopyText.textContent = text;
   els.manualCopyText.focus();
   els.manualCopyText.select();
   els.manualCopyText.setSelectionRange(0, els.manualCopyText.value.length);
