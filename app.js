@@ -1217,8 +1217,9 @@ function renderDetails() {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const upcomingBookings = monthBookings.filter((booking) => dateObj(departureFor(booking)) >= today);
-  const pastBookings = monthBookings.filter((booking) => dateObj(departureFor(booking)) < today);
+  const currentBookings = monthBookings.filter((booking) => dateObj(booking.arrival) <= today && dateObj(departureFor(booking)) > today);
+  const upcomingBookings = monthBookings.filter((booking) => dateObj(booking.arrival) > today);
+  const pastBookings = monthBookings.filter((booking) => dateObj(departureFor(booking)) <= today);
   const bookingRows = (items) =>
     items
       .map((booking) => {
@@ -1268,7 +1269,9 @@ function renderDetails() {
           </tr>
         </thead>
         <tbody>
-          <tr class="quick-section-row"><td colspan="11">Upcoming / Current Guests</td></tr>
+          <tr class="quick-section-row current"><td colspan="11">Current Guests</td></tr>
+          ${currentBookings.length ? bookingRows(currentBookings) : `<tr><td colspan="11" class="empty-row">No current guests for this selected month.</td></tr>`}
+          <tr class="quick-section-row"><td colspan="11">Upcoming Guests</td></tr>
           ${upcomingBookings.length ? bookingRows(upcomingBookings) : `<tr><td colspan="11" class="empty-row">No upcoming guests for this selected month.</td></tr>`}
           <tr class="quick-section-row past"><td colspan="11">Past Guests</td></tr>
           ${pastBookings.length ? bookingRows(pastBookings) : `<tr><td colspan="11" class="empty-row">No past guests for this selected month.</td></tr>`}

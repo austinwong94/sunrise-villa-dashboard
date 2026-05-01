@@ -923,6 +923,11 @@ button {
   text-transform: uppercase;
 }
 
+.quick-view-table .quick-section-row.current td {
+  background: linear-gradient(90deg, rgba(226, 248, 235, 0.96), rgba(255, 249, 223, 0.82));
+  color: #2d7653;
+}
+
 .quick-view-table .quick-section-row.past td {
   background: rgba(255, 255, 255, 0.72);
   color: var(--muted);
