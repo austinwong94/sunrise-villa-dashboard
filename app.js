@@ -297,6 +297,7 @@ function normalizeBooking(booking) {
     depositAmount: channel === "Airbnb" && !booking.depositPaid && depositAmount === 500 ? 0 : depositAmount,
     depositPaid: Boolean(booking.depositPaid),
     depositRefunded: Boolean(booking.depositRefunded),
+    whatsappSent: Boolean(booking.whatsappSent),
   };
 }
 
@@ -710,11 +711,21 @@ function fullReceivedControl(booking) {
   `;
 }
 
+function whatsappSentControl(booking) {
+  return `
+    <label class="wa-toggle" title="WhatsApp check-in details sent">
+      <input type="checkbox" data-whatsapp-sent="${booking.id}" ${booking.whatsappSent ? "checked" : ""} />
+      <span class="sr-only">WhatsApp sent</span>
+    </label>
+  `;
+}
+
 const quickColumnOptions = [
   { key: "guest", label: "Guest", locked: true },
   { key: "type", label: "Type" },
   { key: "checkin", label: "Check-in", locked: true },
   { key: "nights", label: "Nights", locked: true },
+  { key: "wa", label: "W/A", locked: true },
   { key: "revenue", label: "Accommodation" },
   { key: "deposit", label: "Deposit" },
   { key: "total", label: "Total" },
@@ -777,6 +788,12 @@ function setFullReceived(id, checked) {
   );
   saveBookings();
   renderAll();
+}
+
+function setWhatsappSent(id, checked) {
+  bookings = bookings.map((booking) => (booking.id === id ? { ...booking, whatsappSent: Boolean(checked) } : booking));
+  saveBookings();
+  renderDetails();
 }
 
 function currentYear() {
@@ -1238,6 +1255,7 @@ function renderDetails() {
             ${quickCell("type", channelBadgeFor(booking))}
             ${quickCell("checkin", `<strong>${quickDate(booking.arrival)}</strong>`)}
             ${quickCell("nights", `<strong>${booking.nights}</strong>`)}
+            ${quickCell("wa", whatsappSentControl(booking))}
             ${quickCell("revenue", money(booking.revenue), "amount-cell")}
             ${quickCell("deposit", money(booking.depositAmount), "amount-cell")}
             ${quickCell("total", money(totalToReceiveFor(booking)), "amount-cell")}
@@ -1259,6 +1277,7 @@ function renderDetails() {
             <th data-col="type">Type</th>
             <th data-col="checkin">Check-in</th>
             <th data-col="nights">Nights</th>
+            <th data-col="wa">W/A</th>
             <th data-col="revenue">Accommodation Fees</th>
             <th data-col="deposit">Damage Deposit</th>
             <th data-col="total">Total to Receive</th>
@@ -1269,12 +1288,12 @@ function renderDetails() {
           </tr>
         </thead>
         <tbody>
-          <tr class="quick-section-row current"><td colspan="11">Current Guests</td></tr>
-          ${currentBookings.length ? bookingRows(currentBookings) : `<tr><td colspan="11" class="empty-row">No current guests for this selected month.</td></tr>`}
-          <tr class="quick-section-row"><td colspan="11">Upcoming Guests</td></tr>
-          ${upcomingBookings.length ? bookingRows(upcomingBookings) : `<tr><td colspan="11" class="empty-row">No upcoming guests for this selected month.</td></tr>`}
-          <tr class="quick-section-row past"><td colspan="11">Past Guests</td></tr>
-          ${pastBookings.length ? bookingRows(pastBookings) : `<tr><td colspan="11" class="empty-row">No past guests for this selected month.</td></tr>`}
+          <tr class="quick-section-row current"><td colspan="12">Current Guests</td></tr>
+          ${currentBookings.length ? bookingRows(currentBookings) : `<tr><td colspan="12" class="empty-row">No current guests for this selected month.</td></tr>`}
+          <tr class="quick-section-row"><td colspan="12">Upcoming Guests</td></tr>
+          ${upcomingBookings.length ? bookingRows(upcomingBookings) : `<tr><td colspan="12" class="empty-row">No upcoming guests for this selected month.</td></tr>`}
+          <tr class="quick-section-row past"><td colspan="12">Past Guests</td></tr>
+          ${pastBookings.length ? bookingRows(pastBookings) : `<tr><td colspan="12" class="empty-row">No past guests for this selected month.</td></tr>`}
         </tbody>
       </table>
       <div class="quick-summary">
@@ -3168,6 +3187,8 @@ els.detailsList.addEventListener("change", (event) => {
   if (fullReceivedId) setFullReceived(fullReceivedId, event.target.checked);
   const refundId = event.target.dataset.refundToggle;
   if (refundId) setDepositRefunded(refundId, event.target.checked);
+  const whatsappId = event.target.dataset.whatsappSent;
+  if (whatsappId) setWhatsappSent(whatsappId, event.target.checked);
 });
 
 els.upcomingRows?.addEventListener("change", (event) => {

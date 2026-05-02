@@ -877,6 +877,11 @@ button {
   text-align: center;
 }
 
+.quick-view-table [data-col="wa"] {
+  width: 42px;
+  text-align: center;
+}
+
 .quick-view-table [data-col="revenue"],
 .quick-view-table [data-col="deposit"],
 .quick-view-table [data-col="total"],
@@ -936,6 +941,19 @@ button {
 
 .quick-view-table tr:last-child td {
   border-bottom: none;
+}
+
+.wa-toggle {
+  min-height: 22px;
+  display: inline-grid;
+  place-items: center;
+}
+
+.wa-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--pink);
+  cursor: pointer;
 }
 
 .guest-cell {
