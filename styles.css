@@ -855,30 +855,30 @@ button {
 
 .quick-view-table {
   width: 100%;
-  min-width: 920px;
+  min-width: 0;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
 .quick-view-table [data-col="guest"] {
-  width: 190px;
+  width: 180px;
 }
 
 .quick-view-table [data-col="type"] {
-  width: 92px;
+  width: 78px;
 }
 
 .quick-view-table [data-col="checkin"] {
-  width: 98px;
+  width: 82px;
 }
 
 .quick-view-table [data-col="nights"] {
-  width: 70px;
+  width: 52px;
   text-align: center;
 }
 
 .quick-view-table [data-col="wa"] {
-  width: 42px;
+  width: 36px;
   text-align: center;
 }
 
@@ -887,15 +887,15 @@ button {
 .quick-view-table [data-col="total"],
 .quick-view-table [data-col="received"],
 .quick-view-table [data-col="balance"] {
-  width: 118px;
+  width: 102px;
 }
 
 .quick-view-table [data-col="full"] {
-  width: 112px;
+  width: 96px;
 }
 
 .quick-view-table [data-col="refund"] {
-  width: 108px;
+  width: 86px;
 }
 
 .quick-view-table .hidden-col {
@@ -904,16 +904,16 @@ button {
 
 .quick-view-table th,
 .quick-view-table td {
-  padding: 9px 8px;
+  padding: 8px 6px;
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 11.5px;
   line-height: 1.18;
 }
 
 .quick-view-table th {
   background: #fff0f6;
   color: var(--navy);
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
   white-space: nowrap;
 }

@@ -2103,9 +2103,27 @@ function renderBookingColumnControls() {
   setupTableColumnResizers("#bookingsTable", "booking");
 }
 
+const quickColumnWidthLimits = {
+  guest: 180,
+  type: 78,
+  checkin: 82,
+  nights: 52,
+  wa: 36,
+  revenue: 102,
+  deposit: 102,
+  total: 102,
+  received: 102,
+  full: 96,
+  balance: 102,
+  refund: 86,
+};
+
 function applyTableColumnWidths(tableSelector, widths) {
   document.querySelectorAll(`${tableSelector} [data-col]`).forEach((cell) => {
-    const width = Number(widths[cell.dataset.col] || 0);
+    const storedWidth = Number(widths[cell.dataset.col] || 0);
+    const width = tableSelector === "#quickViewTable" && quickColumnWidthLimits[cell.dataset.col]
+      ? Math.min(storedWidth, quickColumnWidthLimits[cell.dataset.col])
+      : storedWidth;
     if (width > 0) {
       cell.style.width = `${width}px`;
       cell.style.minWidth = `${width}px`;
@@ -2142,7 +2160,9 @@ function setupTableColumnResizers(tableSelector, tableType) {
 
 document.addEventListener("mousemove", (event) => {
   if (!activeColumnResize) return;
-  const nextWidth = Math.max(64, Math.min(260, Math.round(activeColumnResize.startWidth + event.clientX - activeColumnResize.startX)));
+  const maxWidth = activeColumnResize.tableType === "quick" ? (quickColumnWidthLimits[activeColumnResize.key] || 160) : 260;
+  const minWidth = activeColumnResize.tableType === "quick" ? 34 : 64;
+  const nextWidth = Math.max(minWidth, Math.min(maxWidth, Math.round(activeColumnResize.startWidth + event.clientX - activeColumnResize.startX)));
   const key = activeColumnResize.tableType === "quick" ? "quickColumnWidths" : "bookingColumnWidths";
   appSettings = {
     ...appSettings,
