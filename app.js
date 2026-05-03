@@ -2237,7 +2237,7 @@ function renderDashboard() {
   if (els.sideRefundPending) els.sideRefundPending.textContent = money(totals.refundPending);
   els.sideBalance.textContent = money(totals.balance);
   els.sideUpcomingPayments.textContent = money(upcomingPayments);
-  els.sideNights.textContent = totals.nights;
+  els.sideNights.textContent = `${selectedPerformance.bookedNights}/${selectedPerformance.availableNights} (${percent(selectedPerformance.occupancyRate)})`;
   els.overallTitle.textContent = `${year} Overall Summary`;
   els.overallRevenue.textContent = money(overall.revenue);
   els.overallTotalToReceive.textContent = money(overall.totalToReceive);
