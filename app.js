@@ -7,6 +7,7 @@ const SUPABASE_URL = "https://nigzeyamrzrozftbujmm.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Hs81yUXxrGC4ydDZ7nWGsQ_MlCtxqED";
 const CLOUD_DATA_TYPE = "full_app_backup";
 const CLOUD_RECORD_KEY = "sunrise-villa-main";
+const APP_VERSION = "2026.05.04";
 
 let supabaseClient = null;
 let cloudUser = null;
@@ -104,6 +105,11 @@ const els = {
   backupStatus: document.querySelector("#backupStatus"),
   backupNow: document.querySelector("#backupNow"),
   restoreBackup: document.querySelector("#restoreBackup"),
+  syncCloudNow: document.querySelector("#syncCloudNow"),
+  dataHealthStatus: document.querySelector("#dataHealthStatus"),
+  dataHealthLastSync: document.querySelector("#dataHealthLastSync"),
+  dataHealthBackup: document.querySelector("#dataHealthBackup"),
+  dataHealthRecords: document.querySelector("#dataHealthRecords"),
   showDashboardSections: document.querySelector("#showDashboardSections"),
   overallTitle: document.querySelector("#overallTitle"),
   overallRevenue: document.querySelector("#overallRevenue"),
@@ -466,6 +472,7 @@ function saveProfitData() {
 function defaultAppSettings() {
   return {
     lastBackupAt: "",
+    lastCloudSyncAt: "",
     dashboardHidden: {},
     dashboardMode: "monthly",
     bookingMonthFilter: "Selected",
@@ -1419,6 +1426,7 @@ function setCloudStatus(mode, title, text) {
   ui.panel?.dataset && (ui.panel.dataset.status = mode);
   if (ui.title) ui.title.textContent = title;
   if (ui.text) ui.text.textContent = text;
+  renderDataHealth(mode);
 }
 
 function syncCloudAuthUi() {
@@ -1471,6 +1479,8 @@ async function saveCloudSnapshot() {
     return;
   }
   cloudRecordId = data?.id || cloudRecordId;
+  appSettings = { ...appSettings, lastCloudSyncAt: new Date().toISOString() };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
   setCloudStatus("connected", "Cloud storage connected", `Saved to Supabase at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`);
 }
 
@@ -1497,6 +1507,8 @@ async function loadCloudSnapshot() {
     isRestoringCloudData = true;
     restoreAppData(data.data);
     isRestoringCloudData = false;
+    appSettings = { ...appSettings, lastCloudSyncAt: data.updated_at || new Date().toISOString() };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
     setCloudStatus("connected", "Cloud storage connected", "Loaded your latest Supabase data.");
     return;
   }
@@ -1561,11 +1573,57 @@ function renderBackupStatus() {
   if (!els.backupStatus) return;
   if (!appSettings.lastBackupAt) {
     els.backupStatus.textContent = "Not yet";
+    if (els.dataHealthBackup) els.dataHealthBackup.textContent = "JSON export: not yet";
     return;
   }
   const last = new Date(appSettings.lastBackupAt);
   const days = Math.floor((Date.now() - last.getTime()) / 86400000);
-  els.backupStatus.textContent = days <= 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} ago`;
+  const label = days <= 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} ago`;
+  els.backupStatus.textContent = label;
+  if (els.dataHealthBackup) els.dataHealthBackup.textContent = `JSON export: ${label}`;
+}
+
+function shortDateTimeLabel(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString([], {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderDataHealth(statusMode = "") {
+  if (els.dataHealthStatus) {
+    const cloudLabel = cloudUser
+      ? statusMode === "syncing"
+        ? "Cloud: syncing"
+        : statusMode === "error"
+          ? "Cloud: needs attention"
+          : "Cloud: connected"
+      : "Cloud: login required";
+    els.dataHealthStatus.textContent = cloudLabel;
+    els.dataHealthStatus.dataset.status = statusMode || (cloudUser ? "connected" : "offline");
+  }
+  if (els.dataHealthLastSync) {
+    els.dataHealthLastSync.textContent = `Last synced: ${shortDateTimeLabel(appSettings.lastCloudSyncAt)}`;
+  }
+  if (els.dataHealthRecords) {
+    els.dataHealthRecords.textContent = `${bookings.length} booking${bookings.length === 1 ? "" : "s"} saved`;
+  }
+  renderBackupStatus();
+}
+
+async function syncCloudNow() {
+  if (!supabaseClient) initSupabaseClient();
+  if (!supabaseClient || !cloudUser) {
+    setCloudStatus("error", "Cloud login needed", "Log in first, then use Sync cloud now.");
+    return;
+  }
+  setCloudStatus("syncing", "Saving cloud backup", "Sending your latest website data to Supabase.");
+  await saveCloudSnapshot();
 }
 
 function saveSelectedProfitMonth(nextMonthData) {
@@ -3063,7 +3121,7 @@ function renderAll() {
   renderDashboard();
   renderBookingsTable();
   renderMessageGenerator();
-  renderBackupStatus();
+  renderDataHealth();
   renderDocuments();
   renderTaxPlan();
   setupDashboardToggles();
@@ -3434,6 +3492,7 @@ els.oneOffCostList?.addEventListener("click", (event) => {
 });
 
 els.backupNow?.addEventListener("click", downloadBackup);
+els.syncCloudNow?.addEventListener("click", syncCloudNow);
 
 els.restoreBackup?.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];

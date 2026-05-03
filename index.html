@@ -127,9 +127,10 @@
               <div class="data-menu-list">
                 <button class="ghost-button" id="exportSheets" type="button">Google Sheets CSV</button>
                 <button class="ghost-button soft-action" id="exportJson" type="button">Backup JSON</button>
+                <button class="ghost-button" id="syncCloudNow" type="button">Sync cloud now</button>
                 <div class="backup-menu-row">
-                  <span>Last backup: <strong id="backupStatus">Not yet</strong></span>
-                  <button class="ghost-button compact" id="backupNow" type="button">Backup now</button>
+                  <span>Last JSON export: <strong id="backupStatus">Not yet</strong></span>
+                  <button class="ghost-button compact" id="backupNow" type="button">Export now</button>
                 </div>
                 <label class="ghost-button file-button">
                   Import
@@ -143,6 +144,14 @@
             </details>
           </div>
         </header>
+
+        <section class="data-health-panel" aria-label="Website data health">
+          <span class="health-pill" id="dataHealthStatus">Cloud: checking</span>
+          <span class="health-pill" id="dataHealthLastSync">Last synced: -</span>
+          <span class="health-pill" id="dataHealthBackup">JSON export: not yet</span>
+          <span class="health-pill" id="dataHealthRecords">0 bookings</span>
+          <span class="health-pill">Version 2026.05.04</span>
+        </section>
 
         <section class="view active" id="calendarView" aria-labelledby="pageTitle">
           <div class="calendar-layout">

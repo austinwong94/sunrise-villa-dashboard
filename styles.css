@@ -521,6 +521,46 @@ button {
   align-items: start;
 }
 
+.data-health-panel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: -6px 0 18px;
+}
+
+.health-pill {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(122, 54, 80, 0.14);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.health-pill[data-status="connected"] {
+  border-color: rgba(69, 166, 106, 0.28);
+  background: var(--green-soft);
+  color: #287548;
+}
+
+.health-pill[data-status="syncing"] {
+  border-color: rgba(247, 168, 75, 0.32);
+  background: rgba(255, 209, 102, 0.18);
+  color: #8a5b16;
+}
+
+.health-pill[data-status="error"] {
+  border-color: rgba(200, 63, 94, 0.26);
+  background: rgba(253, 232, 241, 0.9);
+  color: var(--red);
+}
+
 .primary-button {
   background: linear-gradient(135deg, var(--teal), #e36a8b);
   color: white;
