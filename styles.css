@@ -3425,8 +3425,23 @@ dialog::backdrop {
 
 .doc-item-table {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   margin: 18px 0;
+}
+
+.doc-item-table th:first-child,
+.doc-item-table td:first-child {
+  width: auto;
+  overflow-wrap: anywhere;
+}
+
+.doc-item-table th:last-child,
+.doc-item-table td:last-child {
+  width: 150px;
+  white-space: nowrap;
 }
 
 .doc-item-table th,
