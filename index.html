@@ -760,6 +760,10 @@
                   <label>Company to Claim / Bill To
                     <input id="docBillTo" placeholder="Company name or guest name" />
                   </label>
+                  <label class="wide-field">Company / Billing Address
+                    <textarea id="docBillAddress" rows="3" placeholder="Enter address line 1&#10;Enter address line 2&#10;Postcode, city, state"></textarea>
+                    <small>Press Enter to start a new address line.</small>
+                  </label>
                 </div>
               </section>
 
@@ -872,6 +876,12 @@
         </section>
 
         <section class="view" id="taxView" aria-labelledby="pageTitle">
+          <div class="message-flow-tabs tax-inner-tabs" role="tablist" aria-label="Tax workspace">
+            <button class="message-flow-tab active" type="button" data-tax-inner-tab="plan">Tax Plan</button>
+            <button class="message-flow-tab" type="button" data-tax-inner-tab="expenses">Expense Records</button>
+          </div>
+
+          <div class="tax-inner-panel active" data-tax-inner-panel="plan">
           <section class="dashboard-section">
             <div class="section-heading">
               <div>
@@ -970,6 +980,182 @@
               <label><input id="taxNoteDocs" type="checkbox" /> Keep receipts, Airbnb statements, bank records and owner withdrawals clearly filed</label>
             </div>
           </section>
+          </div>
+
+          <div class="tax-inner-panel" data-tax-inner-panel="expenses">
+            <section class="tax-expense-entry dashboard-section">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Quick entry</p>
+                  <h3>Add Expense</h3>
+                </div>
+              </div>
+
+              <form class="tax-expense-form" id="taxExpenseForm">
+                <input id="taxExpenseId" type="hidden" />
+                <div class="tax-expense-grid">
+                  <label>Date
+                    <input id="taxExpenseDate" type="date" required />
+                  </label>
+                  <label>Business
+                    <select id="taxExpenseEntity">
+                      <option>Enterprise</option>
+                      <option>Sdn. Bhd.</option>
+                      <option>Personal / Owner</option>
+                    </select>
+                  </label>
+                  <label>Property
+                    <select id="taxExpenseProperty">
+                      <option>Sunrise Villa</option>
+                      <option>Windmill Villa</option>
+                      <option>Shared</option>
+                    </select>
+                  </label>
+                  <label>Category
+                    <select id="taxExpenseCategory"></select>
+                  </label>
+                  <label>Amount
+                    <input id="taxExpenseAmount" type="number" min="0" step="0.01" required />
+                  </label>
+                  <label>Paid To / Supplier
+                    <input id="taxExpenseVendor" placeholder="Example: TNB, supermarket, contractor" />
+                  </label>
+                  <label class="wide-field">Notes
+                    <textarea id="taxExpenseNotes" rows="2" placeholder="Short description for accountant or tax filing"></textarea>
+                  </label>
+                </div>
+                <details class="tax-accounting-drawer">
+                  <summary>Accounting details, receipt and tax review</summary>
+                  <div class="tax-accounting-grid">
+                    <label>Payment Method
+                      <select id="taxExpensePayment">
+                        <option>Bank Transfer</option>
+                        <option>Cash</option>
+                        <option>Credit Card</option>
+                        <option>Debit Card</option>
+                        <option>E-wallet</option>
+                        <option>Other</option>
+                      </select>
+                    </label>
+                    <label>Paid / Claim Status
+                      <select id="taxExpenseClaimStatus">
+                        <option>Paid by business</option>
+                        <option>Paid personally</option>
+                        <option>Reimbursed</option>
+                        <option>Not reimbursed</option>
+                      </select>
+                    </label>
+                    <label>Type
+                      <select id="taxExpenseType">
+                        <option>One-off</option>
+                        <option>Recurring</option>
+                      </select>
+                    </label>
+                    <label>Tax Status
+                      <select id="taxExpenseDeductible">
+                        <option>Deductible</option>
+                        <option>Partially deductible</option>
+                        <option>Not deductible</option>
+                        <option>Ask accountant</option>
+                      </select>
+                    </label>
+                    <label>Receipt / Reference No.
+                      <input id="taxExpenseReceipt" placeholder="Invoice, receipt or transaction no." />
+                    </label>
+                    <label class="file-upload-field">Receipt Attachment
+                      <input id="taxExpenseAttachment" type="file" accept="image/*,.pdf" />
+                      <span id="taxExpenseAttachmentStatus">No file attached</span>
+                    </label>
+                    <label class="checkbox-label tax-review-check">
+                      <input id="taxExpenseReviewed" type="checkbox" />
+                      Accountant reviewed
+                    </label>
+                  </div>
+                </details>
+                <div class="tax-expense-actions">
+                  <button class="primary-button" type="submit">Save Expense</button>
+                  <button class="ghost-button" id="clearTaxExpense" type="button">Clear</button>
+                  <button class="ghost-button" id="removeTaxExpenseAttachment" type="button">Remove Attachment</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="tax-expense-summary" id="taxExpenseSummary"></section>
+
+            <section class="table-panel">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Tabulated records</p>
+                  <h3 id="taxExpenseTableTitle">Expense List</h3>
+                </div>
+                <div class="heading-actions">
+                  <button class="ghost-button compact" id="exportTaxExpensesExcel" type="button">Export Excel</button>
+                  <button class="ghost-button compact" id="exportTaxExpensesPdf" type="button">Export PDF</button>
+                </div>
+              </div>
+              <div class="booking-toolbar tax-expense-toolbar">
+                <label>
+                  <span>Year</span>
+                  <input id="taxExpenseYearFilter" type="number" min="2024" max="2035" step="1" />
+                </label>
+                <label>
+                  <span>Month</span>
+                  <select id="taxExpenseMonthFilter">
+                    <option value="All">All months</option>
+                    <option value="01">Jan</option>
+                    <option value="02">Feb</option>
+                    <option value="03">Mar</option>
+                    <option value="04">Apr</option>
+                    <option value="05">May</option>
+                    <option value="06">Jun</option>
+                    <option value="07">Jul</option>
+                    <option value="08">Aug</option>
+                    <option value="09">Sep</option>
+                    <option value="10">Oct</option>
+                    <option value="11">Nov</option>
+                    <option value="12">Dec</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Category</span>
+                  <select id="taxExpenseCategoryFilter">
+                    <option value="All">All categories</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Receipt</span>
+                  <select id="taxExpenseReceiptFilter">
+                    <option value="All">All records</option>
+                    <option value="Missing">Missing receipt</option>
+                    <option value="Attached">Has attachment</option>
+                    <option value="Review">Review pending</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Search</span>
+                  <input id="taxExpenseSearch" type="search" placeholder="Supplier, notes, receipt no." />
+                </label>
+              </div>
+              <div class="table-scroll">
+                <table class="compact-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Business</th>
+                      <th>Property</th>
+                      <th>Category</th>
+                      <th>Supplier</th>
+                      <th>Receipt</th>
+                      <th>Review</th>
+                      <th>Amount</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="taxExpenseRows"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
         </section>
       </main>
     </div>

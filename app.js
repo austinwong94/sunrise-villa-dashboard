@@ -52,6 +52,22 @@ const defaultCommitments = [
 ];
 
 const GUIDE_LINK = "https://bit.ly/sunrisevilla-guest-guide";
+const taxExpenseCategories = [
+  "Housekeeping",
+  "Maintenance",
+  "Electricity & Water",
+  "Groceries",
+  "Gas",
+  "Supplies",
+  "Repairs",
+  "Credit Card / Loans",
+  "Bank Charges",
+  "Marketing",
+  "Accounting & Tax",
+  "Insurance",
+  "Licences & Fees",
+  "Other",
+];
 
 const defaultMessageTemplates = {
   quote:
@@ -68,6 +84,8 @@ let profitData = loadProfitData();
 let appSettings = loadAppSettings();
 let selectedMonth = initialMonth();
 let activeView = "calendar";
+let pendingTaxExpenseAttachment = null;
+let removePendingTaxExpenseAttachment = false;
 
 const els = {
   monthPicker: document.querySelector("#monthPicker"),
@@ -225,6 +243,7 @@ const els = {
   docBookingType: document.querySelector("#docBookingType"),
   docGuestName: document.querySelector("#docGuestName"),
   docBillTo: document.querySelector("#docBillTo"),
+  docBillAddress: document.querySelector("#docBillAddress"),
   docProperty: document.querySelector("#docProperty"),
   docCheckIn: document.querySelector("#docCheckIn"),
   docCheckOut: document.querySelector("#docCheckOut"),
@@ -271,6 +290,35 @@ const els = {
   taxNoteSalary: document.querySelector("#taxNoteSalary"),
   taxNoteCp204: document.querySelector("#taxNoteCp204"),
   taxNoteDocs: document.querySelector("#taxNoteDocs"),
+  taxExpenseForm: document.querySelector("#taxExpenseForm"),
+  taxExpenseId: document.querySelector("#taxExpenseId"),
+  taxExpenseDate: document.querySelector("#taxExpenseDate"),
+  taxExpenseEntity: document.querySelector("#taxExpenseEntity"),
+  taxExpenseProperty: document.querySelector("#taxExpenseProperty"),
+  taxExpenseCategory: document.querySelector("#taxExpenseCategory"),
+  taxExpenseAmount: document.querySelector("#taxExpenseAmount"),
+  taxExpenseType: document.querySelector("#taxExpenseType"),
+  taxExpenseDeductible: document.querySelector("#taxExpenseDeductible"),
+  taxExpenseVendor: document.querySelector("#taxExpenseVendor"),
+  taxExpensePayment: document.querySelector("#taxExpensePayment"),
+  taxExpenseClaimStatus: document.querySelector("#taxExpenseClaimStatus"),
+  taxExpenseReceipt: document.querySelector("#taxExpenseReceipt"),
+  taxExpenseAttachment: document.querySelector("#taxExpenseAttachment"),
+  taxExpenseAttachmentStatus: document.querySelector("#taxExpenseAttachmentStatus"),
+  removeTaxExpenseAttachment: document.querySelector("#removeTaxExpenseAttachment"),
+  taxExpenseReviewed: document.querySelector("#taxExpenseReviewed"),
+  taxExpenseNotes: document.querySelector("#taxExpenseNotes"),
+  taxExpenseSummary: document.querySelector("#taxExpenseSummary"),
+  taxExpenseRows: document.querySelector("#taxExpenseRows"),
+  taxExpenseTableTitle: document.querySelector("#taxExpenseTableTitle"),
+  taxExpenseYearFilter: document.querySelector("#taxExpenseYearFilter"),
+  taxExpenseMonthFilter: document.querySelector("#taxExpenseMonthFilter"),
+  taxExpenseCategoryFilter: document.querySelector("#taxExpenseCategoryFilter"),
+  taxExpenseReceiptFilter: document.querySelector("#taxExpenseReceiptFilter"),
+  taxExpenseSearch: document.querySelector("#taxExpenseSearch"),
+  clearTaxExpense: document.querySelector("#clearTaxExpense"),
+  exportTaxExpensesExcel: document.querySelector("#exportTaxExpensesExcel"),
+  exportTaxExpensesPdf: document.querySelector("#exportTaxExpensesPdf"),
 };
 
 let taxPlan = loadTaxPlan();
@@ -321,12 +369,44 @@ function defaultTaxPlan() {
     sdnExpenses: 0,
     monthlySalary: 0,
     personalReliefs: 9000,
+    expenses: [],
     notes: {
       books: false,
       salary: false,
       cp204: false,
       docs: false,
     },
+  };
+}
+
+function normalizeTaxExpense(expense = {}) {
+  const attachment =
+    expense.attachment && typeof expense.attachment === "object"
+      ? {
+          name: String(expense.attachment.name || ""),
+          type: String(expense.attachment.type || ""),
+          dataUrl: String(expense.attachment.dataUrl || ""),
+          attachedAt: expense.attachment.attachedAt || new Date().toISOString(),
+        }
+      : null;
+  return {
+    id: expense.id || crypto.randomUUID(),
+    date: String(expense.date || isoDate(new Date())),
+    entity: ["Enterprise", "Sdn. Bhd.", "Personal / Owner"].includes(expense.entity) ? expense.entity : "Enterprise",
+    property: ["Sunrise Villa", "Windmill Villa", "Shared"].includes(expense.property) ? expense.property : "Sunrise Villa",
+    category: taxExpenseCategories.includes(expense.category) ? expense.category : "Other",
+    type: expense.type === "Recurring" ? "Recurring" : "One-off",
+    deductible: ["Deductible", "Partially deductible", "Not deductible", "Ask accountant"].includes(expense.deductible) ? expense.deductible : "Deductible",
+    vendor: String(expense.vendor || ""),
+    payment: String(expense.payment || "Bank Transfer"),
+    claimStatus: ["Paid by business", "Paid personally", "Reimbursed", "Not reimbursed"].includes(expense.claimStatus) ? expense.claimStatus : "Paid by business",
+    receipt: String(expense.receipt || ""),
+    attachment,
+    reviewed: Boolean(expense.reviewed),
+    notes: String(expense.notes || ""),
+    amount: Number(expense.amount || 0),
+    createdAt: expense.createdAt || new Date().toISOString(),
+    updatedAt: expense.updatedAt || new Date().toISOString(),
   };
 }
 
@@ -339,6 +419,7 @@ function loadTaxPlan() {
     return {
       ...fallback,
       ...parsed,
+      expenses: Array.isArray(parsed.expenses) ? parsed.expenses.map(normalizeTaxExpense) : fallback.expenses,
       notes: { ...fallback.notes, ...(parsed.notes || {}) },
     };
   } catch {
@@ -379,6 +460,7 @@ function normalizeDocument(doc) {
     bookingType,
     guestName: String(doc.guestName || ""),
     billTo: String(doc.billTo || ""),
+    billAddress: String(doc.billAddress || ""),
     propertyName: String(doc.propertyName || "Sunrise Villa"),
     checkIn,
     checkOut,
@@ -621,6 +703,10 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeMultiline(value) {
+  return escapeHtml(value).replace(/\r?\n/g, "<br>");
 }
 
 function money(value) {
@@ -1161,6 +1247,19 @@ function setMessageFlow(flow) {
         : "Check-in Flow uses confirmed bookings already saved in your database.";
   }
   els.manualCopyBox?.classList.add("hidden");
+}
+
+function setTaxInnerTab(mode) {
+  const nextMode = mode === "expenses" ? "expenses" : "plan";
+  document.querySelectorAll("[data-tax-inner-tab]").forEach((button) => {
+    const active = button.dataset.taxInnerTab === nextMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.querySelectorAll("[data-tax-inner-panel]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.taxInnerPanel === nextMode);
+  });
+  if (nextMode === "expenses") renderTaxExpenses();
 }
 
 function staySegmentClass(booking, dayIso) {
@@ -1789,7 +1888,12 @@ function restoreAppData(data) {
     bookings = Array.isArray(data.bookings) ? data.bookings.map(normalizeBooking) : bookings;
     documents = Array.isArray(data.documents) ? data.documents.map(normalizeDocument) : documents;
     taxPlan = data.taxPlan
-      ? { ...defaultTaxPlan(), ...data.taxPlan, notes: { ...defaultTaxPlan().notes, ...(data.taxPlan.notes || {}) } }
+      ? {
+          ...defaultTaxPlan(),
+          ...data.taxPlan,
+          expenses: Array.isArray(data.taxPlan.expenses) ? data.taxPlan.expenses.map(normalizeTaxExpense) : [],
+          notes: { ...defaultTaxPlan().notes, ...(data.taxPlan.notes || {}) },
+        }
       : taxPlan;
     profitData = data.profitData && typeof data.profitData === "object" ? data.profitData : profitData;
     appSettings = data.appSettings
@@ -2694,6 +2798,7 @@ function defaultDocumentDraft() {
     bookingType: "Direct Booking",
     guestName: "",
     billTo: "",
+    billAddress: "",
     propertyName: "Sunrise Villa",
     checkIn: today,
     checkOut: isoDate(addDays(new Date(), 1)),
@@ -2715,6 +2820,7 @@ function formDocument() {
     bookingType: els.docBookingType.value,
     guestName: els.docGuestName.value.trim(),
     billTo: els.docBillTo.value.trim(),
+    billAddress: els.docBillAddress.value.trim(),
     propertyName: els.docProperty.value.trim(),
     checkIn: els.docCheckIn.value || isoDate(new Date()),
     checkOut: els.docCheckOut.value || isoDate(addDays(new Date(), 1)),
@@ -2742,6 +2848,7 @@ function fillDocumentForm(doc) {
   els.docBookingType.value = normalized.bookingType;
   els.docGuestName.value = normalized.guestName;
   els.docBillTo.value = normalized.billTo;
+  els.docBillAddress.value = normalized.billAddress;
   els.docProperty.value = normalized.propertyName;
   els.docCheckIn.value = normalized.checkIn;
   els.docCheckOut.value = normalized.checkOut;
@@ -2838,7 +2945,8 @@ function renderDocumentPreview(doc = formDocument()) {
       <section>
         <h4>Bill To</h4>
         <p><strong>${escapeHtml(normalized.guestName || "Guest Name")}</strong></p>
-        <p>${escapeHtml(normalized.billTo || normalized.guestName || "-")}</p>
+        ${normalized.billTo ? `<p>${escapeHtml(normalized.billTo)}</p>` : ""}
+        ${normalized.billAddress ? `<p class="doc-address">${escapeMultiline(normalized.billAddress)}</p>` : ""}
       </section>
       <section>
         <h4>Booking Details</h4>
@@ -3008,7 +3116,7 @@ function renderDocumentArchive() {
   const type = els.documentTypeFilter?.value || "All";
   const filtered = documents
     .filter((doc) => {
-      const haystack = `${doc.code} ${doc.type} ${doc.issuer} ${doc.guestName} ${doc.billTo} ${doc.propertyName} ${doc.checkIn} ${doc.checkOut}`.toLowerCase();
+      const haystack = `${doc.code} ${doc.type} ${doc.issuer} ${doc.guestName} ${doc.billTo} ${doc.billAddress} ${doc.propertyName} ${doc.checkIn} ${doc.checkOut}`.toLowerCase();
       if (type !== "All" && doc.type !== type) return false;
       return !search || haystack.includes(search);
     })
@@ -3083,6 +3191,300 @@ function renderTaxPlan() {
   els.personalSalaryOut.textContent = money(annualSalary);
   els.reliefOut.textContent = money(personalReliefs);
   els.personalTaxOut.textContent = money(personalTax);
+  renderTaxExpenses();
+}
+
+function taxExpenseFilters() {
+  return {
+    year: Number(els.taxExpenseYearFilter?.value || taxPlan.year || currentYear()),
+    month: els.taxExpenseMonthFilter?.value || "All",
+    category: els.taxExpenseCategoryFilter?.value || "All",
+    receipt: els.taxExpenseReceiptFilter?.value || "All",
+    search: els.taxExpenseSearch?.value.trim().toLowerCase() || "",
+  };
+}
+
+function filteredTaxExpenses() {
+  const filters = taxExpenseFilters();
+  return (taxPlan.expenses || [])
+    .filter((expense) => {
+      const date = new Date(`${expense.date}T00:00:00`);
+      if (Number.isNaN(date.getTime())) return false;
+      if (date.getFullYear() !== filters.year) return false;
+      if (filters.month !== "All" && expense.date.slice(5, 7) !== filters.month) return false;
+      if (filters.category !== "All" && expense.category !== filters.category) return false;
+      if (filters.receipt === "Missing" && (expense.receipt || expense.attachment?.dataUrl)) return false;
+      if (filters.receipt === "Attached" && !expense.attachment?.dataUrl) return false;
+      if (filters.receipt === "Review" && expense.reviewed) return false;
+      const haystack = `${expense.entity} ${expense.property} ${expense.category} ${expense.type} ${expense.deductible} ${expense.vendor} ${expense.payment} ${expense.claimStatus} ${expense.receipt} ${expense.notes}`.toLowerCase();
+      return !filters.search || haystack.includes(filters.search);
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function renderTaxExpenseSelects() {
+  if (els.taxExpenseCategory && !els.taxExpenseCategory.options.length) {
+    els.taxExpenseCategory.innerHTML = taxExpenseCategories.map((category) => `<option>${escapeHtml(category)}</option>`).join("");
+  }
+  if (els.taxExpenseCategoryFilter && els.taxExpenseCategoryFilter.options.length <= 1) {
+    els.taxExpenseCategoryFilter.innerHTML = `<option value="All">All categories</option>${taxExpenseCategories.map((category) => `<option>${escapeHtml(category)}</option>`).join("")}`;
+  }
+}
+
+function clearTaxExpenseForm() {
+  if (!els.taxExpenseForm) return;
+  els.taxExpenseForm.reset();
+  els.taxExpenseId.value = "";
+  els.taxExpenseDate.value = isoDate(new Date());
+  els.taxExpenseEntity.value = "Enterprise";
+  els.taxExpenseProperty.value = "Sunrise Villa";
+  els.taxExpenseCategory.value = "Housekeeping";
+  els.taxExpenseType.value = "One-off";
+  els.taxExpenseDeductible.value = "Deductible";
+  els.taxExpensePayment.value = "Bank Transfer";
+  els.taxExpenseClaimStatus.value = "Paid by business";
+  els.taxExpenseReviewed.checked = false;
+  pendingTaxExpenseAttachment = null;
+  removePendingTaxExpenseAttachment = false;
+  if (els.taxExpenseAttachment) els.taxExpenseAttachment.value = "";
+  if (els.taxExpenseAttachmentStatus) els.taxExpenseAttachmentStatus.textContent = "No file attached";
+}
+
+function formTaxExpense() {
+  const now = new Date().toISOString();
+  const existing = (taxPlan.expenses || []).find((expense) => expense.id === els.taxExpenseId.value);
+  return normalizeTaxExpense({
+    id: els.taxExpenseId.value || crypto.randomUUID(),
+    date: els.taxExpenseDate.value || isoDate(new Date()),
+    entity: els.taxExpenseEntity.value,
+    property: els.taxExpenseProperty.value,
+    category: els.taxExpenseCategory.value,
+    type: els.taxExpenseType.value,
+    deductible: els.taxExpenseDeductible.value,
+    vendor: els.taxExpenseVendor.value.trim(),
+    payment: els.taxExpensePayment.value,
+    claimStatus: els.taxExpenseClaimStatus.value,
+    receipt: els.taxExpenseReceipt.value.trim(),
+    attachment: pendingTaxExpenseAttachment || (removePendingTaxExpenseAttachment ? null : existing?.attachment || null),
+    reviewed: els.taxExpenseReviewed.checked,
+    notes: els.taxExpenseNotes.value.trim(),
+    amount: Number(els.taxExpenseAmount.value || 0),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+}
+
+function fileToTaxAttachment(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve({
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        dataUrl: String(reader.result || ""),
+        attachedAt: new Date().toISOString(),
+      });
+    });
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+function receiptLabel(expense) {
+  if (expense.attachment?.dataUrl) return "Attached";
+  if (expense.receipt) return "Ref only";
+  return "Missing";
+}
+
+function attachmentLink(expense) {
+  if (!expense.attachment?.dataUrl) return "";
+  return `<a class="small-action" href="${expense.attachment.dataUrl}" download="${escapeHtml(expense.attachment.name || "receipt")}" title="${escapeHtml(expense.attachment.name || "Receipt")}">View</a>`;
+}
+
+function fillTaxExpenseForm(id) {
+  const expense = (taxPlan.expenses || []).find((item) => item.id === id);
+  if (!expense) return;
+  renderTaxExpenseSelects();
+  els.taxExpenseId.value = expense.id;
+  els.taxExpenseDate.value = expense.date;
+  els.taxExpenseEntity.value = expense.entity;
+  els.taxExpenseProperty.value = expense.property;
+  els.taxExpenseCategory.value = expense.category;
+  els.taxExpenseType.value = expense.type;
+  els.taxExpenseDeductible.value = expense.deductible;
+  els.taxExpenseAmount.value = expense.amount;
+  els.taxExpenseVendor.value = expense.vendor;
+  els.taxExpensePayment.value = expense.payment;
+  els.taxExpenseClaimStatus.value = expense.claimStatus;
+  els.taxExpenseReceipt.value = expense.receipt;
+  els.taxExpenseReviewed.checked = Boolean(expense.reviewed);
+  els.taxExpenseNotes.value = expense.notes;
+  pendingTaxExpenseAttachment = null;
+  removePendingTaxExpenseAttachment = false;
+  if (els.taxExpenseAttachment) els.taxExpenseAttachment.value = "";
+  if (els.taxExpenseAttachmentStatus) {
+    els.taxExpenseAttachmentStatus.textContent = expense.attachment?.name ? `Attached: ${expense.attachment.name}` : "No file attached";
+  }
+}
+
+function saveTaxExpense(event) {
+  event.preventDefault();
+  if (!els.taxExpenseForm.reportValidity()) return;
+  const expense = formTaxExpense();
+  taxPlan = {
+    ...taxPlan,
+    expenses: (taxPlan.expenses || []).some((item) => item.id === expense.id)
+      ? taxPlan.expenses.map((item) => (item.id === expense.id ? expense : item))
+      : [expense, ...(taxPlan.expenses || [])],
+  };
+  saveTaxPlan();
+  clearTaxExpenseForm();
+  renderTaxExpenses();
+}
+
+function deleteTaxExpense(id) {
+  if (!window.confirm("Delete this expense record?")) return;
+  taxPlan = { ...taxPlan, expenses: (taxPlan.expenses || []).filter((expense) => expense.id !== id) };
+  saveTaxPlan();
+  renderTaxExpenses();
+}
+
+function taxExpenseExportRows(rows = filteredTaxExpenses()) {
+  return rows.map((expense) => [
+    expense.date,
+    expense.entity,
+    expense.property,
+    expense.category,
+    expense.type,
+    expense.deductible,
+    expense.vendor || "-",
+    expense.notes || "-",
+    expense.payment || "-",
+    expense.claimStatus,
+    expense.receipt || "-",
+    expense.attachment?.name || "-",
+    expense.reviewed ? "Reviewed" : "Pending",
+    Number(expense.amount || 0),
+  ]);
+}
+
+function renderTaxExpenses() {
+  if (!els.taxExpenseRows) return;
+  renderTaxExpenseSelects();
+  if (els.taxExpenseYearFilter && !els.taxExpenseYearFilter.value) els.taxExpenseYearFilter.value = taxPlan.year || currentYear();
+  if (els.taxExpenseDate && !els.taxExpenseDate.value) clearTaxExpenseForm();
+  const rows = filteredTaxExpenses();
+  const filters = taxExpenseFilters();
+  const total = rows.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const missingReceiptCount = rows.filter((expense) => !expense.receipt && !expense.attachment?.dataUrl).length;
+  const reviewPendingCount = rows.filter((expense) => !expense.reviewed).length;
+  const byCategory = rows.reduce((acc, expense) => {
+    acc[expense.category] = (acc[expense.category] || 0) + Number(expense.amount || 0);
+    return acc;
+  }, {});
+  const topCategories = Object.entries(byCategory).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (els.taxExpenseTableTitle) els.taxExpenseTableTitle.textContent = `${filters.year} Expense List`;
+  if (els.taxExpenseSummary) {
+    els.taxExpenseSummary.innerHTML = `
+      <article class="tax-expense-card"><span>Total expenses</span><strong>${money(total)}</strong></article>
+      <article class="tax-expense-card"><span>Missing receipts</span><strong>${missingReceiptCount}</strong></article>
+      <article class="tax-expense-card"><span>Review pending</span><strong>${reviewPendingCount}</strong></article>
+      <article class="tax-expense-card"><span>Top category</span><strong>${escapeHtml(topCategories[0]?.[0] || "-")}</strong></article>
+    `;
+  }
+  els.taxExpenseRows.innerHTML = rows.length
+    ? rows
+        .map(
+          (expense) => `
+            <tr>
+              <td>${shortDate(expense.date)}</td>
+              <td>${escapeHtml(expense.entity)}</td>
+              <td>${escapeHtml(expense.property)}</td>
+              <td><span class="doc-status">${escapeHtml(expense.category)}</span></td>
+              <td>${escapeHtml(expense.vendor || "-")}</td>
+              <td>${escapeHtml(receiptLabel(expense))}<br><span class="table-muted">${escapeHtml(expense.receipt || expense.attachment?.name || "-")}</span>${attachmentLink(expense)}</td>
+              <td>${expense.reviewed ? "Reviewed" : "Pending"}</td>
+              <td><strong>${money(expense.amount)}</strong></td>
+              <td class="actions">
+                <button class="small-action" type="button" data-edit-tax-expense="${expense.id}">Edit</button>
+                <button class="small-action danger-action" type="button" data-delete-tax-expense="${expense.id}">Delete</button>
+              </td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="9" class="empty-state">No expense records for this filter.</td></tr>`;
+}
+
+function exportTaxExpensesExcel() {
+  const headers = ["Date", "Business", "Property", "Category", "Type", "Tax Status", "Supplier", "Description", "Payment", "Claim Status", "Receipt", "Attachment", "Review", "Amount"];
+  const rows = taxExpenseExportRows();
+  const tableHtml = `
+    <table>
+      <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
+      ${rows.map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`).join("")}
+    </table>
+  `;
+  const blob = new Blob([tableHtml], { type: "application/vnd.ms-excel" });
+  const link = document.createElement("a");
+  link.download = `sunrise-villa-tax-expenses-${taxExpenseFilters().year}.xls`;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function exportTaxExpensesPdf() {
+  const filters = taxExpenseFilters();
+  const rows = filteredTaxExpenses();
+  const total = rows.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Sunrise Villa Tax Expenses</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 28px; color: #2f1e28; }
+          h1 { margin: 0 0 6px; }
+          p { margin: 0 0 18px; color: #6f5b64; }
+          table { width: 100%; border-collapse: collapse; font-size: 12px; }
+          th, td { border: 1px solid #e8cfc8; padding: 8px; text-align: left; }
+          th { background: #fff1f6; }
+          .total { margin: 18px 0; font-weight: 800; }
+        </style>
+      </head>
+      <body>
+        <h1>Sunrise Villa Tax Expense Report</h1>
+        <p>${filters.year} ${filters.month === "All" ? "All months" : monthLabel(`${filters.year}-${filters.month}`)} · ${filters.category === "All" ? "All categories" : escapeHtml(filters.category)}</p>
+        <div class="total">Total Expenses: ${money(total)}</div>
+        <table>
+          <thead><tr><th>Date</th><th>Business</th><th>Property</th><th>Category</th><th>Tax</th><th>Claim</th><th>Receipt</th><th>Review</th><th>Amount</th></tr></thead>
+          <tbody>
+            ${rows
+              .map(
+                (expense) => `
+                  <tr>
+                    <td>${shortDate(expense.date)}</td>
+                    <td>${escapeHtml(expense.entity)}</td>
+                    <td>${escapeHtml(expense.property)}</td>
+                    <td>${escapeHtml(expense.category)}</td>
+                    <td>${escapeHtml(expense.deductible)}</td>
+                    <td>${escapeHtml(expense.claimStatus)}</td>
+                    <td>${escapeHtml(expense.receipt || expense.attachment?.name || receiptLabel(expense))}</td>
+                    <td>${expense.reviewed ? "Reviewed" : "Pending"}</td>
+                    <td>${money(expense.amount)}</td>
+                  </tr>
+                `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
 }
 
 function renderMonthButtons() {
@@ -3508,6 +3910,10 @@ document.querySelectorAll("[data-message-flow]").forEach((button) => {
   button.addEventListener("click", () => setMessageFlow(button.dataset.messageFlow));
 });
 
+document.querySelectorAll("[data-tax-inner-tab]").forEach((button) => {
+  button.addEventListener("click", () => setTaxInnerTab(button.dataset.taxInnerTab));
+});
+
 [els.messageGuestTitle, els.messageGuestName, els.messagePhone, els.messageSecurityCode, els.messageCheckinTime, els.messageAddress, els.messageMapsLink, els.messageGuideLink, els.quoteGuestTitle, els.quoteGuestName, els.quotePhone, els.quoteTemplateInput, els.checkinTemplateInput, els.guideTemplateInput].forEach((control) => {
   control?.addEventListener("input", renderCheckinMessage);
   control?.addEventListener("change", renderCheckinMessage);
@@ -3657,6 +4063,7 @@ document.querySelector("#dashboardView")?.addEventListener("click", (event) => {
   els.docBookingType,
   els.docGuestName,
   els.docBillTo,
+  els.docBillAddress,
   els.docProperty,
   els.docAccommodationFee,
   els.docDepositAmount,
@@ -3759,8 +4166,47 @@ els.documentArchiveRows?.addEventListener("click", (event) => {
   });
 });
 
+els.taxExpenseForm?.addEventListener("submit", saveTaxExpense);
+els.clearTaxExpense?.addEventListener("click", clearTaxExpenseForm);
+els.removeTaxExpenseAttachment?.addEventListener("click", () => {
+  pendingTaxExpenseAttachment = null;
+  removePendingTaxExpenseAttachment = true;
+  if (els.taxExpenseAttachment) els.taxExpenseAttachment.value = "";
+  if (els.taxExpenseAttachmentStatus) els.taxExpenseAttachmentStatus.textContent = "Attachment will be removed";
+});
+els.taxExpenseAttachment?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.size > 2_500_000) {
+    event.target.value = "";
+    if (els.taxExpenseAttachmentStatus) els.taxExpenseAttachmentStatus.textContent = "File too large. Use below 2.5 MB.";
+    return;
+  }
+  try {
+    pendingTaxExpenseAttachment = await fileToTaxAttachment(file);
+    removePendingTaxExpenseAttachment = false;
+    if (els.taxExpenseAttachmentStatus) els.taxExpenseAttachmentStatus.textContent = `Ready: ${file.name}`;
+  } catch {
+    pendingTaxExpenseAttachment = null;
+    if (els.taxExpenseAttachmentStatus) els.taxExpenseAttachmentStatus.textContent = "Could not read file";
+  }
+});
+[els.taxExpenseYearFilter, els.taxExpenseMonthFilter, els.taxExpenseCategoryFilter, els.taxExpenseReceiptFilter, els.taxExpenseSearch].forEach((control) => {
+  control?.addEventListener("input", renderTaxExpenses);
+  control?.addEventListener("change", renderTaxExpenses);
+});
+els.taxExpenseRows?.addEventListener("click", (event) => {
+  const editId = event.target.dataset.editTaxExpense;
+  if (editId) fillTaxExpenseForm(editId);
+  const deleteId = event.target.dataset.deleteTaxExpense;
+  if (deleteId) deleteTaxExpense(deleteId);
+});
+els.exportTaxExpensesExcel?.addEventListener("click", exportTaxExpensesExcel);
+els.exportTaxExpensesPdf?.addEventListener("click", exportTaxExpensesPdf);
+
 fillDocumentForm(defaultDocumentDraft());
 setMessageFlow("quote");
+setTaxInnerTab("plan");
 setView(activeView);
 renderAll();
 initCloudStorage();

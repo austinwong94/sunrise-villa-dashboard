@@ -1751,6 +1751,262 @@ button {
   color: var(--navy);
 }
 
+.tax-inner-tabs {
+  margin-bottom: 18px;
+}
+
+.tax-inner-panel {
+  display: none;
+}
+
+.tax-inner-panel.active {
+  display: block;
+}
+
+.tax-expense-form {
+  display: grid;
+  gap: 0;
+  padding: 14px;
+}
+
+.tax-expense-grid {
+  display: grid;
+  grid-template-columns: 128px minmax(130px, 0.75fr) minmax(140px, 0.8fr) minmax(165px, 1fr) 130px;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.tax-expense-grid label,
+.tax-accounting-grid label {
+  display: grid;
+  grid-template-rows: 14px 40px;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tax-expense-grid input,
+.tax-expense-grid select,
+.tax-expense-grid textarea,
+.tax-accounting-grid input,
+.tax-accounting-grid select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 11px;
+  background: white;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.tax-expense-grid textarea {
+  height: 40px;
+  min-height: 40px;
+  padding-block: 10px;
+  resize: vertical;
+}
+
+.tax-expense-grid .wide-field {
+  grid-column: span 2;
+}
+
+.tax-accounting-drawer {
+  margin-top: 10px;
+  border: 1px solid rgba(122, 54, 80, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 248, 251, 0.72);
+}
+
+.tax-accounting-drawer summary {
+  height: 40px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.tax-accounting-drawer summary::-webkit-details-marker {
+  display: none;
+}
+
+.tax-accounting-drawer summary::after {
+  content: "Show";
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 9px;
+  background: white;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tax-accounting-drawer[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.tax-accounting-drawer[open] summary::after {
+  content: "Hide";
+}
+
+.tax-accounting-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+.file-upload-field {
+  min-height: 60px;
+  grid-template-rows: 14px 40px 16px !important;
+  align-content: stretch;
+}
+
+.file-upload-field input {
+  padding-top: 7px;
+}
+
+.file-upload-field span {
+  min-height: 16px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.tax-review-check {
+  min-height: 40px;
+  align-self: end;
+  height: 40px;
+  margin-top: 20px;
+}
+
+.tax-expense-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tax-expense-actions .primary-button,
+.tax-expense-actions .ghost-button {
+  min-height: 38px;
+  height: 38px;
+}
+
+.tax-expense-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.tax-expense-card {
+  min-height: 78px;
+  display: grid;
+  align-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 249, 223, 0.88), rgba(255, 240, 245, 0.62)),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: var(--soft-shadow);
+  min-width: 0;
+}
+
+.tax-expense-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.tax-expense-card strong {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tax-expense-toolbar {
+  grid-template-columns: 90px 125px 160px 140px minmax(220px, 1fr);
+  align-items: end;
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.tax-expense-entry .section-heading {
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.22), rgba(255, 255, 255, 0.72));
+}
+
+.tax-expense-entry {
+  overflow: hidden;
+}
+
+#taxExpenseRows td {
+  font-size: 12px;
+  line-height: 1.25;
+  padding: 8px 10px;
+}
+
+#taxExpenseRows th {
+  padding: 8px 10px;
+}
+
+#taxExpenseRows td:nth-child(8) {
+  white-space: nowrap;
+}
+
+#taxExpenseRows .small-action {
+  margin-top: 4px;
+}
+
+#taxExpenseRows td.actions {
+  min-width: 112px;
+}
+
+#taxExpenseRows .small-action,
+#taxExpenseRows .small-action:link {
+  min-height: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px 3px 2px 0;
+  line-height: 1;
+  text-decoration: none;
+}
+
+#taxView .compact-table {
+  min-width: 860px;
+}
+
 .message-layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
@@ -3126,6 +3382,13 @@ dialog::backdrop {
   margin: 4px 0;
 }
 
+.doc-address {
+  margin-top: 8px !important;
+  color: #64545b;
+  line-height: 1.45;
+  white-space: normal;
+}
+
 .doc-item-table {
   width: 100%;
   border-collapse: collapse;
@@ -3389,6 +3652,31 @@ dialog::backdrop {
   .tax-form-grid,
   .tax-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tax-expense-summary,
+  .tax-expense-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .tax-expense-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tax-accounting-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tax-expense-grid .wide-field {
+    grid-column: auto;
+  }
+
+  .tax-expense-actions {
+    justify-content: stretch;
+  }
+
+  .tax-expense-actions > * {
+    flex: 1;
   }
 
   .calendar-grid {
