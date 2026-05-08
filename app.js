@@ -3,6 +3,9 @@ const TAX_PLAN_KEY = "sunrise-villa-tax-plan-v1";
 const DOCUMENTS_KEY = "sunrise-villa-documents-v1";
 const PROFIT_KEY = "sunrise-villa-profit-v1";
 const SETTINGS_KEY = "sunrise-villa-settings-v1";
+const RECOVERY_KEY = "sunrise-villa-recovery-v1";
+const RECOVERY_SESSION_KEY = "sunrise-villa-recovery-session-v1";
+const MAX_RECOVERY_SNAPSHOTS = 8;
 const SUPABASE_URL = "https://nigzeyamrzrozftbujmm.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Hs81yUXxrGC4ydDZ7nWGsQ_MlCtxqED";
 const CLOUD_DATA_TYPE = "full_app_backup";
@@ -124,6 +127,10 @@ const els = {
   backupNow: document.querySelector("#backupNow"),
   restoreBackup: document.querySelector("#restoreBackup"),
   syncCloudNow: document.querySelector("#syncCloudNow"),
+  recoverySnapshotSelect: document.querySelector("#recoverySnapshotSelect"),
+  restoreRecoverySnapshot: document.querySelector("#restoreRecoverySnapshot"),
+  downloadRecoverySnapshot: document.querySelector("#downloadRecoverySnapshot"),
+  recoveryStatus: document.querySelector("#recoveryStatus"),
   dataHealthStatus: document.querySelector("#dataHealthStatus"),
   dataHealthLastSync: document.querySelector("#dataHealthLastSync"),
   dataHealthBackup: document.querySelector("#dataHealthBackup"),
@@ -1497,6 +1504,7 @@ function drawQuickViewImage() {
 function allAppData() {
   return {
     version: 2,
+    appVersion: APP_VERSION,
     exportedAt: new Date().toISOString(),
     bookings,
     documents,
@@ -1504,6 +1512,110 @@ function allAppData() {
     profitData,
     appSettings,
   };
+}
+
+function recoveryCounts(data = allAppData()) {
+  return {
+    bookings: Array.isArray(data.bookings) ? data.bookings.length : 0,
+    documents: Array.isArray(data.documents) ? data.documents.length : 0,
+    expenses: Array.isArray(data.taxPlan?.expenses) ? data.taxPlan.expenses.length : 0,
+  };
+}
+
+function hasMeaningfulAppData(data = allAppData()) {
+  const counts = recoveryCounts(data);
+  return counts.bookings > 0 || counts.documents > 0 || counts.expenses > 0;
+}
+
+function incomingDataLooksSmaller(incomingData, currentData = allAppData()) {
+  const incoming = recoveryCounts(incomingData);
+  const current = recoveryCounts(currentData);
+  return (
+    (current.bookings > 0 && incoming.bookings < current.bookings) ||
+    (current.documents > 0 && incoming.documents < current.documents) ||
+    (current.expenses > 0 && incoming.expenses < current.expenses)
+  );
+}
+
+function loadRecoverySnapshots() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECOVERY_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecoverySnapshots(snapshots) {
+  let next = snapshots.slice(0, MAX_RECOVERY_SNAPSHOTS);
+  while (next.length) {
+    try {
+      localStorage.setItem(RECOVERY_KEY, JSON.stringify(next));
+      return true;
+    } catch {
+      next = next.slice(0, -1);
+    }
+  }
+  return false;
+}
+
+function createRecoverySnapshot(reason, data = allAppData()) {
+  if (!hasMeaningfulAppData(data)) return false;
+  const snapshot = {
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    reason,
+    appVersion: APP_VERSION,
+    counts: recoveryCounts(data),
+    data,
+  };
+  const snapshots = [snapshot, ...loadRecoverySnapshots().filter((item) => item?.id !== snapshot.id)];
+  const saved = writeRecoverySnapshots(snapshots);
+  renderRecoverySnapshots();
+  return saved;
+}
+
+function recoverySnapshotLabel(snapshot) {
+  const date = new Date(snapshot.createdAt);
+  const dateLabel = Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const counts = snapshot.counts || recoveryCounts(snapshot.data || {});
+  return `${dateLabel} · ${snapshot.reason || "Safety copy"} · ${counts.bookings || 0} bookings · ${counts.documents || 0} docs`;
+}
+
+function renderRecoverySnapshots() {
+  if (!els.recoverySnapshotSelect) return;
+  const snapshots = loadRecoverySnapshots();
+  els.recoverySnapshotSelect.innerHTML = snapshots.length
+    ? snapshots.map((snapshot) => `<option value="${snapshot.id}">${escapeHtml(recoverySnapshotLabel(snapshot))}</option>`).join("")
+    : `<option value="">No recovery point saved</option>`;
+  if (els.recoveryStatus) {
+    els.recoveryStatus.textContent = snapshots.length
+      ? `${snapshots.length} recovery point${snapshots.length === 1 ? "" : "s"} saved in this browser.`
+      : "No recovery point yet.";
+  }
+}
+
+function selectedRecoverySnapshot() {
+  const id = els.recoverySnapshotSelect?.value;
+  return loadRecoverySnapshots().find((snapshot) => snapshot.id === id);
+}
+
+function downloadJsonFile(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function createStartupRecoverySnapshot() {
+  if (sessionStorage.getItem(RECOVERY_SESSION_KEY)) {
+    renderRecoverySnapshots();
+    return;
+  }
+  sessionStorage.setItem(RECOVERY_SESSION_KEY, "1");
+  createRecoverySnapshot("Before this session loaded");
 }
 
 function cloudEls() {
@@ -1603,7 +1715,17 @@ async function loadCloudSnapshot() {
 
   if (data?.data) {
     cloudRecordId = data.id;
+    if (incomingDataLooksSmaller(data.data)) {
+      createRecoverySnapshot("Cloud load paused before overwrite");
+      setCloudStatus(
+        "error",
+        "Cloud load paused",
+        "Supabase has fewer records than this browser. Your browser data was kept. Use Sync cloud now if this version is correct, or Recovery history to restore an older copy.",
+      );
+      return;
+    }
     isRestoringCloudData = true;
+    createRecoverySnapshot("Before cloud data loaded");
     restoreAppData(data.data);
     isRestoringCloudData = false;
     appSettings = { ...appSettings, lastCloudSyncAt: data.updated_at || new Date().toISOString() };
@@ -1659,12 +1781,7 @@ cloudEls().logout?.addEventListener("click", async () => {
 function downloadBackup() {
   appSettings = { ...appSettings, lastBackupAt: new Date().toISOString() };
   saveAppSettings();
-  const blob = new Blob([JSON.stringify(allAppData(), null, 2)], { type: "application/json" });
-  const link = document.createElement("a");
-  link.download = `sunrise-villa-backup-${isoDate(new Date())}.json`;
-  link.href = URL.createObjectURL(blob);
-  link.click();
-  URL.revokeObjectURL(link.href);
+  downloadJsonFile(`sunrise-villa-backup-${isoDate(new Date())}.json`, allAppData());
   renderBackupStatus();
 }
 
@@ -1882,6 +1999,7 @@ function renderCommitments() {
 }
 
 function restoreAppData(data) {
+  if (!isRestoringCloudData) createRecoverySnapshot("Before data restore/import");
   if (Array.isArray(data)) {
     bookings = data.map(normalizeBooking);
   } else {
@@ -3098,6 +3216,7 @@ function duplicateSavedDocument(id) {
 function deleteSavedDocument(id) {
   const doc = documents.find((item) => item.id === id);
   if (!window.confirm(`Delete ${doc?.code || "this document"}?`)) return;
+  createRecoverySnapshot("Before document deleted");
   documents = documents.filter((item) => item.id !== id);
   saveDocuments();
   renderDocumentArchive();
@@ -3904,6 +4023,19 @@ els.restoreBackup?.addEventListener("change", async (event) => {
   event.target.value = "";
 });
 
+els.restoreRecoverySnapshot?.addEventListener("click", () => {
+  const snapshot = selectedRecoverySnapshot();
+  if (!snapshot?.data) return;
+  if (!window.confirm("Restore this recovery point? Your current data will be saved as a recovery point first.")) return;
+  restoreAppData(snapshot.data);
+});
+
+els.downloadRecoverySnapshot?.addEventListener("click", () => {
+  const snapshot = selectedRecoverySnapshot();
+  if (!snapshot?.data) return;
+  downloadJsonFile(`sunrise-villa-recovery-${isoDate(new Date(snapshot.createdAt))}.json`, snapshot.data);
+});
+
 els.messageBookingSelect?.addEventListener("change", () => fillMessageFromBooking(true));
 
 document.querySelectorAll("[data-message-flow]").forEach((button) => {
@@ -4204,6 +4336,7 @@ els.taxExpenseRows?.addEventListener("click", (event) => {
 els.exportTaxExpensesExcel?.addEventListener("click", exportTaxExpensesExcel);
 els.exportTaxExpensesPdf?.addEventListener("click", exportTaxExpensesPdf);
 
+createStartupRecoverySnapshot();
 fillDocumentForm(defaultDocumentDraft());
 setMessageFlow("quote");
 setTaxInnerTab("plan");

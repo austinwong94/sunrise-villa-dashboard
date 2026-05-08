@@ -132,6 +132,15 @@
                   <span>Last JSON export: <strong id="backupStatus">Not yet</strong></span>
                   <button class="ghost-button compact" id="backupNow" type="button">Export now</button>
                 </div>
+                <details class="recovery-menu-row">
+                  <summary>Recovery history</summary>
+                  <div class="recovery-controls">
+                    <select id="recoverySnapshotSelect" aria-label="Saved recovery points"></select>
+                    <button class="ghost-button compact" id="restoreRecoverySnapshot" type="button">Restore selected</button>
+                    <button class="ghost-button compact" id="downloadRecoverySnapshot" type="button">Download selected</button>
+                  </div>
+                  <small id="recoveryStatus">No recovery point yet.</small>
+                </details>
                 <label class="ghost-button file-button">
                   Import
                   <input id="importJson" type="file" accept="application/json" />

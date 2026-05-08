@@ -635,7 +635,8 @@ button {
   justify-content: flex-start;
 }
 
-.backup-menu-row {
+.backup-menu-row,
+.recovery-menu-row {
   display: grid;
   gap: 8px;
   padding: 8px;
@@ -645,6 +646,39 @@ button {
   color: var(--muted);
   font-size: 12px;
   font-weight: 750;
+}
+
+.recovery-menu-row summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.recovery-menu-row summary::-webkit-details-marker {
+  display: none;
+}
+
+.recovery-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.recovery-controls select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: white;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.recovery-menu-row small {
+  color: var(--muted);
+  line-height: 1.35;
 }
 
 .view {
@@ -3739,32 +3773,75 @@ dialog::backdrop {
 }
 
 @media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  html,
   body {
-    background: #fff;
-  }
-
-  body * {
-    visibility: hidden;
-  }
-
-  body.printing-document .document-preview-paper,
-  body.printing-document .document-preview-paper *,
-  body.printing-owner-report .owner-report-paper,
-  body.printing-owner-report .owner-report-paper * {
-    visibility: visible;
-  }
-
-  body.printing-document .document-preview-paper,
-  body.printing-owner-report .owner-report-paper {
-    display: block;
-    position: absolute;
-    inset: 0;
     width: 210mm;
-    min-height: 297mm;
+    margin: 0;
+    background: #fff;
+    overflow: visible;
+  }
+
+  body.printing-document .cloud-auth,
+  body.printing-document .sidebar,
+  body.printing-document .topbar,
+  body.printing-document .data-health-panel,
+  body.printing-document .document-builder,
+  body.printing-document .document-archive,
+  body.printing-document .view:not(#documentsView) {
+    display: none !important;
+  }
+
+  body.printing-document .app-shell,
+  body.printing-document .main,
+  body.printing-document #documentsView,
+  body.printing-document .documents-layout,
+  body.printing-document .document-preview-shell {
+    display: block !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  body.printing-document .document-preview-paper {
+    display: block !important;
+    position: static !important;
+    width: 210mm;
+    min-height: 0;
+    margin: 0;
     border: none;
     border-radius: 0;
     box-shadow: none;
-    padding: 18mm;
+    padding: 14mm;
     background: #fff;
+    overflow: visible;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  body.printing-owner-report > :not(.owner-report-paper) {
+    display: none !important;
+  }
+
+  body.printing-owner-report .owner-report-paper {
+    display: block !important;
+    position: static !important;
+    width: 210mm;
+    min-height: 0;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 14mm;
+    background: #fff;
+    overflow: visible;
   }
 }
