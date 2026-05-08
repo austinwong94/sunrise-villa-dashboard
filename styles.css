@@ -3790,8 +3790,10 @@ dialog::backdrop {
   body.printing-document .sidebar,
   body.printing-document .topbar,
   body.printing-document .data-health-panel,
+  body.printing-document .documents-hero,
   body.printing-document .document-builder,
   body.printing-document .document-archive,
+  body.printing-document .document-preview-shell > .section-heading,
   body.printing-document .view:not(#documentsView) {
     display: none !important;
   }
