@@ -394,6 +394,52 @@ button {
   box-shadow: 0 3px 10px rgba(72, 43, 55, 0.18);
 }
 
+@media (min-width: 1181px) {
+  .month-switcher {
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    gap: 7px;
+    align-items: center;
+  }
+
+  .month-picker-panel {
+    gap: 7px;
+  }
+
+  .month-picker-head {
+    padding: 0 2px;
+  }
+
+  .month-button-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .month-button {
+    min-height: 25px;
+    padding: 0 3px;
+    border-radius: 6px;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .month-button small {
+    top: -4px;
+    right: -3px;
+    min-width: 13px;
+    height: 13px;
+    font-size: 8px;
+  }
+
+  .month-switcher .icon-button {
+    width: 30px;
+    min-height: 72px;
+    height: 72px;
+    align-self: center;
+    border-radius: 8px;
+    font-size: 18px;
+  }
+}
+
 .icon-button {
   width: 32px;
   min-height: 32px;

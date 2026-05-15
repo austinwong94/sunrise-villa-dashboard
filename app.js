@@ -10,7 +10,7 @@ const SUPABASE_URL = "https://nigzeyamrzrozftbujmm.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Hs81yUXxrGC4ydDZ7nWGsQ_MlCtxqED";
 const CLOUD_DATA_TYPE = "full_app_backup";
 const CLOUD_RECORD_KEY = "sunrise-villa-main";
-const APP_VERSION = "2026.05.04";
+const APP_VERSION = "2026.05.15";
 
 let supabaseClient = null;
 let cloudUser = null;
@@ -345,7 +345,7 @@ function normalizeBooking(booking) {
   const channel = booking.channel === "Airbnb" ? "Airbnb" : "Direct";
   const depositAmount = Number(booking.depositAmount ?? defaultDepositForChannel(channel));
   return {
-    id: booking.id || crypto.randomUUID(),
+    id: safeRecordId(booking.id),
     channel,
     guestTitle: booking.guestTitle === "Ms" ? "Ms" : "Mr",
     guest: String(booking.guest || ""),
@@ -392,12 +392,12 @@ function normalizeTaxExpense(expense = {}) {
       ? {
           name: String(expense.attachment.name || ""),
           type: String(expense.attachment.type || ""),
-          dataUrl: String(expense.attachment.dataUrl || ""),
+          dataUrl: safeDataUrl(expense.attachment.dataUrl, ["data:image/", "data:application/pdf"]),
           attachedAt: expense.attachment.attachedAt || new Date().toISOString(),
         }
       : null;
   return {
-    id: expense.id || crypto.randomUUID(),
+    id: safeRecordId(expense.id),
     date: String(expense.date || isoDate(new Date())),
     entity: ["Enterprise", "Sdn. Bhd.", "Personal / Owner"].includes(expense.entity) ? expense.entity : "Enterprise",
     property: ["Sunrise Villa", "Windmill Villa", "Shared"].includes(expense.property) ? expense.property : "Sunrise Villa",
@@ -459,7 +459,7 @@ function normalizeDocument(doc) {
   const nights = Math.max(1, Number(doc.nights || nightsBetween(checkIn, doc.checkOut) || 1));
   const checkOut = String(doc.checkOut || isoDate(addDays(dateObj(checkIn), nights)));
   const normalized = {
-    id: doc.id || crypto.randomUUID(),
+    id: safeRecordId(doc.id),
     type,
     issuer,
     date: String(doc.date || isoDate(new Date())),
@@ -511,11 +511,11 @@ function defaultProfitMonth() {
 
 function normalizeOneOffCost(cost = {}) {
   return {
-    id: cost.id || crypto.randomUUID(),
+    id: safeRecordId(cost.id),
     category: String(cost.category || "Supplies"),
     description: String(cost.description || ""),
     amount: Number(cost.amount || 0),
-    receiptImage: String(cost.receiptImage || ""),
+    receiptImage: safeDataUrl(cost.receiptImage, ["data:image/"]),
     receiptName: String(cost.receiptName || ""),
   };
 }
@@ -622,7 +622,7 @@ function saveAppSettings() {
 
 function normalizeCommitment(commitment = {}) {
   return {
-    id: commitment.id || crypto.randomUUID(),
+    id: safeRecordId(commitment.id),
     name: String(commitment.name || "New Commitment"),
     amount: Number(commitment.amount || 0),
     category: String(commitment.category || "Other"),
@@ -714,6 +714,17 @@ function escapeHtml(value) {
 
 function escapeMultiline(value) {
   return escapeHtml(value).replace(/\r?\n/g, "<br>");
+}
+
+function safeDataUrl(value, allowedPrefixes = []) {
+  const url = String(value || "").trim();
+  const lower = url.toLowerCase();
+  return allowedPrefixes.some((prefix) => lower.startsWith(prefix.toLowerCase())) ? url : "";
+}
+
+function safeRecordId(value) {
+  const id = String(value || "").trim();
+  return /^[a-z0-9_-]{3,120}$/i.test(id) ? id : crypto.randomUUID();
 }
 
 function money(value) {
@@ -1660,7 +1671,14 @@ function initSupabaseClient() {
     setCloudStatus("error", "Supabase library not loaded", "Check your internet connection, then refresh this page.");
     return null;
   }
-  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      storage: window.sessionStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
   return supabaseClient;
 }
 
@@ -1842,6 +1860,21 @@ async function syncCloudNow() {
   await saveCloudSnapshot();
 }
 
+async function restoreJsonFromInput(event, label = "backup file") {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    restoreAppData(parsed);
+  } catch (error) {
+    window.alert(`Could not restore this ${label}. Please choose a valid Sunrise Villa JSON backup file.`);
+    console.error("Restore failed", error);
+  } finally {
+    event.target.value = "";
+  }
+}
+
 function saveSelectedProfitMonth(nextMonthData) {
   profitData = {
     ...profitData,
@@ -1901,7 +1934,7 @@ function renderOneOffCosts() {
                 ${
                   cost.receiptImage
                     ? `<div class="receipt-preview">
-                        <img src="${cost.receiptImage}" alt="Receipt for ${escapeHtml(cost.description || cost.category)}" />
+                        <img src="${escapeHtml(safeDataUrl(cost.receiptImage, ["data:image/"]))}" alt="Receipt for ${escapeHtml(cost.description || cost.category)}" />
                         <div>
                           <strong>${escapeHtml(cost.receiptName || "Receipt attached")}</strong>
                           <button class="small-action danger" type="button" data-remove-receipt="${cost.id}">Remove receipt</button>
@@ -2930,7 +2963,7 @@ function defaultDocumentDraft() {
 
 function formDocument() {
   const raw = {
-    id: els.documentId.value || crypto.randomUUID(),
+    id: safeRecordId(els.documentId.value),
     type: els.docType.value,
     issuer: els.docIssuer.value,
     date: els.docDate.value || isoDate(new Date()),
@@ -3373,7 +3406,7 @@ function formTaxExpense() {
   const now = new Date().toISOString();
   const existing = (taxPlan.expenses || []).find((expense) => expense.id === els.taxExpenseId.value);
   return normalizeTaxExpense({
-    id: els.taxExpenseId.value || crypto.randomUUID(),
+    id: safeRecordId(els.taxExpenseId.value),
     date: els.taxExpenseDate.value || isoDate(new Date()),
     entity: els.taxExpenseEntity.value,
     property: els.taxExpenseProperty.value,
@@ -3416,8 +3449,9 @@ function receiptLabel(expense) {
 }
 
 function attachmentLink(expense) {
-  if (!expense.attachment?.dataUrl) return "";
-  return `<a class="small-action" href="${expense.attachment.dataUrl}" download="${escapeHtml(expense.attachment.name || "receipt")}" title="${escapeHtml(expense.attachment.name || "Receipt")}">View</a>`;
+  const href = safeDataUrl(expense.attachment?.dataUrl, ["data:image/", "data:application/pdf"]);
+  if (!href) return "";
+  return `<a class="small-action" href="${escapeHtml(href)}" download="${escapeHtml(expense.attachment.name || "receipt")}" title="${escapeHtml(expense.attachment.name || "Receipt")}">View</a>`;
 }
 
 function fillTaxExpenseForm(id) {
@@ -3463,6 +3497,7 @@ function saveTaxExpense(event) {
 
 function deleteTaxExpense(id) {
   if (!window.confirm("Delete this expense record?")) return;
+  createRecoverySnapshot("Before tax expense deleted");
   taxPlan = { ...taxPlan, expenses: (taxPlan.expenses || []).filter((expense) => expense.id !== id) };
   saveTaxPlan();
   renderTaxExpenses();
@@ -3730,7 +3765,7 @@ els.excludeCalculationsInput?.addEventListener("change", applyExcludedBookingDef
 els.form.addEventListener("submit", (event) => {
   if (event.submitter?.value === "cancel") return;
   event.preventDefault();
-  const id = els.bookingId.value || crypto.randomUUID();
+  const id = safeRecordId(els.bookingId.value);
   const excluded = els.excludeCalculationsInput.checked;
   const nextBooking = {
     id,
@@ -3768,6 +3803,7 @@ els.bookingRows.addEventListener("click", (event) => {
   if (deleteId) {
     const booking = bookings.find((item) => item.id === deleteId);
     if (!window.confirm(`Delete booking for ${booking?.guest || "this guest"}?`)) return;
+    createRecoverySnapshot("Before booking deleted");
     bookings = bookings.filter((item) => item.id !== deleteId);
     saveBookings();
     renderAll();
@@ -3869,14 +3905,7 @@ document.querySelector("#exportSheets").addEventListener("click", () => {
   downloadCsv("sunrise-villa-google-sheets-export.csv", [headers, ...rows]);
 });
 
-document.querySelector("#importJson").addEventListener("change", async (event) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  const text = await file.text();
-  const parsed = JSON.parse(text);
-  restoreAppData(parsed);
-  event.target.value = "";
-});
+document.querySelector("#importJson").addEventListener("change", (event) => restoreJsonFromInput(event, "import file"));
 
 [els.bookingMonthFilter, els.bookingSearch, els.channelFilter, els.paymentFilter, els.depositFilter].forEach((control) => {
   control?.addEventListener("input", renderBookingsTable);
@@ -4003,6 +4032,7 @@ els.oneOffCostList?.addEventListener("click", (event) => {
   }
   const id = event.target.dataset.deleteOneOff;
   if (!id) return;
+  createRecoverySnapshot("Before one-off cost deleted");
   const current = profitMonth(selectedMonth);
   saveSelectedProfitMonth({
     ...current,
@@ -4015,13 +4045,7 @@ els.oneOffCostList?.addEventListener("click", (event) => {
 els.backupNow?.addEventListener("click", downloadBackup);
 els.syncCloudNow?.addEventListener("click", syncCloudNow);
 
-els.restoreBackup?.addEventListener("change", async (event) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  const text = await file.text();
-  restoreAppData(JSON.parse(text));
-  event.target.value = "";
-});
+els.restoreBackup?.addEventListener("change", (event) => restoreJsonFromInput(event, "backup file"));
 
 els.restoreRecoverySnapshot?.addEventListener("click", () => {
   const snapshot = selectedRecoverySnapshot();
@@ -4142,6 +4166,7 @@ els.commitmentList?.addEventListener("change", (event) => {
 els.commitmentList?.addEventListener("click", (event) => {
   const id = event.target.dataset.deleteCommitment;
   if (!id) return;
+  createRecoverySnapshot("Before monthly commitment deleted");
   appSettings = {
     ...appSettings,
     commitments: (appSettings.commitments || []).filter((commitment) => commitment.id !== id),
