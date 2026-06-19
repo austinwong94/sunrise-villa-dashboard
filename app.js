@@ -1055,11 +1055,12 @@ function monthLabel(monthValue) {
 }
 
 function shortMonthName(monthIndex) {
-  return new Date(2026, monthIndex, 1).toLocaleDateString("en-MY", { month: "short" });
+  // en-MY renders September as "Sept" (4 chars); normalise to 3-letter for consistency
+  return new Date(2026, monthIndex, 1).toLocaleDateString("en-MY", { month: "short" }).replace("Sept", "Sep");
 }
 
 function shortDate(iso) {
-  return dateObj(iso).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" });
+  return dateObj(iso).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" }).replace("Sept", "Sep");
 }
 
 function longDate(iso) {
@@ -1070,7 +1071,7 @@ function quickDate(iso) {
   const date = dateObj(iso);
   const day = date.getDate();
   const suffix = day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th";
-  return `${date.toLocaleDateString("en-MY", { month: "short" })} ${day}${suffix}`;
+  return `${date.toLocaleDateString("en-MY", { month: "short" }).replace("Sept", "Sep")} ${day}${suffix}`;
 }
 
 function quoteDate(iso) {
@@ -1078,7 +1079,7 @@ function quoteDate(iso) {
   const date = dateObj(iso);
   const day = date.getDate();
   const suffix = day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th";
-  return `${date.toLocaleDateString("en-MY", { month: "short" })} ${day}${suffix}, ${date.getFullYear()}`;
+  return `${date.toLocaleDateString("en-MY", { month: "short" }).replace("Sept", "Sep")} ${day}${suffix}, ${date.getFullYear()}`;
 }
 
 function prefixFor(name) {
