@@ -3,47 +3,184 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sunrise Villa Bookings</title>
+    <title>Sunrise Villa</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login">
-      <div class="login-brand">
-        <div class="brand-mark">SV</div>
-        <div>
-          <span class="login-kicker">Private villa workspace</span>
-          <h1>Sunrise Villa</h1>
-          <p>Secure access for bookings, revenue, documents, and owner reports.</p>
+<section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
+
+  <!-- ====================== SUNRISE SCENE ====================== -->
+  <svg class="sv-scene" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+    <defs>
+      <radialGradient id="svSun" cx="50%" cy="42%" r="55%">
+        <stop offset="0%" stop-color="#FFFEF7"/>
+        <stop offset="55%" stop-color="#FFE9A6"/>
+        <stop offset="100%" stop-color="#FFCB60"/>
+      </radialGradient>
+      <radialGradient id="svGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#FFE6A8" stop-opacity=".75"/>
+        <stop offset="100%" stop-color="#FFE6A8" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="svHill1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#BEDCA6"/><stop offset="100%" stop-color="#A2C988"/></linearGradient>
+      <linearGradient id="svHill2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#A1CD84"/><stop offset="100%" stop-color="#7FB266"/></linearGradient>
+      <linearGradient id="svHill3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#84BD72"/><stop offset="100%" stop-color="#5F9A54"/></linearGradient>
+    </defs>
+
+    <!-- sun -->
+    <g class="sv-sun">
+      <circle cx="600" cy="300" r="240" fill="url(#svGlow)"/>
+      <g class="sv-rays">
+        <g fill="#FFE3A0" opacity=".55">
+          <rect x="594" y="70" width="12" height="70" rx="6"/>
+          <rect x="594" y="460" width="12" height="70" rx="6"/>
+          <rect x="370" y="294" width="70" height="12" rx="6"/>
+          <rect x="760" y="294" width="70" height="12" rx="6"/>
+          <rect x="437" y="137" width="12" height="64" rx="6" transform="rotate(-45 443 169)"/>
+          <rect x="751" y="137" width="12" height="64" rx="6" transform="rotate(45 757 169)"/>
+          <rect x="437" y="399" width="12" height="64" rx="6" transform="rotate(45 443 431)"/>
+          <rect x="751" y="399" width="12" height="64" rx="6" transform="rotate(-45 757 431)"/>
+        </g>
+      </g>
+      <circle cx="600" cy="300" r="96" fill="url(#svSun)"/>
+    </g>
+
+    <!-- clouds -->
+    <g class="sv-cloud sv-cloud-a" fill="#FFFFFF">
+      <g opacity=".82"><ellipse cx="210" cy="170" rx="58" ry="30"/><ellipse cx="258" cy="158" rx="46" ry="34"/><ellipse cx="300" cy="176" rx="50" ry="26"/><rect x="200" y="176" width="120" height="22" rx="11"/></g>
+    </g>
+    <g class="sv-cloud sv-cloud-b" fill="#FFFFFF">
+      <g opacity=".7"><ellipse cx="980" cy="220" rx="64" ry="32"/><ellipse cx="1035" cy="206" rx="48" ry="36"/><ellipse cx="1080" cy="226" rx="52" ry="26"/><rect x="970" y="226" width="140" height="22" rx="11"/></g>
+    </g>
+    <g class="sv-cloud sv-cloud-c" fill="#FFFFFF">
+      <g opacity=".6"><ellipse cx="470" cy="120" rx="42" ry="22"/><ellipse cx="508" cy="110" rx="34" ry="26"/><rect x="462" y="124" width="86" height="16" rx="8"/></g>
+    </g>
+
+    <!-- hills -->
+    <path d="M0 560 Q300 500 600 548 T1200 540 L1200 800 L0 800 Z" fill="url(#svHill1)"/>
+    <path d="M0 638 Q340 576 720 626 T1200 612 L1200 800 L0 800 Z" fill="url(#svHill2)"/>
+    <path d="M0 706 Q300 662 600 702 T1200 690 L1200 800 L0 800 Z" fill="url(#svHill3)"/>
+
+    <!-- left palm -->
+    <g class="sv-palm sv-palm-l" transform="translate(150 700)">
+      <path d="M0 0 C -8 -54 10 -104 -2 -168" fill="none" stroke="#9A6B3E" stroke-width="11" stroke-linecap="round"/>
+      <g fill="none" stroke-linecap="round">
+        <path d="M-2 -168 Q 58 -196 96 -158" stroke="#5C8A50" stroke-width="13"/>
+        <path d="M-2 -168 Q -60 -198 -96 -156" stroke="#4E7A46" stroke-width="13"/>
+        <path d="M-2 -168 Q 40 -226 70 -214" stroke="#69995A" stroke-width="12"/>
+        <path d="M-2 -168 Q -44 -226 -72 -210" stroke="#4E7A46" stroke-width="12"/>
+        <path d="M-2 -168 Q 2 -236 6 -214" stroke="#5C8A50" stroke-width="11"/>
+      </g>
+      <circle cx="-2" cy="-166" r="7" fill="#8A5E36"/>
+    </g>
+
+    <!-- right palm -->
+    <g class="sv-palm sv-palm-r" transform="translate(1050 712)">
+      <path d="M0 0 C 8 -46 -10 -88 4 -140" fill="none" stroke="#9A6B3E" stroke-width="9" stroke-linecap="round"/>
+      <g fill="none" stroke-linecap="round">
+        <path d="M4 -140 Q 54 -166 86 -132" stroke="#5C8A50" stroke-width="11"/>
+        <path d="M4 -140 Q -48 -166 -78 -128" stroke="#4E7A46" stroke-width="11"/>
+        <path d="M4 -140 Q 34 -192 60 -180" stroke="#69995A" stroke-width="10"/>
+        <path d="M4 -140 Q -36 -190 -60 -176" stroke="#4E7A46" stroke-width="10"/>
+      </g>
+      <circle cx="4" cy="-138" r="6" fill="#8A5E36"/>
+    </g>
+
+    <!-- flowers -->
+    <g class="sv-flower sv-fl-a" transform="translate(90 770)"><path d="M0 0 V-34" stroke="#5C8A50" stroke-width="3.5"/><g fill="#E985AE"><circle cx="0" cy="-40" r="5.5"/><circle cx="7" cy="-44" r="5.5"/><circle cx="-7" cy="-44" r="5.5"/><circle cx="4" cy="-50" r="5.5"/><circle cx="-4" cy="-50" r="5.5"/></g><circle cx="0" cy="-44" r="4" fill="#FFD66B"/></g>
+    <g class="sv-flower sv-fl-b" transform="translate(255 778)"><path d="M0 0 V-28" stroke="#5C8A50" stroke-width="3.5"/><g fill="#F2A65A"><circle cx="0" cy="-34" r="5"/><circle cx="6" cy="-37" r="5"/><circle cx="-6" cy="-37" r="5"/><circle cx="3" cy="-42" r="5"/><circle cx="-3" cy="-42" r="5"/></g><circle cx="0" cy="-37" r="3.5" fill="#FFE08A"/></g>
+    <g class="sv-flower sv-fl-c" transform="translate(430 786)"><path d="M0 0 V-32" stroke="#5C8A50" stroke-width="3.5"/><g fill="#D98AC8"><circle cx="0" cy="-38" r="5.5"/><circle cx="7" cy="-42" r="5.5"/><circle cx="-7" cy="-42" r="5.5"/><circle cx="4" cy="-48" r="5.5"/><circle cx="-4" cy="-48" r="5.5"/></g><circle cx="0" cy="-42" r="4" fill="#FFD66B"/></g>
+    <g class="sv-flower sv-fl-d" transform="translate(800 784)"><path d="M0 0 V-30" stroke="#5C8A50" stroke-width="3.5"/><g fill="#EF8E6B"><circle cx="0" cy="-36" r="5"/><circle cx="6" cy="-39" r="5"/><circle cx="-6" cy="-39" r="5"/><circle cx="3" cy="-44" r="5"/><circle cx="-3" cy="-44" r="5"/></g><circle cx="0" cy="-39" r="3.5" fill="#FFE08A"/></g>
+    <g class="sv-flower sv-fl-e" transform="translate(960 776)"><path d="M0 0 V-34" stroke="#5C8A50" stroke-width="3.5"/><g fill="#F2C24E"><circle cx="0" cy="-40" r="5.5"/><circle cx="7" cy="-44" r="5.5"/><circle cx="-7" cy="-44" r="5.5"/><circle cx="4" cy="-50" r="5.5"/><circle cx="-4" cy="-50" r="5.5"/></g><circle cx="0" cy="-44" r="4" fill="#FF9E5A"/></g>
+    <g class="sv-flower sv-fl-f" transform="translate(1120 782)"><path d="M0 0 V-30" stroke="#5C8A50" stroke-width="3.5"/><g fill="#E985AE"><circle cx="0" cy="-36" r="5"/><circle cx="6" cy="-39" r="5"/><circle cx="-6" cy="-39" r="5"/><circle cx="3" cy="-44" r="5"/><circle cx="-3" cy="-44" r="5"/></g><circle cx="0" cy="-39" r="3.5" fill="#FFD66B"/></g>
+  </svg>
+
+  <!-- birds -->
+  <div class="sv-flock sv-flock-1" aria-hidden="true">
+    <div class="sv-flock-row">
+      <svg width="32" height="14" viewBox="0 0 32 14" class="sv-bird"><path d="M1 9 C6 2.5 11 3 16 8 C21 3 26 2.5 31 9" fill="none" stroke="#5B5048" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <svg width="26" height="12" viewBox="0 0 32 14" class="sv-bird sv-bird-d1" style="margin-top:10px;"><path d="M1 9 C6 2.5 11 3 16 8 C21 3 26 2.5 31 9" fill="none" stroke="#5B5048" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <svg width="28" height="13" viewBox="0 0 32 14" class="sv-bird sv-bird-d2" style="margin-top:-4px;"><path d="M1 9 C6 2.5 11 3 16 8 C21 3 26 2.5 31 9" fill="none" stroke="#5B5048" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+  <div class="sv-flock sv-flock-2" aria-hidden="true">
+    <div class="sv-flock-row" style="opacity:.7;">
+      <svg width="24" height="11" viewBox="0 0 32 14" class="sv-bird sv-bird-s"><path d="M1 9 C6 2.5 11 3 16 8 C21 3 26 2.5 31 9" fill="none" stroke="#5B5048" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <svg width="20" height="9" viewBox="0 0 32 14" class="sv-bird sv-bird-s sv-bird-d3" style="margin-top:8px;"><path d="M1 9 C6 2.5 11 3 16 8 C21 3 26 2.5 31 9" fill="none" stroke="#5B5048" stroke-width="2.4" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+
+  <!-- butterflies -->
+  <div class="sv-butterfly sv-bf-1" aria-hidden="true">
+    <svg width="26" height="22" viewBox="0 0 26 22">
+      <g class="sv-wing"><ellipse cx="7" cy="7" rx="6.5" ry="5.5" fill="#E97AA6"/><ellipse cx="7.5" cy="15" rx="5" ry="4.5" fill="#F4A0C2"/></g>
+      <g class="sv-wing sv-wing-flip" transform="scale(-1 1) translate(-26 0)"><ellipse cx="7" cy="7" rx="6.5" ry="5.5" fill="#E97AA6"/><ellipse cx="7.5" cy="15" rx="5" ry="4.5" fill="#F4A0C2"/></g>
+      <rect x="12" y="5" width="2" height="13" rx="1" fill="#5B4A52"/>
+    </svg>
+  </div>
+  <div class="sv-butterfly sv-bf-2" aria-hidden="true">
+    <svg width="22" height="19" viewBox="0 0 26 22">
+      <g class="sv-wing sv-wing-slow"><ellipse cx="7" cy="7" rx="6.5" ry="5.5" fill="#F2A65A"/><ellipse cx="7.5" cy="15" rx="5" ry="4.5" fill="#FBC889"/></g>
+      <g class="sv-wing sv-wing-slow sv-wing-flip" transform="scale(-1 1) translate(-26 0)"><ellipse cx="7" cy="7" rx="6.5" ry="5.5" fill="#F2A65A"/><ellipse cx="7.5" cy="15" rx="5" ry="4.5" fill="#FBC889"/></g>
+      <rect x="12" y="5" width="2" height="13" rx="1" fill="#5B4A52"/>
+    </svg>
+  </div>
+
+  <!-- ====================== AUTH CARD ====================== -->
+  <div class="login-card">
+    <div class="login-brand">
+      <span class="login-mark">SV</span>
+      <div class="login-brand-text">
+        <div class="login-wordmark">Sunrise Villa</div>
+        <div class="login-tagline">Private workspace</div>
+      </div>
+    </div>
+
+    <p class="login-dateline" id="cloudDateLine"></p>
+    <h1 class="login-greeting" id="cloudGreeting">Welcome back</h1>
+
+    <div class="login-status" role="status" aria-live="polite">
+      <span class="login-status-dot" id="cloudStatusDot"></span>
+      <div class="login-status-copy">
+        <strong id="cloudStatusTitle">Offline</strong>
+        <p id="cloudStatusText">Sign in to sync your villa workspace.</p>
+      </div>
+    </div>
+
+    <form id="cloudLoginForm" class="login-form" autocomplete="on">
+      <div class="login-field">
+        <label for="cloudEmail">Email or username</label>
+        <input type="email" id="cloudEmail" name="email" autocomplete="email" placeholder="you@sunrisevilla.my" required />
+      </div>
+
+      <div class="login-field">
+        <label for="cloudPassword">Password</label>
+        <div class="login-password-wrap">
+          <input type="password" id="cloudPassword" name="password" autocomplete="current-password" placeholder="Enter your password" required />
+          <button type="button" id="cloudPasswordToggle" class="login-pw-toggle" aria-label="Show password">Show</button>
         </div>
       </div>
-      <div class="login-card">
-        <div class="login-card-head">
-          <span class="cloud-dot" id="cloudStatusDot"></span>
-          <div>
-            <strong id="cloudStatusTitle">Cloud storage not connected</strong>
-            <p id="cloudStatusText">Log in to save bookings, documents, expenses, and settings to Supabase.</p>
-          </div>
-        </div>
-      <form class="cloud-login-form" id="cloudLoginForm">
-          <label>Email
-            <input id="cloudEmail" type="email" autocomplete="email" placeholder="you@example.com" required />
-          </label>
-          <label>Password
-            <input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Enter password" required />
-          </label>
-          <button class="primary-button" type="submit">Log in securely</button>
-      </form>
-        <button class="ghost-button compact hidden" id="cloudLogout" type="button">Log out</button>
-      </div>
-    </section>
+
+      <label class="login-remember" for="cloudRemember">
+        <input type="checkbox" id="cloudRemember" name="remember" checked />
+        <span>Keep me signed in on this device</span>
+      </label>
+
+      <button type="submit" class="login-submit">Unlock the villa</button>
+    </form>
+  </div>
+</section>
     <div class="app-shell private-locked" id="appShell" hidden>
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-mark">SV</div>
-          <div>
+          <div class="brand-text">
             <h1>Sunrise Villa</h1>
             <p>Booking calendar</p>
           </div>
+          <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar"></button>
         </div>
 
         <nav class="nav-tabs" aria-label="Views">
@@ -117,17 +254,25 @@
       <main class="main">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Private villa operations</p>
-            <h2 id="pageTitle">Monthly Calendar</h2>
+            <p class="eyebrow page-kicker">Private villa operations</p>
+            <h2 class="page-title" id="pageTitle">Monthly Calendar</h2>
           </div>
           <div class="topbar-actions">
             <button class="primary-button" id="openAddBooking" type="button">+ Booking</button>
+            <div class="theme-menu" id="themeMenu">
+              <button class="ghost-button theme-trigger" id="themeTrigger" type="button" aria-haspopup="true" aria-expanded="false"><span class="theme-swatch-dot"></span> Theme</button>
+              <div class="theme-popover popover" id="themePopover" hidden>
+                <p class="theme-popover-title">Theme colour</p>
+                <div class="theme-swatches" id="themeSwatches"></div>
+              </div>
+            </div>
             <details class="data-menu">
               <summary>Data tools</summary>
               <div class="data-menu-list">
                 <button class="ghost-button" id="exportSheets" type="button">Google Sheets CSV</button>
                 <button class="ghost-button soft-action" id="exportJson" type="button">Backup JSON</button>
                 <button class="ghost-button" id="syncCloudNow" type="button">Sync cloud now</button>
+                <button class="ghost-button danger-action hidden" id="cloudLogout" type="button">Sign out</button>
                 <div class="backup-menu-row">
                   <span>Last JSON export: <strong id="backupStatus">Not yet</strong></span>
                   <button class="ghost-button compact" id="backupNow" type="button">Export now</button>

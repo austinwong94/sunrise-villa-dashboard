@@ -12,6 +12,40 @@ const CLOUD_DATA_TYPE = "full_app_backup";
 const CLOUD_RECORD_KEY = "sunrise-villa-main";
 const APP_VERSION = "2026.05.15";
 
+// --- "Keep me signed in" storage adapter (the only user-approved edit to the frozen auth layer) ---
+// Routes the Supabase session token to localStorage (persists across browser restarts) when the
+// "keep me signed in" box is checked, or sessionStorage (clears on browser close) when not.
+// No new storage key is introduced: the default is inferred from where an existing token already lives.
+let svRememberSession = true;
+try {
+  const svInLocal = Object.keys(window.localStorage).some((k) => k.includes("-auth-token"));
+  const svInSession = Object.keys(window.sessionStorage).some((k) => k.includes("-auth-token"));
+  if (svInSession && !svInLocal) svRememberSession = false;
+} catch (_) {}
+const svAuthStorage = {
+  getItem(key) {
+    try {
+      return window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key);
+    } catch (_) {
+      return null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      const primary = svRememberSession ? window.localStorage : window.sessionStorage;
+      const secondary = svRememberSession ? window.sessionStorage : window.localStorage;
+      primary.setItem(key, value);
+      secondary.removeItem(key);
+    } catch (_) {}
+  },
+  removeItem(key) {
+    try {
+      window.localStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
+    } catch (_) {}
+  },
+};
+
 let supabaseClient = null;
 let cloudUser = null;
 let cloudRecordId = "";
@@ -1640,6 +1674,10 @@ function cloudEls() {
     title: document.querySelector("#cloudStatusTitle"),
     text: document.querySelector("#cloudStatusText"),
     dot: document.querySelector("#cloudStatusDot"),
+    remember: document.querySelector("#cloudRemember"),
+    passwordToggle: document.querySelector("#cloudPasswordToggle"),
+    greeting: document.querySelector("#cloudGreeting"),
+    dateLine: document.querySelector("#cloudDateLine"),
   };
 }
 
@@ -1673,7 +1711,7 @@ function initSupabaseClient() {
   }
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
-      storage: window.sessionStorage,
+      storage: svAuthStorage,
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
@@ -1779,6 +1817,7 @@ cloudEls().form?.addEventListener("submit", async (event) => {
   if (!supabaseClient) initSupabaseClient();
   if (!supabaseClient) return;
   const ui = cloudEls();
+  svRememberSession = ui.remember ? ui.remember.checked : true;
   setCloudStatus("syncing", "Logging in", "Connecting to Supabase.");
   const { error } = await supabaseClient.auth.signInWithPassword({
     email: ui.email.value.trim(),
@@ -2583,6 +2622,8 @@ function renderDashboard() {
   renderCommitments();
   els.occupancyTitle.textContent = `${monthLabel(selectedMonth)} Occupancy & Nightly Rates`;
   els.occupancyRate.textContent = percent(selectedPerformance.occupancyRate);
+  const occHero = els.occupancyRate?.closest(".performance-hero");
+  if (occHero) occHero.style.setProperty("--occ", Math.max(0, Math.min(100, Number(selectedPerformance.occupancyRate) || 0)));
   els.bookedNights.textContent = selectedPerformance.bookedNights;
   els.availableNights.textContent = selectedPerformance.availableNights;
   els.weekdayNights.textContent = selectedPerformance.weekdayNights;
@@ -3670,6 +3711,7 @@ function setSelectedMonth(monthValue, syncBookingFilter = true) {
 }
 
 function renderAll() {
+  applyAccent();
   els.monthPicker.value = selectedMonth;
   renderMonthButtons();
   renderCalendar();
@@ -4361,10 +4403,115 @@ els.taxExpenseRows?.addEventListener("click", (event) => {
 els.exportTaxExpensesExcel?.addEventListener("click", exportTaxExpensesExcel);
 els.exportTaxExpensesPdf?.addEventListener("click", exportTaxExpensesPdf);
 
+// ---------------- Theme picker (8 accents, persisted in appSettings.accent -> cloud) ----------------
+const SV_THEMES = [
+  { name: "Sage", hex: "#4B6B5B" },
+  { name: "Meadow", hex: "#3FAE7C" },
+  { name: "Teal", hex: "#2FAFA3" },
+  { name: "Sky", hex: "#4C9FD6" },
+  { name: "Lavender", hex: "#8A7BD8" },
+  { name: "Blossom", hex: "#E175A4" },
+  { name: "Coral", hex: "#F26D5B" },
+  { name: "Honey", hex: "#E0A23C" },
+];
+
+function svActiveAccent() {
+  return (appSettings && typeof appSettings.accent === "string" && appSettings.accent) || "#4B6B5B";
+}
+
+function applyAccent() {
+  const a = svActiveAccent();
+  const root = document.documentElement;
+  root.style.setProperty("--accent", a);
+  root.style.setProperty("--accent-soft", a + "22");
+  root.style.setProperty("--cbc", a);
+  // faint accent wash over the warm page base (matches the reference prototypes)
+  document.body.style.background = `linear-gradient(${a}12, ${a}12), #F8F8F5`;
+  const dot = document.querySelector(".theme-swatch-dot");
+  if (dot) dot.style.background = a;
+  document.querySelectorAll(".theme-swatch").forEach((sw) => {
+    sw.classList.toggle("selected", (sw.dataset.accent || "").toLowerCase() === a.toLowerCase());
+  });
+}
+
+function initThemePicker() {
+  const wrap = document.querySelector("#themeSwatches");
+  const trigger = document.querySelector("#themeTrigger");
+  const popover = document.querySelector("#themePopover");
+  if (wrap && !wrap.childElementCount) {
+    wrap.innerHTML = SV_THEMES.map(
+      (t) => `<button class="theme-swatch" type="button" data-accent="${t.hex}" style="--sw:${t.hex}" title="${t.name}" aria-label="${t.name}"></button>`,
+    ).join("");
+    wrap.addEventListener("click", (event) => {
+      const swatch = event.target.closest("[data-accent]");
+      if (!swatch) return;
+      appSettings = { ...appSettings, accent: swatch.dataset.accent };
+      saveAppSettings();
+      applyAccent();
+    });
+  }
+  if (trigger && popover) {
+    const close = () => {
+      popover.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+    };
+    trigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const willOpen = popover.hidden;
+      popover.hidden = !willOpen;
+      trigger.setAttribute("aria-expanded", String(willOpen));
+    });
+    document.addEventListener("click", (event) => {
+      if (!popover.hidden && !popover.contains(event.target) && !trigger.contains(event.target)) close();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close();
+    });
+  }
+  applyAccent();
+}
+
+// ---------------- Collapsible sidebar (persisted in appSettings.sidebarCollapsed -> cloud) ----------------
+function initSidebar() {
+  const shell = document.querySelector("#appShell");
+  const toggle = document.querySelector("#sidebarToggle");
+  if (!shell) return;
+  if (appSettings && appSettings.sidebarCollapsed) shell.classList.add("sidebar-collapsed");
+  toggle?.addEventListener("click", () => {
+    const collapsed = shell.classList.toggle("sidebar-collapsed");
+    appSettings = { ...appSettings, sidebarCollapsed: collapsed };
+    saveAppSettings();
+  });
+}
+
+// ---------------- Login UI niceties (greeting, date, show/hide password) ----------------
+function initLoginUi() {
+  const ui = cloudEls();
+  if (ui.greeting || ui.dateLine) {
+    const now = new Date();
+    const hour = now.getHours();
+    const part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    if (ui.greeting) ui.greeting.textContent = `${part}, Austin`;
+    if (ui.dateLine) ui.dateLine.textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  }
+  if (ui.passwordToggle && ui.password) {
+    ui.passwordToggle.addEventListener("click", () => {
+      const reveal = ui.password.type === "password";
+      ui.password.type = reveal ? "text" : "password";
+      ui.passwordToggle.textContent = reveal ? "Hide" : "Show";
+      ui.passwordToggle.setAttribute("aria-label", reveal ? "Hide password" : "Show password");
+    });
+  }
+  if (ui.remember) ui.remember.checked = svRememberSession;
+}
+
 createStartupRecoverySnapshot();
 fillDocumentForm(defaultDocumentDraft());
 setMessageFlow("quote");
 setTaxInnerTab("plan");
 setView(activeView);
+initThemePicker();
+initSidebar();
+initLoginUi();
 renderAll();
 initCloudStorage();
