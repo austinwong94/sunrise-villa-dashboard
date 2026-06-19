@@ -807,56 +807,57 @@ details summary::marker { content: ""; }
    the classes/ids assigned to the shell; never redefines foundation.
    ============================================================ */
 
-/* ---------- APP SHELL LAYOUT ---------- */
-.app-shell {
-  display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
-  min-height: 100vh;
-  background: var(--page-base);
-}
-.app-shell.sidebar-collapsed {
-  grid-template-columns: 72px minmax(0, 1fr);
-}
-.app-shell[hidden] { display: none !important; }
+/* ============================================================
+   SUNRISE VILLA — APP SHELL: SIDEBAR STATE MACHINE (FULL REPLACEMENT)
+   Replaces the shell sidebar block in the "SCREEN: shell" section
+   (old styles.css lines ~811-1006, the sidebar layout/collapse rules)
+   AND the obsolete @media(max-width:720px) shell block at 1454-1462.
+   KEEP: month-switcher styling (1008-1071), sidebar-panel/focus-panel/
+   mini-stat visuals (1078-1147), the topbar block (1159+), and the
+   mobile top-bar @media(max-width:760px) block (4823-4854) untouched.
 
-/* private-locked: JS swaps the locked screen in; keep grid intact */
+   Model (reference hover-expand):
+     default         -> 72px icon rail, content margin-left:72px
+     .sidebar-hover  -> 248px OVERLAY (content does NOT shift) + scrim + shadow
+     .sidebar-pinned -> 248px docked, content margin-left:248px, no overlay
+   All desktop geometry is scoped to (min-width:761px) so the existing
+   max-width:760px top-bar block always wins on small screens with zero
+   source-order or specificity fight.
+   ============================================================ */
+
+/* ---------- BASE (all widths): the sidebar is flat white chrome ---------- */
+.app-shell { background: var(--page-base); min-height: 100vh; }
+.app-shell[hidden] { display: none !important; }
 .app-shell.private-locked .main { filter: none; }
 
-.main {
-  min-width: 0;
-  padding: 30px 34px 48px;
-}
-
-/* ---------- SIDEBAR ---------- */
 .sidebar {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: 100vh;
-  z-index: 60;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 18px 14px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   border-right: 1px solid var(--line);
   overflow-x: hidden;
   overflow-y: auto;
-  transition: width .2s ease, padding .2s ease, box-shadow .2s ease;
-}
-/* expanded (default) gets the soft right-edge shadow */
-.app-shell:not(.sidebar-collapsed) .sidebar {
-  box-shadow: var(--shadow-sidebar);
-}
-.app-shell.sidebar-collapsed .sidebar {
-  padding: 18px 12px;
   box-shadow: none;
 }
-/* hide the sidebar's own scrollbar */
 .sidebar::-webkit-scrollbar { width: 0; height: 0; }
 
-/* ---------- BRAND ---------- */
+.main { min-width: 0; padding: 28px 24px 44px; }
+
+/* scrim element (created by initSidebar, appended to #appShell) */
+.sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(27, 27, 25, .06);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+}
+
+/* ---------- BRAND (base) ---------- */
 .brand {
   display: flex;
   align-items: center;
@@ -865,145 +866,154 @@ details summary::marker { content: ""; }
   padding: 0 6px;
 }
 .brand-mark {
-  width: 32px;
-  height: 32px;
-  flex: none;
-  display: grid;
-  place-items: center;
+  width: 32px; height: 32px; flex: none;
+  display: grid; place-items: center;
   border-radius: 10px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: .01em;
+  background: var(--accent); color: #fff;
+  font-weight: 700; font-size: 13px; letter-spacing: .01em;
 }
+.brand-text { flex: 1; min-width: 0; overflow: hidden; }
 .brand h1 {
   font-family: var(--font-ui);
-  font-size: 14.5px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
+  font-size: 14.5px; font-weight: 700; line-height: 1; letter-spacing: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.brand p {
-  color: var(--muted);
-  font-size: 11.5px;
-  margin-top: 3px;
-  white-space: nowrap;
-}
-/* brand text wrapper: h1 + p share the flexible middle column */
-.brand h1 + p,
-.brand > p { margin-top: 3px; }
+.brand p { color: var(--muted); font-size: 11.5px; margin-top: 3px; white-space: nowrap; }
 
-/* COLLAPSED: hide brand text, keep the mark; center it */
-.app-shell.sidebar-collapsed .brand {
-  padding: 0;
-  justify-content: center;
-  gap: 0;
-}
-.app-shell.sidebar-collapsed .brand h1,
-.app-shell.sidebar-collapsed .brand p {
-  display: none;
-}
-
-/* ---------- SIDEBAR TOGGLE (new markup, top-right of brand) ---------- */
+/* ---------- PIN TOGGLE (#sidebarToggle, base) ---------- */
 .sidebar-toggle {
-  width: 26px;
-  height: 26px;
-  flex: none;
-  display: grid;
-  place-items: center;
+  width: 26px; height: 26px; flex: none;
+  display: grid; place-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background .15s ease, color .15s ease, transform .2s ease;
+  background: var(--card); color: var(--muted);
+  font-size: 13px; line-height: 1; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
 }
 .sidebar-toggle:hover { background: var(--soft); color: var(--ink); }
-.sidebar-toggle::before {
-  content: "\00AB"; /* « when expanded */
-  display: block;
-}
-/* COLLAPSED: glyph flips to » and the button centers under the mark */
-.app-shell.sidebar-collapsed .sidebar-toggle::before { content: "\00BB"; }
-.app-shell.sidebar-collapsed .sidebar-toggle {
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  font-size: 15px;
-  margin: 6px auto 0;
-}
+.sidebar-toggle::before { content: "\00BB"; display: block; } /* » = will expand/pin */
 
-/* ---------- NAV ---------- */
-.nav-tabs {
-  display: grid;
-  gap: 3px;
-}
+/* ---------- NAV (base) ---------- */
+.nav-tabs { display: grid; gap: 3px; }
 .nav-button {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-height: 42px;
-  padding: 0 12px;
-  border: none;
-  border-radius: var(--r-control);
-  background: transparent;
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-align: left;
-  cursor: pointer;
+  display: flex; align-items: center; gap: 11px;
+  min-height: 42px; padding: 0 12px;
+  border: none; border-radius: var(--r-control);
+  background: transparent; color: var(--muted);
+  font-family: inherit; font-size: 13.5px; font-weight: 600;
+  white-space: nowrap; text-align: left; cursor: pointer;
   position: relative;
   transition: background .15s ease, color .15s ease;
 }
 .nav-button:hover { background: var(--nav-hover); color: var(--ink); }
 .nav-button > span[aria-hidden] {
-  width: 20px;
-  flex: none;
-  text-align: center;
-  font-size: 15px;
-  line-height: 1;
+  width: 20px; flex: none; text-align: center; font-size: 15px; line-height: 1;
 }
-/* active: accent-soft fill + accent text + left indicator */
-.nav-button.active {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
+.nav-button.active { background: var(--accent-soft); color: var(--accent); }
 .nav-button.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
+  content: ""; position: absolute; left: 0; top: 50%;
   transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent);
+  width: 3px; height: 20px; border-radius: 0 3px 3px 0; background: var(--accent);
 }
 .nav-button.active:hover { background: var(--accent-soft); color: var(--accent); }
 
-/* COLLAPSED: centered icons only, labels hidden */
-.app-shell.sidebar-collapsed .nav-button {
-  gap: 0;
-  padding: 0;
-  width: 44px;
-  margin: 0 auto;
-  justify-content: center;
+/* ============================================================
+   DESKTOP STATE MACHINE — scoped so it cannot reach <=760px
+   ============================================================ */
+@media (min-width: 761px) {
+
+  /* fixed rail; default collapsed width 72px */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0;
+    height: 100vh;
+    width: 72px;
+    z-index: 60;
+    transition: width .18s ease, box-shadow .18s ease, padding .18s ease;
+  }
+  /* content sits beside the rail by default */
+  .main {
+    margin-left: 72px;
+    transition: margin-left .18s ease;
+  }
+
+  /* ---------- DEFAULT (collapsed rail): icon-only, labels hidden ---------- */
+  #appShell .brand { padding: 0; justify-content: center; gap: 0; }
+  #appShell .brand-text,
+  #appShell .sidebar-toggle { display: none; }
+
+  /* nav LABEL is a bare TEXT NODE — kill it with font-size:0, restore the icon */
+  #appShell .nav-button {
+    font-size: 0;
+    gap: 0;
+    padding: 0;
+    width: 44px;
+    margin: 0 auto;
+    justify-content: center;
+  }
+  #appShell .nav-button > span[aria-hidden] { font-size: 15px; }
+  #appShell .nav-button.active::before { display: none; }
+
+  /* hide expandable-only panels in the rail */
+  #appShell .month-switcher,
+  #appShell .sidebar-panel,
+  #appShell .focus-panel { display: none; }
+
+  /* ---------- HOVER OVERLAY (not pinned) ---------- */
+  #appShell.sidebar-hover .sidebar {
+    width: 248px;
+    box-shadow: var(--shadow-sidebar); /* overlay shadow only */
+  }
+  /* content must NOT shift while hovering */
+  #appShell.sidebar-hover .main { margin-left: 72px; }
+  /* show the scrim behind the overlay */
+  #appShell.sidebar-hover .sidebar-scrim { opacity: 1; pointer-events: auto; }
+
+  /* ---------- PINNED (docked, content shifts, no overlay) ---------- */
+  #appShell.sidebar-pinned .sidebar { width: 248px; box-shadow: none; }
+  #appShell.sidebar-pinned .main { margin-left: 248px; }
+  #appShell.sidebar-pinned .sidebar-scrim { opacity: 0 !important; pointer-events: none !important; }
+
+  /* ---------- EXPANDED CONTENT (hover OR pinned): reveal labels/panels ---------- */
+  #appShell.sidebar-hover .brand,
+  #appShell.sidebar-pinned .brand { padding: 0 6px; justify-content: flex-start; gap: 11px; }
+  #appShell.sidebar-hover .brand-text,
+  #appShell.sidebar-pinned .brand-text,
+  #appShell.sidebar-hover .sidebar-toggle,
+  #appShell.sidebar-pinned .sidebar-toggle { display: grid; }
+
+  #appShell.sidebar-hover .nav-button,
+  #appShell.sidebar-pinned .nav-button {
+    font-size: 13.5px;
+    gap: 11px;
+    padding: 0 12px;
+    width: auto;
+    margin: 0;
+    justify-content: flex-start;
+  }
+  #appShell.sidebar-hover .nav-button.active::before,
+  #appShell.sidebar-pinned .nav-button.active::before { display: block; }
+
+  #appShell.sidebar-hover .month-switcher,
+  #appShell.sidebar-pinned .month-switcher { display: flex; }
+  #appShell.sidebar-hover .sidebar-panel,
+  #appShell.sidebar-pinned .sidebar-panel,
+  #appShell.sidebar-hover .focus-panel,
+  #appShell.sidebar-pinned .focus-panel { display: block; }
+
+  /* pin glyph: « once pinned, » otherwise; pin gets the accent-soft chip */
+  #appShell.sidebar-pinned .sidebar-toggle::before { content: "\00AB"; }
+  #appShell.sidebar-pinned .sidebar-toggle {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: transparent;
+  }
+  #appShell.sidebar-hover:not(.sidebar-pinned) .sidebar-toggle::before { content: "\00BB"; }
 }
-/* hide every direct child except the icon span */
-.app-shell.sidebar-collapsed .nav-button > *:not([aria-hidden]) {
-  display: none;
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .main, .sidebar-scrim { transition: none; }
 }
-.app-shell.sidebar-collapsed .nav-button.active::before { display: none; }
 
 /* ---------- MONTH SWITCHER ---------- */
 .month-switcher {
@@ -1068,11 +1078,6 @@ details summary::marker { content: ""; }
    Give them a slightly rounder, sidebar-tuned look. */
 .month-switcher .icon-button {
   border-radius: 11px;
-}
-
-/* COLLAPSED: hide the whole month switcher */
-.app-shell.sidebar-collapsed .month-switcher {
-  display: none;
 }
 
 /* ---------- SIDEBAR PANEL (payment snapshot / focus) ---------- */
@@ -1144,16 +1149,6 @@ details summary::marker { content: ""; }
   font-size: 13.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-/* COLLAPSED: hide the payment snapshot panel */
-.app-shell.sidebar-collapsed .sidebar-panel {
-  display: none;
-}
-
-/* push toggle to the bottom in collapsed state if it lives outside brand */
-.app-shell.sidebar-collapsed .sidebar > .sidebar-toggle:last-child {
-  margin-top: auto;
 }
 
 /* ---------- TOPBAR ---------- */
@@ -1451,16 +1446,6 @@ details summary::marker { content: ""; }
 }
 
 /* ---------- RESPONSIVE: shell collapses to a thin rail on small widths ---------- */
-@media (max-width: 720px) {
-  .app-shell,
-  .app-shell.sidebar-collapsed {
-    grid-template-columns: 72px minmax(0, 1fr);
-  }
-  .sidebar .brand h1,
-  .sidebar .brand p { display: none; }
-  .main { padding: 22px 18px 40px; }
-}
-
 /* ===================== SCREEN: login ===================== */
 /* ============================================================
    SUNRISE VILLA — LOGIN MODULE (#cloudAuthPanel)
@@ -5064,3 +5049,435 @@ body.resizing-column { cursor: col-resize; user-select: none; }
 
 /* ---------- Hide the sunrise login once the app shell is unlocked (signed in) ---------- */
 body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
+
+
+/* ============================================================
+   REVISION 2 — TABLE FIT PACK (fits tables at ~1000px, no page h-scroll)
+   ============================================================ */
+/* =====================================================================
+   TABLE FIT PACK — make data tables fit ~940-1000px content width
+   (1080px viewport - 72px collapsed rail - 68px main padding = ~940px)
+   Scoped under view ids; APPEND to the END of styles.css so the
+   per-column widths and the min-width:0 reset win over the existing
+   #bookingsView .bookings-table{min-width:880px} (styles.css:3088-3092)
+   and the loose foundation td/th padding. No markup or JS changes.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   SHARED: checkbox-only Full/Refund toggles in BOTH dense tables.
+   Hides the redundant 'Mark full'/'Full'/'Pending'/'Refunded' text but
+   keeps it for screen readers (matches the existing .wa-toggle pattern).
+   Recovers ~140-180px per table — the single biggest fit win.
+   --------------------------------------------------------------------- */
+#bookingsView .bookings-table .refund-toggle span,
+#calendarView .quick-view-table .refund-toggle span {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+#bookingsView .bookings-table .refund-toggle,
+#calendarView .quick-view-table .refund-toggle { gap: 0; justify-content: center; }
+
+/* =====================================================================
+   #bookingsTable — 13 default cols, table-layout:fixed
+   Width budget (px, incl. ~14px intra-cell padding):
+   channel64 + guest116 + contact104 + arrival70 + nights40 + revenue80
+   + deposit80 + total80 + received80 + full46 + balance80 + refund46
+   + actions100 = ~986. Fits ~1000px; the contained-scroll fallback +
+   sticky guest column guard the residual, user-resized columns, and the
+   record/prefix optional columns when toggled on — the PAGE never scrolls.
+   ===================================================================== */
+
+/* contained scroll = page never overflows even if columns are added */
+#bookingsView .bookings-table-wrap {
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
+}
+
+#bookingsView .bookings-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;                /* kill the 880px floor that forces scroll */
+}
+
+/* header: smaller, tighter */
+#bookingsView .bookings-table thead th {
+  padding: 8px 5px;
+  font-size: 10px;
+  letter-spacing: .01em;
+}
+#bookingsView .bookings-table thead th:first-child { padding-left: 14px; }
+#bookingsView .bookings-table thead th:last-child  { padding-right: 14px; }
+
+/* body: tighter rows, smaller text. Numbers/dates/badges NEVER truncate;
+   only the free-text columns (guest, contact) ellipsize if very long. */
+#bookingsView .bookings-table tbody td {
+  padding: 9px 5px;
+  font-size: 12.5px;
+}
+#bookingsView .bookings-table tbody td:first-child { padding-left: 14px; }
+#bookingsView .bookings-table tbody td:last-child  { padding-right: 14px; }
+#bookingsView .booking-guest-cell {
+  font-size: 12.5px;
+  max-width: 116px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#bookingsView .contact-cell {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#bookingsView .contact-cell,
+#bookingsView .date-cell { font-size: 12px; }
+
+/* money cells: tabular, nowrap, compact, never truncated */
+#bookingsView .bookings-table .money-cell {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;          /* clip rather than spill the page when many columns are on */
+  text-overflow: clip;
+}
+
+/* per-column widths (fixed layout reads these off header + first row) */
+#bookingsView .bookings-table th[data-col="channel"],
+#bookingsView .bookings-table td[data-col="channel"]  { width: 54px; }
+#bookingsView .bookings-table th[data-col="record"],
+#bookingsView .bookings-table td[data-col="record"]   { width: 72px; }
+#bookingsView .bookings-table th[data-col="guest"],
+#bookingsView .bookings-table td[data-col="guest"]    { width: 116px; white-space: normal; }
+#bookingsView .bookings-table th[data-col="contact"],
+#bookingsView .bookings-table td[data-col="contact"]  { width: 104px; }
+#bookingsView .bookings-table th[data-col="prefix"],
+#bookingsView .bookings-table td[data-col="prefix"]   { width: 30px; }
+#bookingsView .bookings-table th[data-col="arrival"],
+#bookingsView .bookings-table td[data-col="arrival"]  { width: 70px; }
+#bookingsView .bookings-table th[data-col="nights"],
+#bookingsView .bookings-table td[data-col="nights"]   { width: 34px; }
+#bookingsView .bookings-table th[data-col="revenue"],
+#bookingsView .bookings-table td[data-col="revenue"],
+#bookingsView .bookings-table th[data-col="deposit"],
+#bookingsView .bookings-table td[data-col="deposit"],
+#bookingsView .bookings-table th[data-col="total"],
+#bookingsView .bookings-table td[data-col="total"],
+#bookingsView .bookings-table th[data-col="received"],
+#bookingsView .bookings-table td[data-col="received"],
+#bookingsView .bookings-table th[data-col="balance"],
+#bookingsView .bookings-table td[data-col="balance"]  { width: 96px; white-space: nowrap; }
+#bookingsView .bookings-table th[data-col="full"],
+#bookingsView .bookings-table td[data-col="full"]     { width: 38px; }
+#bookingsView .bookings-table th[data-col="refund"],
+#bookingsView .bookings-table td[data-col="refund"]   { width: 38px; }
+#bookingsView .bookings-table th[data-col="actions"],
+#bookingsView .bookings-table td[data-col="actions"]  { width: 76px; }
+
+/* channel/record badges: snug */
+#bookingsView .bookings-table .channel-badge {
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 10.5px;
+}
+
+/* compact in-table action buttons */
+#bookingsView .bookings-table td[data-col="actions"] .small-action {
+  height: 24px;
+  padding: 0 7px;
+  font-size: 11px;
+  gap: 4px;
+}
+#bookingsView .bookings-table td[data-col="actions"] .small-action + .small-action { margin-left: 4px; }
+
+/* sticky guest column so the contained scroll keeps the anchor visible */
+#bookingsView .bookings-table th[data-col="guest"],
+#bookingsView .bookings-table td[data-col="guest"] {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--card);
+}
+#bookingsView .bookings-table thead th[data-col="guest"] { z-index: 3; }
+#bookingsView .bookings-table tbody tr:hover td[data-col="guest"] { background: var(--row-hover); }
+
+/* month-divider row reads as a clear section break (foundation only set 22px inset) */
+#bookingsView .bookings-table .booking-month-row td {
+  padding: 10px 7px 10px 14px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--soft);
+}
+
+/* =====================================================================
+   #quickViewTable — up to 12 cols, full-width detail panel <=1080px
+   Width budget when ALL on:
+   guest156 + type70 + checkin76 + nights44 + wa38 + revenue84
+   + deposit84 + total84 + received84 + full46 + balance84 + refund46
+   = ~896. Fits the ~940px stacked panel below the existing 1080px
+   breakpoint (styles.css:1924) with room to spare.
+   ===================================================================== */
+#calendarView .quick-view-card { overflow-x: auto; }   /* contained safety */
+
+#calendarView .quick-view-table { table-layout: fixed; width: 100%; }
+
+#calendarView .quick-view-table thead th {
+  padding: 8px 8px;
+  font-size: 10px;
+}
+#calendarView .quick-view-table tbody td {
+  padding: 9px 7px;
+  font-size: 12.5px;
+}
+#calendarView .quick-view-table td.amount-cell,
+#calendarView .quick-view-table td[data-col="revenue"],
+#calendarView .quick-view-table td[data-col="deposit"],
+#calendarView .quick-view-table td[data-col="total"],
+#calendarView .quick-view-table td[data-col="received"],
+#calendarView .quick-view-table td[data-col="balance"] {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* per-column widths (mirror app.js quickColumnWidthLimits, trimmed to fit) */
+#calendarView .quick-view-table th[data-col="guest"],
+#calendarView .quick-view-table td[data-col="guest"]    { width: 156px; }
+#calendarView .quick-view-table th[data-col="type"],
+#calendarView .quick-view-table td[data-col="type"]     { width: 70px; }
+#calendarView .quick-view-table th[data-col="checkin"],
+#calendarView .quick-view-table td[data-col="checkin"]  { width: 76px; }
+#calendarView .quick-view-table th[data-col="nights"],
+#calendarView .quick-view-table td[data-col="nights"]   { width: 44px; }
+#calendarView .quick-view-table th[data-col="wa"],
+#calendarView .quick-view-table td[data-col="wa"]       { width: 38px; }
+#calendarView .quick-view-table th[data-col="revenue"],
+#calendarView .quick-view-table td[data-col="revenue"],
+#calendarView .quick-view-table th[data-col="deposit"],
+#calendarView .quick-view-table td[data-col="deposit"],
+#calendarView .quick-view-table th[data-col="total"],
+#calendarView .quick-view-table td[data-col="total"],
+#calendarView .quick-view-table th[data-col="received"],
+#calendarView .quick-view-table td[data-col="received"],
+#calendarView .quick-view-table th[data-col="balance"],
+#calendarView .quick-view-table td[data-col="balance"]  { width: 92px; white-space: nowrap; }
+#calendarView .quick-view-table th[data-col="full"],
+#calendarView .quick-view-table td[data-col="full"]     { width: 46px; }
+#calendarView .quick-view-table th[data-col="refund"],
+#calendarView .quick-view-table td[data-col="refund"]   { width: 46px; }
+
+/* guest cell internals: let name shrink, code stays fixed */
+#calendarView .quick-view-table .guest-cell { gap: 8px; min-width: 0; }
+#calendarView .quick-view-table .guest-meta { min-width: 0; }
+#calendarView .quick-view-table .guest-meta strong {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#calendarView .quick-view-table .guest-code { min-width: 24px; font-size: 10px; }
+#calendarView .quick-view-table td[data-col="type"] .channel-badge {
+  min-width: 0; padding: 0 6px; font-size: 10.5px;
+}
+
+/* =====================================================================
+   SECONDARY TABLES — consistency + page-overflow containment
+   (#summaryRows 12-col monthly, #pnlRows P&L, #taxExpenseRows, archive)
+   ===================================================================== */
+.compact-table th { padding: 7px 8px; font-size: 10px; }
+.compact-table td { padding: 8px 8px; font-size: 12.5px; }
+.compact-table .money-cell,
+.compact-table td:last-child { font-variant-numeric: tabular-nums; }
+
+/* the dashboard 'Full Monthly Table' (#summaryRows, 12 cols) — contain + tighten */
+#dashboardView .dashboard-monthly-table .table-scroll { overflow-x: auto; }
+#dashboardView .dashboard-monthly-table table { min-width: 0; }
+#dashboardView .dashboard-monthly-table thead th { padding: 7px 8px; font-size: 10px; white-space: nowrap; }
+#dashboardView .dashboard-monthly-table tbody td { padding: 8px 8px; font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* P&L drawer + tax expense + doc archive: keep scroll inside the card */
+#dashboardView .pnl-table-wrap,
+#taxView .tax-inner-panel .table-scroll,
+#documentsView .document-archive .table-scroll { overflow-x: auto; max-width: 100%; }
+
+/* compact tax + archive action buttons to match primary tables */
+#taxView #taxExpenseRows td .small-action,
+#documentsView .document-archive td .small-action {
+  height: 24px; padding: 0 7px; font-size: 11px;
+}
+
+/* ============================================================
+   REVISION 2 — PER-SCREEN POLISH + CONSISTENCY PACK
+   ============================================================ */
+/* =====================================================================
+   SUNRISE VILLA — PER-SCREEN POLISH + CONSISTENCY PACK
+   APPEND to the END of styles.css, AFTER the Table Fit Pack, so these
+   win on source order. Scoped under view ids (or single-value foundation
+   overrides) so nothing fights the existing media queries.
+   NOTE: the sidebar and table fixes live in their own payloads; this
+   pack deliberately contains NO sidebar or data-table width rules.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. CARD H3 = ONE RULE (SANS 16px). Demote the serif card/section
+   headings; keep serif ONLY on the true page hero (documents-hero).
+   --------------------------------------------------------------------- */
+#dashboardView #dashboardGuideTitle,
+#messagesView .message-template-head h3,
+#bookingDialog .dialog-head h3 {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+/* the modal title may read a touch larger, still sans */
+#bookingDialog .dialog-head h3 { font-size: 18px; }
+/* documents-hero is a true page hero -> keep serif, normalize the size */
+#documentsView .documents-hero h3 { font-size: 32px; }
+
+/* ---------------------------------------------------------------------
+   2. CONTROL HEIGHTS — fold the 36/38px strays into the 34px tier
+   --------------------------------------------------------------------- */
+#bookingsView .booking-toolbar .filter-grid select { height: 34px; border-radius: var(--r-sm); }
+#dashboardView .one-off-row input[type="text"],
+#dashboardView .one-off-row input[type="number"],
+#dashboardView .one-off-row select,
+#dashboardView .commitment-row input[type="text"],
+#dashboardView .commitment-row input[type="number"],
+#dashboardView .commitment-row select {
+  height: 34px;
+  border-radius: var(--r-sm);
+}
+
+/* ---------------------------------------------------------------------
+   3. TOKEN DRIFT — replace hardcoded #fff with var(--card)
+   --------------------------------------------------------------------- */
+#dashboardView .one-off-row input[type="text"],
+#dashboardView .one-off-row input[type="number"],
+#dashboardView .one-off-row select,
+#dashboardView .commitment-row input[type="text"],
+#dashboardView .commitment-row input[type="number"],
+#dashboardView .commitment-row select,
+#dashboardView .annual-commitment-table,
+#dashboardView .annual-commitment-table th { background: var(--card); }
+#dashboardView .performance-hero::before { background: var(--card); }
+
+/* ---------------------------------------------------------------------
+   4. UPPERCASE MICRO-LABEL — one spec: 11px / 700 / .04em.
+   Fix the .06em outlier; align .eyebrow size to 12px (the page kicker
+   stays the single sentence-case eyebrow exception — left untouched).
+   --------------------------------------------------------------------- */
+#bookingDialog .form-section h4 { font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.eyebrow { font-size: 12px; letter-spacing: .04em; }
+
+/* ---------------------------------------------------------------------
+   5. DASHBOARD — mini-kpi baseline (kill row-to-row number jitter) +
+   occupancy ring centering + channel meter value alignment.
+   (Lightweight anchor; deliberately NOT restructuring the overview grid.)
+   --------------------------------------------------------------------- */
+#dashboardView .mini-kpi,
+#dashboardView .hero-kpi { justify-content: flex-start; }
+#dashboardView .supporting-kpis > .mini-kpi { min-height: 92px; }
+
+/* occupancy ring: pin the readout dead-center, % as the optical center */
+#dashboardView .performance-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+#dashboardView .performance-hero #occupancyRate { order: 1; }
+#dashboardView .performance-hero > span { order: 2; margin-top: 2px; }
+#dashboardView .performance-hero > small { order: 3; }
+
+/* channel meter: keep the value on one line, aligned with its label */
+#dashboardView .channel-item > strong { gap: 10px; }
+#dashboardView .channel-item > strong > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#dashboardView .channel-item > strong > span:last-child { flex: none; white-space: nowrap; }
+
+/* ---------------------------------------------------------------------
+   6. BOOKINGS TOOLBAR — one 34px control row; hide the visible "Month"
+   caption (Search's label is already sr-only) so heights/baselines match.
+   --------------------------------------------------------------------- */
+#bookingsView .booking-toolbar { align-items: center; }
+#bookingsView .booking-month-field { display: inline-flex; align-items: center; }
+#bookingsView .booking-month-field > span {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+#bookingsView .booking-month-field select { height: 34px; align-self: center; }
+#bookingsView .booking-toolbar input[type="search"],
+#bookingsView .booking-toolbar > details.filter-drawer > summary,
+#bookingsView .booking-toolbar > details.column-drawer > summary { height: 34px; align-self: center; }
+
+/* ---------------------------------------------------------------------
+   7. MESSAGES — stop the serif header wrapping to 3 lines + even inputs.
+   (Keep the existing column ratio; this only lets the head wrap.)
+   --------------------------------------------------------------------- */
+#messagesView .message-template-head { flex-wrap: wrap; row-gap: 10px; align-items: center; }
+#messagesView .message-template-head > div { flex: 1 1 220px; min-width: 0; }
+#messagesView .message-template-head h3 {
+  margin-top: 0;
+  font-size: 17px;          /* overrides rule #1's 16px specifically for this wrap-prone head */
+  line-height: 1.15;
+  text-wrap: balance;
+}
+#messagesView .message-actions { flex: 0 0 auto; flex-wrap: wrap; }
+
+#messagesView .message-form label > input,
+#messagesView .message-form label > select,
+#messagesView .quote-lead-grid label > input,
+#messagesView .quote-lead-grid label > select,
+#messagesView .quote-grid label > input,
+#messagesView .quote-grid label > select {
+  height: 42px;
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------------------------
+   8. DOCUMENTS — line-item table fills the paper width (fix the
+   width:auto + table-layout:fixed contradiction) + clean accent cap.
+   --------------------------------------------------------------------- */
+#documentsView .document-preview-paper .doc-item-table { width: 100%; }
+#documentsView .doc-payment-section .compact-doc-table { width: 100%; }
+#documentsView .document-preview-paper > * { max-width: 600px; }
+#documentsView .document-preview-paper > *:first-child {
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+}
+#documentsView .document-preview-paper .doc-paper-head {
+  border-top: 6px solid var(--accent);
+}
+
+/* ---------------------------------------------------------------------
+   9. TAX — even stat cards, aligned breakdown totals, seated checkbox.
+   --------------------------------------------------------------------- */
+#taxView .tax-summary-grid { align-items: stretch; }
+#taxView .tax-card { min-height: 116px; justify-content: flex-start; }
+#taxView .tax-card.warning { border: 1px solid transparent; }   /* match lined-card box height */
+#taxView .tax-breakdown > div:last-child { align-items: center; } /* center big total vs its label */
+#taxView .tax-expense-summary { align-items: stretch; }
+#taxView .tax-expense-card { min-height: 92px; justify-content: flex-start; }
+#taxView .tax-review-check {
+  align-self: end;
+  height: 42px;
+  margin-top: 18px;   /* match caption(11px)+gap(7px) of sibling fields */
+  display: inline-flex;
+  align-items: center;
+}
+/* REVISION 2.1 — keep large stat numbers on one line (no mid-value wrap) */
+#dashboardView .overview-card strong,
+#dashboardView .hero-kpi strong,
+#dashboardView .mini-kpi strong,
+#dashboardView .performance-hero strong,
+#taxView .tax-card strong { white-space: nowrap; }

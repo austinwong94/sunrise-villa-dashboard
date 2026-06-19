@@ -4471,16 +4471,53 @@ function initThemePicker() {
   applyAccent();
 }
 
-// ---------------- Collapsible sidebar (persisted in appSettings.sidebarCollapsed -> cloud) ----------------
+// ---------------- Sidebar: reference hover-expand + pin model (persisted via appSettings.sidebarPinned -> cloud) ----------------
 function initSidebar() {
   const shell = document.querySelector("#appShell");
+  const sidebar = shell?.querySelector(".sidebar");
   const toggle = document.querySelector("#sidebarToggle");
-  if (!shell) return;
-  if (appSettings && appSettings.sidebarCollapsed) shell.classList.add("sidebar-collapsed");
-  toggle?.addEventListener("click", () => {
-    const collapsed = shell.classList.toggle("sidebar-collapsed");
-    appSettings = { ...appSettings, sidebarCollapsed: collapsed };
+  if (!shell || !sidebar) return;
+
+  // Default rail = not pinned. Restore the persisted pin preference.
+  const pinnedInitial = !!(appSettings && appSettings.sidebarPinned);
+
+  // Scrim behind the hover overlay (created once, toggled via CSS class).
+  let scrim = shell.querySelector(".sidebar-scrim");
+  if (!scrim) {
+    scrim = document.createElement("div");
+    scrim.className = "sidebar-scrim";
+    scrim.setAttribute("aria-hidden", "true");
+    shell.appendChild(scrim);
+  }
+
+  const setPinned = (pinned) => {
+    shell.classList.toggle("sidebar-pinned", pinned);
+    if (pinned) shell.classList.remove("sidebar-hover"); // pinned overrides hover
+    appSettings = { ...appSettings, sidebarPinned: pinned };
     saveAppSettings();
+  };
+
+  // Apply persisted state on boot.
+  shell.classList.toggle("sidebar-pinned", pinnedInitial);
+
+  // Hover-to-expand as overlay — only when NOT pinned (mouse + keyboard focus).
+  const openHover = () => {
+    if (!shell.classList.contains("sidebar-pinned")) shell.classList.add("sidebar-hover");
+  };
+  const closeHover = () => shell.classList.remove("sidebar-hover");
+
+  sidebar.addEventListener("mouseenter", openHover);
+  sidebar.addEventListener("mouseleave", closeHover);
+  sidebar.addEventListener("focusin", openHover);
+  sidebar.addEventListener("focusout", (e) => {
+    if (!sidebar.contains(e.relatedTarget)) closeHover();
+  });
+  scrim.addEventListener("click", closeHover);
+
+  // The toggle pins / unpins and persists.
+  toggle?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setPinned(!shell.classList.contains("sidebar-pinned"));
   });
 }
 
