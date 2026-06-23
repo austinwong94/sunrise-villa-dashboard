@@ -5557,3 +5557,19 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 /* One-click WhatsApp action on a booking row */
 .small-action.wa-action { color: #128c4b; border-color: #a7dcbe; }
 .small-action.wa-action:hover { background: #e9f7ef; }
+
+/* Today: "Send today" + "Open nights ahead" action cards (improvements #1, #2, #3) */
+#todayView .today-action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+@media (max-width: 980px) { #todayView .today-action-grid { grid-template-columns: 1fr; } }
+#todayView .today-card.today-send { border-color: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-soft) inset; }
+#todayView .today-card.today-send .today-card-head h3 { color: var(--accent); }
+#todayView .today-row.send-row { gap: 11px; }
+#todayView .today-row-main span em { font-style: normal; color: var(--due); font-weight: 600; }
+#todayView .send-phone { display: flex; align-items: center; gap: 6px; flex: none; }
+#todayView .send-phone input { width: 150px; max-width: 44vw; padding: 7px 9px; border: 1px solid var(--line); border-radius: 9px; font-size: 12.5px; background: var(--bg); color: inherit; }
+#todayView .send-phone input:focus { outline: none; border-color: var(--accent); }
+#todayView .today-row.vacancy-row.tight { background: var(--due-soft); border-radius: 8px; }
+#todayView .today-row.vacancy-row .today-row-main strong { white-space: normal; }
+
+/* Bookings table: "no phone" badge */
+.bookings-table .contact-missing { color: var(--due, #c0392b); font-size: 12px; font-weight: 600; white-space: nowrap; }

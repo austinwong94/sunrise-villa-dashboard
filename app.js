@@ -148,6 +148,7 @@ const els = {
   channelFilter: document.querySelector("#channelFilter"),
   paymentFilter: document.querySelector("#paymentFilter"),
   depositFilter: document.querySelector("#depositFilter"),
+  contactFilter: document.querySelector("#contactFilter"),
   summaryRows: document.querySelector("#summaryRows"),
   upcomingRows: document.querySelector("#upcomingRows"),
   incomeChart: document.querySelector("#incomeChart"),
@@ -645,6 +646,16 @@ function defaultAppSettings() {
       guideLink: GUIDE_LINK,
       bankDetails: "",
       templates: defaultMessageTemplates,
+      // Per-villa override block. Blank by default ON PURPOSE so Windmill never inherits
+      // Sunrise's address, directions, bank details or templates. Filled in when on Windmill.
+      windmill: {
+        checkinTime: "3:00 PM",
+        address: "",
+        mapsLink: "",
+        guideLink: "",
+        bankDetails: "",
+        templates: { quote: "", checkin: "", guide: "", reminder: "" },
+      },
     },
     ical: { sources: [], imported: [], lastSyncedAt: "", lastStatus: "", lastError: "" },
   };
@@ -668,7 +679,16 @@ function loadAppSettings() {
       quickColumns: { ...fallback.quickColumns, ...(parsed.quickColumns || {}) },
       quickColumnWidths: { ...fallback.quickColumnWidths, ...(parsed.quickColumnWidths || {}) },
       commitments: Array.isArray(parsed.commitments) ? parsed.commitments.map(normalizeCommitment) : fallback.commitments,
-      message: { ...fallback.message, ...(parsed.message || {}), templates: { ...defaultMessageTemplates, ...(parsed.message?.templates || {}) } },
+      message: {
+        ...fallback.message,
+        ...(parsed.message || {}),
+        templates: { ...defaultMessageTemplates, ...(parsed.message?.templates || {}) },
+        windmill: {
+          ...fallback.message.windmill,
+          ...(parsed.message?.windmill || {}),
+          templates: { ...fallback.message.windmill.templates, ...(parsed.message?.windmill?.templates || {}) },
+        },
+      },
       ical: { ...fallback.ical, ...(parsed.ical || {}) },
     };
     // One-time migration: lift bank details out of the (now public-sanitized) quote
@@ -981,6 +1001,23 @@ function setWhatsappSent(id, checked) {
   bookings = bookings.map((booking) => (booking.id === id ? { ...booking, whatsappSent: Boolean(checked) } : booking));
   saveBookings();
   renderDetails();
+}
+
+// Improvement #2: capture / edit a guest phone inline, no dialog. Saves and re-renders.
+function setBookingContact(id, value) {
+  const next = String(value || "").trim();
+  bookings = bookings.map((booking) => (booking.id === id ? { ...booking, contact: next } : booking));
+  saveBookings();
+  renderAll();
+}
+
+// Improvement #1: stamp a comms timestamp so the "Send today" list self-clears once messaged.
+function markBookingMessaged(id, field) {
+  const key = field === "reminder" ? "reminderSentAt" : "checkinSentAt";
+  const stamp = isoDate(new Date());
+  bookings = bookings.map((booking) => (booking.id === id ? { ...booking, [key]: stamp } : booking));
+  saveBookings();
+  renderToday();
 }
 
 function currentYear() {
@@ -1393,6 +1430,18 @@ function renderCalendar() {
   const todayIso = isoDate(new Date());
   els.calendarGrid.innerHTML = "";
 
+  // De-duplicate the iCal layer: an Airbnb reservation that's already recorded as a
+  // real booking would otherwise show twice (the named pill AND a generic "Airbnb · …"
+  // pill from the calendar feed). Keep only imported blocks for THIS villa that no real
+  // booking overlaps — so each reservation appears once, and the feed now flags only
+  // Airbnb stays you haven't entered yet. Render-only; nothing stored is changed.
+  const importedBlocks = (appSettings.ical?.imported || []).filter((b) => {
+    const villa = b.villa === "Windmill" ? "Windmill" : "Sunrise";
+    if (villa !== activeVilla) return false;
+    const alreadyRecorded = bookings.some((bk) => b.start < departureFor(bk) && bk.arrival < b.end);
+    return !alreadyRecorded;
+  });
+
   for (let i = 0; i < 42; i += 1) {
     const day = addDays(gridStart, i);
     const dayIso = isoDate(day);
@@ -1428,7 +1477,7 @@ function renderCalendar() {
 
     // Imported Airbnb blocks (improvement #5): availability only, not financial bookings.
     // A block covers [start, end) — end is the checkout/exclusive date.
-    const importedToday = (appSettings.ical?.imported || []).filter((b) => (b.villa === "Windmill" ? "Windmill" : "Sunrise") === activeVilla && b.start <= dayIso && dayIso < b.end);
+    const importedToday = importedBlocks.filter((b) => b.start <= dayIso && dayIso < b.end);
     importedToday.slice(0, 2).forEach((b) => {
       const chip = document.createElement(b.reservationUrl ? "a" : "div");
       chip.className = "booking-chip airbnb-import";
@@ -2405,7 +2454,16 @@ function restoreAppData(data) {
           bookingColumnWidths: { ...defaultAppSettings().bookingColumnWidths, ...(data.appSettings.bookingColumnWidths || {}) },
           quickColumns: { ...defaultAppSettings().quickColumns, ...(data.appSettings.quickColumns || {}) },
           quickColumnWidths: { ...defaultAppSettings().quickColumnWidths, ...(data.appSettings.quickColumnWidths || {}) },
-          message: { ...defaultAppSettings().message, ...(data.appSettings.message || {}), templates: { ...defaultMessageTemplates, ...(data.appSettings.message?.templates || {}) } },
+          message: {
+            ...defaultAppSettings().message,
+            ...(data.appSettings.message || {}),
+            templates: { ...defaultMessageTemplates, ...(data.appSettings.message?.templates || {}) },
+            windmill: {
+              ...defaultAppSettings().message.windmill,
+              ...(data.appSettings.message?.windmill || {}),
+              templates: { ...defaultAppSettings().message.windmill.templates, ...(data.appSettings.message?.windmill?.templates || {}) },
+            },
+          },
           ical: { ...defaultAppSettings().ical, ...(data.appSettings.ical || {}) },
         }
       : appSettings;
@@ -2420,6 +2478,22 @@ function restoreAppData(data) {
 
 function formatPhoneForWhatsapp(value) {
   return String(value || "").replace(/[^\d]/g, "");
+}
+
+// --- Per-villa message resolution (improvement #7) -------------------------------
+// Sunrise uses the top-level message block (unchanged). Windmill uses its own block
+// so Sunrise's address, directions, bank details and templates can never leak across.
+function messageBlockForVilla(villa) {
+  return villa === "Windmill" ? (appSettings.message.windmill || {}) : appSettings.message;
+}
+function activeMessageBlock() {
+  return messageBlockForVilla(appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise");
+}
+function templateForVilla(villa, key) {
+  const t = messageBlockForVilla(villa)?.templates?.[key];
+  if (typeof t === "string" && t.trim()) return t;
+  // Sunrise falls back to the built-in defaults; Windmill stays blank (never Sunrise text).
+  return villa === "Windmill" ? "" : defaultMessageTemplates[key];
 }
 
 function templateValuesForBooking(booking = selectedMessageBooking()) {
@@ -2438,14 +2512,19 @@ function templateValuesForQuote() {
 
 function templateValues({ guest, booking }) {
   const quote = quoteCalculation();
+  const villa = booking
+    ? (booking.villa === "Windmill" ? "Windmill" : "Sunrise")
+    : (appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise");
+  const block = messageBlockForVilla(villa);
+  const isW = villa === "Windmill";
   return {
     guest,
     code: booking ? bookingConfirmationCode(booking) : "SV-DDMM-A08",
-    address: els.messageAddress?.value?.trim() || appSettings.message.address,
-    mapsLink: els.messageMapsLink?.value?.trim() || appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh",
-    checkinTime: els.messageCheckinTime?.value || appSettings.message.checkinTime || "3:00 PM",
-    guideLink: els.messageGuideLink?.value?.trim() || appSettings.message.guideLink || GUIDE_LINK,
-    bankDetails: (els.messageBankDetails && els.messageBankDetails.value.trim()) || appSettings.message.bankDetails || "",
+    address: els.messageAddress?.value?.trim() || block.address || "",
+    mapsLink: els.messageMapsLink?.value?.trim() || block.mapsLink || (isW ? "" : "https://g.co/kgs/DYpYPSh"),
+    checkinTime: els.messageCheckinTime?.value || block.checkinTime || "3:00 PM",
+    guideLink: els.messageGuideLink?.value?.trim() || block.guideLink || (isW ? "" : GUIDE_LINK),
+    bankDetails: (els.messageBankDetails && els.messageBankDetails.value.trim()) || block.bankDetails || "",
     quoteCheckIn: quoteDate(quote.checkIn),
     quoteCheckOut: quoteDate(quote.checkOut),
     quoteAccommodationFee: money(quote.accommodationFee),
@@ -2589,35 +2668,44 @@ function fillMessageFromBooking(force = false) {
   if (els.messageGuestTitle) els.messageGuestTitle.value = booking.guestTitle === "Ms" ? "Ms" : "Mr";
   if (force || !els.messageGuestName.value) els.messageGuestName.value = booking.guest;
   if (force || !els.messagePhone.value) els.messagePhone.value = booking.contact || "";
-  if (force || !els.messageCheckinTime.value) els.messageCheckinTime.value = appSettings.message.checkinTime || "3:00 PM";
+  const block = activeMessageBlock();
+  const isW = activeVillaKey() === "Windmill";
+  if (force || !els.messageCheckinTime.value) els.messageCheckinTime.value = block.checkinTime || "3:00 PM";
   els.messageSecurityCode.value = bookingConfirmationCode(booking);
   if (els.messageCodeDisplay) els.messageCodeDisplay.textContent = bookingConfirmationCode(booking);
-  if (force || !els.messageAddress.value) els.messageAddress.value = appSettings.message.address || "";
-  if (els.messageMapsLink && (force || !els.messageMapsLink.value)) els.messageMapsLink.value = appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh";
-  if (els.messageGuideLink && (force || !els.messageGuideLink.value)) els.messageGuideLink.value = appSettings.message.guideLink || GUIDE_LINK;
-  if (els.messageBankDetails && (force || !els.messageBankDetails.value)) els.messageBankDetails.value = appSettings.message.bankDetails || "";
+  if (force || !els.messageAddress.value) els.messageAddress.value = block.address || "";
+  if (els.messageMapsLink && (force || !els.messageMapsLink.value)) els.messageMapsLink.value = block.mapsLink || (isW ? "" : "https://g.co/kgs/DYpYPSh");
+  if (els.messageGuideLink && (force || !els.messageGuideLink.value)) els.messageGuideLink.value = block.guideLink || (isW ? "" : GUIDE_LINK);
+  if (els.messageBankDetails && (force || !els.messageBankDetails.value)) els.messageBankDetails.value = block.bankDetails || "";
   renderQuickQuote(false);
   renderCheckinMessage();
 }
 
+function activeVillaKey() {
+  return appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise";
+}
+function villaOf(booking) {
+  return booking ? (booking.villa === "Windmill" ? "Windmill" : "Sunrise") : activeVillaKey();
+}
+
 function checkinMessageText() {
-  return applyTemplate(appSettings.message.templates?.checkin || defaultMessageTemplates.checkin, templateValuesForBooking());
+  return applyTemplate(templateForVilla(villaOf(selectedMessageBooking()), "checkin"), templateValuesForBooking());
 }
 
 function checkinMessageTextForBooking(booking) {
-  return applyTemplate(appSettings.message.templates?.checkin || defaultMessageTemplates.checkin, templateValuesForBooking(booking));
+  return applyTemplate(templateForVilla(villaOf(booking), "checkin"), templateValuesForBooking(booking));
 }
 
 function guestGuideMessageTextForBooking(booking) {
-  return applyTemplate(appSettings.message.templates?.guide || defaultMessageTemplates.guide, templateValuesForBooking(booking));
+  return applyTemplate(templateForVilla(villaOf(booking), "guide"), templateValuesForBooking(booking));
 }
 
 function reminderMessageTextForBooking(booking) {
-  return applyTemplate(appSettings.message.templates?.reminder || defaultMessageTemplates.reminder, templateValuesForBooking(booking));
+  return applyTemplate(templateForVilla(villaOf(booking), "reminder"), templateValuesForBooking(booking));
 }
 
 function quoteMessageText() {
-  return applyTemplate(appSettings.message.templates?.quote || defaultMessageTemplates.quote, templateValuesForQuote());
+  return applyTemplate(templateForVilla(activeVillaKey(), "quote"), templateValuesForQuote());
 }
 
 function openWhatsappMessage(phoneValue, text) {
@@ -2702,22 +2790,26 @@ async function copyMessageWithFeedback(text, button, defaultLabel) {
 
 function renderCheckinMessage() {
   if (els.messageCodeDisplay) els.messageCodeDisplay.textContent = selectedMessageBooking() ? bookingConfirmationCode(selectedMessageBooking()) : "SV-DDMM-A08";
-  appSettings = {
-    ...appSettings,
-    message: {
-      checkinTime: els.messageCheckinTime?.value || "3:00 PM",
-      address: els.messageAddress?.value || "",
-      mapsLink: els.messageMapsLink?.value || appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh",
-      guideLink: els.messageGuideLink?.value || appSettings.message.guideLink || GUIDE_LINK,
-      bankDetails: els.messageBankDetails ? els.messageBankDetails.value : (appSettings.message.bankDetails || ""),
-      templates: {
-        quote: els.quoteTemplateInput?.value || defaultMessageTemplates.quote,
-        checkin: els.checkinTemplateInput?.value || defaultMessageTemplates.checkin,
-        guide: els.guideTemplateInput?.value || defaultMessageTemplates.guide,
-        reminder: els.reminderTemplateInput?.value || defaultMessageTemplates.reminder,
-      },
+  const isW = activeVillaKey() === "Windmill";
+  const base = activeMessageBlock();
+  const dflt = (key) => (isW ? "" : defaultMessageTemplates[key]);
+  const block = {
+    checkinTime: els.messageCheckinTime?.value || "3:00 PM",
+    address: els.messageAddress?.value || "",
+    mapsLink: els.messageMapsLink?.value || base.mapsLink || (isW ? "" : "https://g.co/kgs/DYpYPSh"),
+    guideLink: els.messageGuideLink?.value || base.guideLink || (isW ? "" : GUIDE_LINK),
+    bankDetails: els.messageBankDetails ? els.messageBankDetails.value : (base.bankDetails || ""),
+    templates: {
+      quote: els.quoteTemplateInput?.value || dflt("quote"),
+      checkin: els.checkinTemplateInput?.value || dflt("checkin"),
+      guide: els.guideTemplateInput?.value || dflt("guide"),
+      reminder: els.reminderTemplateInput?.value || dflt("reminder"),
     },
   };
+  // Write only the ACTIVE villa's block; the other villa's settings are preserved untouched.
+  appSettings = isW
+    ? { ...appSettings, message: { ...appSettings.message, windmill: { ...(appSettings.message.windmill || {}), ...block } } }
+    : { ...appSettings, message: { ...appSettings.message, ...block } };
   saveAppSettings();
 }
 
@@ -2726,11 +2818,28 @@ function renderMessageGenerator() {
   const current = els.messageBookingSelect.value;
   els.messageBookingSelect.innerHTML = messageBookingOptions() || `<option value="">No bookings yet</option>`;
   if (current && [...els.messageBookingSelect.options].some((option) => option.value === current)) els.messageBookingSelect.value = current;
-  if (els.quoteTemplateInput && !els.quoteTemplateInput.value) els.quoteTemplateInput.value = appSettings.message.templates?.quote || defaultMessageTemplates.quote;
-  if (els.checkinTemplateInput && !els.checkinTemplateInput.value) els.checkinTemplateInput.value = appSettings.message.templates?.checkin || defaultMessageTemplates.checkin;
-  if (els.guideTemplateInput && !els.guideTemplateInput.value) els.guideTemplateInput.value = appSettings.message.templates?.guide || defaultMessageTemplates.guide;
-  if (els.reminderTemplateInput && !els.reminderTemplateInput.value) els.reminderTemplateInput.value = appSettings.message.templates?.reminder || defaultMessageTemplates.reminder;
+  if (els.quoteTemplateInput && !els.quoteTemplateInput.value) els.quoteTemplateInput.value = templateForVilla(activeVillaKey(), "quote");
+  if (els.checkinTemplateInput && !els.checkinTemplateInput.value) els.checkinTemplateInput.value = templateForVilla(activeVillaKey(), "checkin");
+  if (els.guideTemplateInput && !els.guideTemplateInput.value) els.guideTemplateInput.value = templateForVilla(activeVillaKey(), "guide");
+  if (els.reminderTemplateInput && !els.reminderTemplateInput.value) els.reminderTemplateInput.value = templateForVilla(activeVillaKey(), "reminder");
   fillMessageFromBooking(false);
+}
+
+// Force the message form + template editors to show the ACTIVE villa's saved block.
+// Called when the villa switch flips so Sunrise text is never left sitting in Windmill's editor.
+function loadVillaMessageIntoForm() {
+  const villa = activeVillaKey();
+  const block = messageBlockForVilla(villa);
+  const isW = villa === "Windmill";
+  if (els.messageCheckinTime) els.messageCheckinTime.value = block.checkinTime || "3:00 PM";
+  if (els.messageAddress) els.messageAddress.value = block.address || "";
+  if (els.messageMapsLink) els.messageMapsLink.value = block.mapsLink || (isW ? "" : "https://g.co/kgs/DYpYPSh");
+  if (els.messageGuideLink) els.messageGuideLink.value = block.guideLink || (isW ? "" : GUIDE_LINK);
+  if (els.messageBankDetails) els.messageBankDetails.value = block.bankDetails || "";
+  if (els.quoteTemplateInput) els.quoteTemplateInput.value = templateForVilla(villa, "quote");
+  if (els.checkinTemplateInput) els.checkinTemplateInput.value = templateForVilla(villa, "checkin");
+  if (els.guideTemplateInput) els.guideTemplateInput.value = templateForVilla(villa, "guide");
+  if (els.reminderTemplateInput) els.reminderTemplateInput.value = templateForVilla(villa, "reminder");
 }
 
 const bookingColumnOptions = [
@@ -3087,9 +3196,11 @@ function renderBookingsTable() {
   const channel = els.channelFilter?.value || "All";
   const payment = els.paymentFilter?.value || "All";
   const deposit = els.depositFilter?.value || "All";
+  const contactState = els.contactFilter?.value || "All";
   const sorted = [...bookings]
     .filter((booking) => {
       const balance = balanceFor(booking);
+      const hasPhone = !!formatPhoneForWhatsapp(booking.contact);
       const haystack = `${booking.guest} ${booking.contact} ${prefixFor(booking.guest)} ${booking.channel} ${isExcludedBooking(booking) ? "influencer complimentary free record only" : "financial"}`.toLowerCase();
       if (effectiveMonth !== "All" && !bookingMonthOverlap(booking, effectiveMonth)) return false;
       if (search && !haystack.includes(search)) return false;
@@ -3100,6 +3211,8 @@ function renderBookingsTable() {
       if (deposit === "Held" && (!booking.depositPaid || booking.depositRefunded)) return false;
       if (deposit === "RefundDue" && refundPendingFor(booking) <= 0) return false;
       if (deposit === "Refunded" && !booking.depositRefunded) return false;
+      if (contactState === "Missing" && hasPhone) return false;
+      if (contactState === "Has" && !hasPhone) return false;
       return true;
     })
     .sort((a, b) => a.arrival.localeCompare(b.arrival));
@@ -3118,7 +3231,7 @@ function renderBookingsTable() {
           ${bookingCell("channel", channelBadgeFor(booking))}
           ${bookingCell("record", isExcludedBooking(booking) ? `<span class="channel-badge influencer">Record only</span>` : `<span class="channel-badge direct">Financial</span>`)}
           ${bookingCell("guest", escapeHtml(booking.guest), "booking-guest-cell")}
-          ${bookingCell("contact", escapeHtml(booking.contact || "-"), "contact-cell")}
+          ${bookingCell("contact", formatPhoneForWhatsapp(booking.contact) ? escapeHtml(booking.contact) : `<span class="contact-missing" title="No WhatsApp number saved">⚠ no phone</span>`, "contact-cell")}
           ${bookingCell("prefix", `<strong>${prefixFor(booking.guest)}</strong>`)}
           ${bookingCell("arrival", shortDate(booking.arrival), "date-cell")}
           ${bookingCell("nights", booking.nights)}
@@ -4107,6 +4220,65 @@ function setSelectedMonth(monthValue, syncBookingFilter = true) {
   }
 }
 
+// Improvement #1: guests arriving soon who still need their check-in info OR a phone number.
+function messagesToSendToday(daysAhead = 7) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const horizon = addDays(today, daysAhead);
+  return scopedBookings()
+    .filter((b) => {
+      const arr = dateObj(b.arrival);
+      if (arr < today || arr > horizon) return false;
+      const needsPhone = !formatPhoneForWhatsapp(b.contact);
+      const needsCheckin = !b.checkinSentAt;
+      return needsPhone || needsCheckin;
+    })
+    .sort((a, b) => a.arrival.localeCompare(b.arrival));
+}
+
+// Improvement #3: open / gap nights in the active villa's calendar for the next window.
+// "gap" = empty nights bounded by bookings on both sides (hardest to fill); "open" = open-ended.
+function upcomingVacancies(daysAhead = 45) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const horizon = addDays(today, daysAhead);
+  const intervals = scopedBookings()
+    .map((b) => ({ start: dateObj(b.arrival), end: dateObj(departureFor(b)) }))
+    .filter((iv) => iv.end > today)
+    .sort((a, b) => a.start - b.start);
+  const merged = [];
+  intervals.forEach((iv) => {
+    const last = merged[merged.length - 1];
+    if (last && iv.start <= last.end) {
+      if (iv.end > last.end) last.end = iv.end;
+    } else {
+      merged.push({ start: new Date(iv.start), end: new Date(iv.end) });
+    }
+  });
+  const clip = (d) => (d < today ? today : d > horizon ? horizon : d);
+  const out = [];
+  let cursor = today;
+  let passed = false;
+  merged.forEach((iv) => {
+    const gapStart = clip(cursor);
+    const gapEnd = clip(iv.start);
+    if (gapEnd > gapStart) {
+      const nights = Math.round((gapEnd - gapStart) / 86400000);
+      if (nights > 0) out.push({ start: isoDate(gapStart), end: isoDate(gapEnd), nights, type: passed ? "gap" : "open" });
+    }
+    if (iv.end > cursor) {
+      cursor = iv.end;
+      passed = true;
+    }
+  });
+  if (cursor < horizon) {
+    const s = clip(cursor);
+    const nights = Math.round((horizon - s) / 86400000);
+    if (nights > 0) out.push({ start: isoDate(s), end: isoDate(horizon), nights, type: "open" });
+  }
+  return out;
+}
+
 function renderToday() {
   const bookings = scopedBookings();
   const host = document.querySelector("#todayContent");
@@ -4147,6 +4319,59 @@ function renderToday() {
       <div class="today-card-body">${rowsHtml || emptyMsg(emptyText)}</div>
     </section>`;
 
+  // --- Improvement #1 + #2: "Send today" with inline phone capture ---
+  const fmtN = (n) => `${n} night${Number(n) === 1 ? "" : "s"}`;
+  const sendList = messagesToSendToday(7);
+  const sendRows = sendList
+    .map((b) => {
+      const villa = b.villa === "Windmill" ? "Windmill" : "Sunrise";
+      const hasPhone = !!formatPhoneForWhatsapp(b.contact);
+      const action = hasPhone
+        ? `<button class="small-action wa-action" type="button" data-send-checkin="${b.id}">${b.checkinSentAt ? "Resend check-in" : "Send check-in"}</button>`
+        : `<div class="send-phone">
+             <input type="tel" inputmode="tel" placeholder="+60 12-345 6789" data-contact-input="${b.id}" aria-label="WhatsApp number for ${escapeHtml(b.guest)}" />
+             <button class="small-action" type="button" data-set-contact="${b.id}">Save</button>
+           </div>`;
+      return `
+        <div class="today-row send-row">
+          <span class="today-avatar">${prefixFor(b.guest)}</span>
+          <div class="today-row-main">
+            <strong>${escapeHtml(b.guest)}</strong>
+            <span>${villa} · arrives ${shortDate(b.arrival)} · ${fmtN(b.nights)}${hasPhone ? "" : " · <em>needs WhatsApp number</em>"}</span>
+          </div>
+          ${action}
+        </div>`;
+    })
+    .join("");
+  const sendCard = `
+    <section class="today-card today-send">
+      <div class="today-card-head"><h3>Send today</h3><span class="count-pill">${sendList.length}</span></div>
+      <div class="today-card-body">${sendRows || emptyMsg("No check-in messages waiting.")}</div>
+    </section>`;
+
+  // --- Improvement #3: open / gap nights ahead ---
+  const vacancies = upcomingVacancies(45);
+  const vacRows = vacancies
+    .slice(0, 6)
+    .map((v) => {
+      const tight = v.type === "gap" && v.nights <= 2;
+      const tag = v.type === "gap" ? "gap between stays" : "open";
+      return `
+        <div class="today-row vacancy-row${tight ? " tight" : ""}">
+          <div class="today-row-main">
+            <strong>${shortDate(v.start)} → ${shortDate(v.end)}</strong>
+            <span>${fmtN(v.nights)} free · ${tag}</span>
+          </div>
+          ${tight ? `<span class="today-flag due">Hard to fill</span>` : ""}
+        </div>`;
+    })
+    .join("");
+  const vacancyCard = `
+    <section class="today-card today-vacancy">
+      <div class="today-card-head"><h3>Open nights ahead</h3><span class="count-pill">${vacancies.length}</span></div>
+      <div class="today-card-body">${vacRows || emptyMsg("Fully booked for the next 6 weeks. 🎉")}</div>
+    </section>`;
+
   host.innerHTML = `
     <div class="today-headline">
       <p class="eyebrow">Daily operations</p>
@@ -4156,6 +4381,10 @@ function renderToday() {
       ${col("Arrivals today", arrivals.length, arrivals.map((b) => guestRow(b, `${fmtNights(b.nights)} · out ${shortDate(departureFor(b))}`)).join(""), "No arrivals today.")}
       ${col("In-house now", inhouse.length, inhouse.map((b) => guestRow(b, `until ${shortDate(departureFor(b))}`)).join(""), "No guests in-house.")}
       ${col("Departures today", departures.length, departures.map((b) => guestRow(b, "checking out")).join(""), "No departures today.")}
+    </div>
+    <div class="today-action-grid">
+      ${sendCard}
+      ${vacancyCard}
     </div>
     <section class="today-card today-attention">
       <div class="today-card-head"><h3>Needs your attention</h3><span class="count-pill">${attention.length}</span></div>
@@ -4211,6 +4440,7 @@ document.querySelectorAll(".villa-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     appSettings = { ...appSettings, activeVilla: tab.dataset.villa === "Windmill" ? "Windmill" : "Sunrise" };
     saveAppSettings();
+    loadVillaMessageIntoForm(); // show the active villa's own message block (no Sunrise↔Windmill bleed)
     renderAll();
   });
 });
@@ -4356,6 +4586,47 @@ els.bookingRows.addEventListener("click", (event) => {
   }
 });
 
+// Improvement #1 + #2: "Send today" card — one-click check-in send + inline phone capture.
+const todayContentEl = document.querySelector("#todayContent");
+todayContentEl?.addEventListener("click", (event) => {
+  const sendBtn = event.target.closest("[data-send-checkin]");
+  if (sendBtn) {
+    const booking = bookings.find((b) => b.id === sendBtn.dataset.sendCheckin);
+    if (booking) {
+      try {
+        openWhatsappForBooking(booking, "checkin");
+      } catch (_) {
+        /* popup blocked in some browsers — still record it as messaged below */
+      }
+      markBookingMessaged(booking.id, "checkin");
+    }
+    return;
+  }
+  const saveBtn = event.target.closest("[data-set-contact]");
+  if (saveBtn) {
+    const id = saveBtn.dataset.setContact;
+    const input = todayContentEl.querySelector(`[data-contact-input="${id}"]`);
+    const value = input?.value || "";
+    if (!formatPhoneForWhatsapp(value)) {
+      window.alert("Enter a valid WhatsApp number first.");
+      input?.focus();
+      return;
+    }
+    setBookingContact(id, value);
+  }
+});
+todayContentEl?.addEventListener("keydown", (event) => {
+  const input = event.target.closest?.("[data-contact-input]");
+  if (input && event.key === "Enter") {
+    event.preventDefault();
+    if (!formatPhoneForWhatsapp(input.value)) {
+      window.alert("Enter a valid WhatsApp number first.");
+      return;
+    }
+    setBookingContact(input.dataset.contactInput, input.value);
+  }
+});
+
 els.bookingRows.addEventListener("change", (event) => {
   const fullReceivedId = event.target.dataset.fullReceived;
   if (fullReceivedId) setFullReceived(fullReceivedId, event.target.checked);
@@ -4453,7 +4724,7 @@ document.querySelector("#exportSheets").addEventListener("click", () => {
 
 document.querySelector("#importJson").addEventListener("change", (event) => restoreJsonFromInput(event, "import file"));
 
-[els.bookingMonthFilter, els.bookingSearch, els.channelFilter, els.paymentFilter, els.depositFilter].forEach((control) => {
+[els.bookingMonthFilter, els.bookingSearch, els.channelFilter, els.paymentFilter, els.depositFilter, els.contactFilter].forEach((control) => {
   control?.addEventListener("input", renderBookingsTable);
   control?.addEventListener("change", () => {
     if (control === els.bookingMonthFilter) {
