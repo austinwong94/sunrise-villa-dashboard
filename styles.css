@@ -5511,3 +5511,21 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 /* Today: make the "Needs your attention" card stand out from the neutral columns */
 #todayView .today-card.today-attention { border-color: var(--due-soft); box-shadow: 0 0 0 1px var(--due-soft) inset; }
 #todayView .today-card.today-attention .today-card-head h3 { color: var(--due); }
+
+/* Airbnb calendar sync panel (improvement #5) */
+.ical-sync-card { background: var(--card, #fff); border: 1px solid var(--line, #e7e3da); border-radius: 16px; padding: 16px 18px; margin-bottom: 16px; }
+.ical-sync-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.ical-sync-head h3 { margin: 2px 0 0; }
+.ical-sync-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ical-sync-status { font-size: 13px; color: var(--muted, #8a8275); }
+.ical-sync-status.ok { color: #2e7d54; font-weight: 600; }
+.ical-sync-status.err { color: #c0392b; font-weight: 600; }
+.sync-now-button { background: var(--accent, #e8913a); color: #fff; border: none; border-radius: 10px; padding: 9px 18px; font-weight: 600; font-size: 14px; cursor: pointer; }
+.sync-now-button:hover { filter: brightness(0.96); }
+.sync-now-button:disabled { opacity: 0.6; cursor: default; }
+.ical-sync-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.ical-sync-fields label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted, #6f6a60); }
+.ical-sync-fields input { padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 13px; background: var(--bg, #fff); color: inherit; }
+@media (max-width: 760px) { .ical-sync-fields { grid-template-columns: 1fr; } }
+.day-cell .booking-chip.airbnb-import { display: block; background: #fdf0e3; border: 1px dashed #e0934a; color: #9c5a1c; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px; margin-top: 3px; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-cell a.booking-chip.airbnb-import:hover { background: #fbe6d2; }

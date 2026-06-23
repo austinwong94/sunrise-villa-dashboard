@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260623-2" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-1" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -330,6 +330,27 @@
         </section>
 
         <section class="view" id="calendarView" aria-labelledby="pageTitle">
+          <section class="ical-sync-card" aria-label="Airbnb calendar sync">
+            <div class="ical-sync-head">
+              <div>
+                <p class="eyebrow">Airbnb calendar sync</p>
+                <h3>Auto-import booked dates</h3>
+              </div>
+              <div class="ical-sync-actions">
+                <span class="ical-sync-status" id="icalSyncStatus">Not synced yet</span>
+                <button class="sync-now-button" id="icalSyncBtn" type="button">Sync now</button>
+              </div>
+            </div>
+            <div class="ical-sync-fields">
+              <label>Sunrise Villa — Airbnb .ics link
+                <input id="icalSunriseUrl" type="url" placeholder="https://www.airbnb.com/calendar/ical/....ics?t=..." />
+              </label>
+              <label>Windmill Villa — Airbnb .ics link (only if listed on Airbnb)
+                <input id="icalWindmillUrl" type="url" placeholder="Leave blank if Windmill isn't on Airbnb" />
+              </label>
+            </div>
+            <p class="helper-text">Paste your Airbnb export link(s), then Sync now. Imported dates appear as blocked on the calendar — dates + a one-tap guest link only, no phone numbers stored.</p>
+          </section>
           <div class="calendar-layout">
             <section class="calendar-panel" aria-label="Booked dates calendar">
               <div class="weekday-row">
@@ -1457,6 +1478,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260623-3"></script>
+    <script src="./app.js?v=20260624-1"></script>
   </body>
 </html>

@@ -247,6 +247,10 @@ const els = {
   messageMapsLink: document.querySelector("#messageMapsLink"),
   messageGuideLink: document.querySelector("#messageGuideLink"),
   messageBankDetails: document.querySelector("#messageBankDetails"),
+  icalSunriseUrl: document.querySelector("#icalSunriseUrl"),
+  icalWindmillUrl: document.querySelector("#icalWindmillUrl"),
+  icalSyncBtn: document.querySelector("#icalSyncBtn"),
+  icalSyncStatus: document.querySelector("#icalSyncStatus"),
   checkinTemplateInput: document.querySelector("#checkinTemplateInput"),
   guideTemplateInput: document.querySelector("#guideTemplateInput"),
   quoteTemplateInput: document.querySelector("#quoteTemplateInput"),
@@ -633,6 +637,7 @@ function defaultAppSettings() {
       bankDetails: "",
       templates: defaultMessageTemplates,
     },
+    ical: { sources: [], imported: [], lastSyncedAt: "", lastStatus: "", lastError: "" },
   };
 }
 
@@ -654,6 +659,7 @@ function loadAppSettings() {
       quickColumnWidths: { ...fallback.quickColumnWidths, ...(parsed.quickColumnWidths || {}) },
       commitments: Array.isArray(parsed.commitments) ? parsed.commitments.map(normalizeCommitment) : fallback.commitments,
       message: { ...fallback.message, ...(parsed.message || {}), templates: { ...defaultMessageTemplates, ...(parsed.message?.templates || {}) } },
+      ical: { ...fallback.ical, ...(parsed.ical || {}) },
     };
     // One-time migration: lift bank details out of the (now public-sanitized) quote
     // template into a private field so they live only in your synced data, never in source.
@@ -1401,7 +1407,120 @@ function renderCalendar() {
       cell.appendChild(more);
     }
 
+    // Imported Airbnb blocks (improvement #5): availability only, not financial bookings.
+    // A block covers [start, end) — end is the checkout/exclusive date.
+    const importedToday = (appSettings.ical?.imported || []).filter((b) => b.start <= dayIso && dayIso < b.end);
+    importedToday.slice(0, 2).forEach((b) => {
+      const chip = document.createElement(b.reservationUrl ? "a" : "div");
+      chip.className = "booking-chip airbnb-import";
+      if (b.reservationUrl) {
+        chip.href = b.reservationUrl;
+        chip.target = "_blank";
+        chip.rel = "noopener noreferrer";
+        chip.title = "Open this reservation in Airbnb";
+      }
+      chip.innerHTML = `<span>Airbnb · ${escapeHtml(b.villa)}${b.reservationUrl ? " ↗" : ""}</span>`;
+      cell.appendChild(chip);
+    });
+
     els.calendarGrid.appendChild(cell);
+  }
+}
+
+// --- Airbnb calendar sync (improvement #5): pulls blocked dates in via the ical-import Edge Function ---
+function icalSourcesFromInputs() {
+  const sources = [];
+  const s = els.icalSunriseUrl?.value?.trim();
+  const w = els.icalWindmillUrl?.value?.trim();
+  if (s) sources.push({ villa: "Sunrise", url: s });
+  if (w) sources.push({ villa: "Windmill", url: w });
+  return sources;
+}
+
+function persistIcalSources() {
+  appSettings = { ...appSettings, ical: { ...(appSettings.ical || {}), sources: icalSourcesFromInputs() } };
+  saveAppSettings();
+}
+
+function renderIcalSettings() {
+  if (!els.icalSyncStatus) return;
+  const ical = appSettings.ical || {};
+  const bySrc = {};
+  (ical.sources || []).forEach((src) => {
+    if (src && src.villa) bySrc[src.villa] = src.url || "";
+  });
+  if (els.icalSunriseUrl && !els.icalSunriseUrl.value && bySrc.Sunrise) els.icalSunriseUrl.value = bySrc.Sunrise;
+  if (els.icalWindmillUrl && !els.icalWindmillUrl.value && bySrc.Windmill) els.icalWindmillUrl.value = bySrc.Windmill;
+  const count = (ical.imported || []).length;
+  if (ical.lastStatus === "error") {
+    els.icalSyncStatus.className = "ical-sync-status err";
+    els.icalSyncStatus.textContent = `Sync failed — ${ical.lastError || "try again"}`;
+  } else if (ical.lastSyncedAt) {
+    const when = new Date(ical.lastSyncedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    els.icalSyncStatus.className = "ical-sync-status ok";
+    els.icalSyncStatus.textContent = `✓ Synced ${when} · ${count} dates`;
+  } else {
+    els.icalSyncStatus.className = "ical-sync-status";
+    els.icalSyncStatus.textContent = "Not synced yet";
+  }
+}
+
+async function syncIcalNow() {
+  if (!els.icalSyncStatus) return;
+  const sources = icalSourcesFromInputs();
+  if (!sources.length) {
+    els.icalSyncStatus.className = "ical-sync-status err";
+    els.icalSyncStatus.textContent = "Paste your Airbnb .ics link first";
+    return;
+  }
+  if (!supabaseClient) initSupabaseClient();
+  if (!supabaseClient) {
+    els.icalSyncStatus.className = "ical-sync-status err";
+    els.icalSyncStatus.textContent = "Cloud not connected — log in first";
+    return;
+  }
+  persistIcalSources();
+  if (els.icalSyncBtn) els.icalSyncBtn.disabled = true;
+  els.icalSyncStatus.className = "ical-sync-status";
+  els.icalSyncStatus.textContent = "Syncing…";
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("ical-import", { body: { sources } });
+    if (error) throw error;
+    const results = Array.isArray(data?.results) ? data.results : [];
+    const imported = [];
+    const seen = new Set();
+    let failed = "";
+    for (const r of results) {
+      if (!r.ok) {
+        failed = r.error || "fetch failed";
+        continue;
+      }
+      for (const ev of r.events || []) {
+        const key = `${r.villa}|${ev.uid}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        imported.push({ villa: r.villa, uid: ev.uid, start: ev.start, end: ev.end, reservationUrl: ev.reservationUrl || "" });
+      }
+    }
+    appSettings = {
+      ...appSettings,
+      ical: {
+        ...(appSettings.ical || {}),
+        sources,
+        imported,
+        lastSyncedAt: data?.syncedAt || new Date().toISOString(),
+        lastStatus: failed ? "error" : "ok",
+        lastError: failed,
+      },
+    };
+    saveAppSettings();
+    renderAll();
+  } catch (e) {
+    appSettings = { ...appSettings, ical: { ...(appSettings.ical || {}), lastStatus: "error", lastError: e?.message || "sync failed" } };
+    saveAppSettings();
+    renderIcalSettings();
+  } finally {
+    if (els.icalSyncBtn) els.icalSyncBtn.disabled = false;
   }
 }
 
@@ -2164,6 +2283,7 @@ function restoreAppData(data) {
           quickColumns: { ...defaultAppSettings().quickColumns, ...(data.appSettings.quickColumns || {}) },
           quickColumnWidths: { ...defaultAppSettings().quickColumnWidths, ...(data.appSettings.quickColumnWidths || {}) },
           message: { ...defaultAppSettings().message, ...(data.appSettings.message || {}), templates: { ...defaultMessageTemplates, ...(data.appSettings.message?.templates || {}) } },
+          ical: { ...defaultAppSettings().ical, ...(data.appSettings.ical || {}) },
         }
       : appSettings;
   }
@@ -3858,6 +3978,7 @@ function renderAll() {
   els.monthPicker.value = selectedMonth;
   renderMonthButtons();
   renderCalendar();
+  renderIcalSettings();
   renderDetails();
   renderDashboard();
   renderBookingsTable();
@@ -3875,6 +3996,10 @@ document.querySelectorAll(".nav-button").forEach((button) => {
     renderAll();
   });
 });
+
+els.icalSyncBtn?.addEventListener("click", syncIcalNow);
+els.icalSunriseUrl?.addEventListener("change", persistIcalSources);
+els.icalWindmillUrl?.addEventListener("change", persistIcalSources);
 
 els.monthPicker.addEventListener("change", () => {
   setSelectedMonth(els.monthPicker.value);
