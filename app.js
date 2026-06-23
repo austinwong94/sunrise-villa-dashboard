@@ -1524,6 +1524,16 @@ async function syncIcalNow() {
   }
 }
 
+// Auto-sync (improvement #5b): when the dashboard opens and a feed is configured,
+// refresh automatically if the last sync is older than ~2 hours — so no manual clicking.
+function maybeAutoSyncIcal() {
+  const ical = appSettings.ical || {};
+  if (!(ical.sources || []).length) return;
+  const last = ical.lastSyncedAt ? new Date(ical.lastSyncedAt).getTime() : 0;
+  const ageHours = (Date.now() - last) / 3600000;
+  if (ageHours >= 2) syncIcalNow();
+}
+
 function renderDetails() {
   const monthBookings = bookingsForMonth(selectedMonth);
   els.detailMonth.textContent = monthLabel(selectedMonth);
@@ -1949,13 +1959,16 @@ async function initCloudStorage() {
   const { data } = await client.auth.getSession();
   cloudUser = data.session?.user || null;
   syncCloudAuthUi();
-  if (cloudUser) await loadCloudSnapshot();
+  if (cloudUser) {
+    await loadCloudSnapshot();
+    maybeAutoSyncIcal();
+  }
 
   client.auth.onAuthStateChange((_event, session) => {
     cloudUser = session?.user || null;
     if (!cloudUser) cloudRecordId = "";
     syncCloudAuthUi();
-    if (cloudUser) loadCloudSnapshot();
+    if (cloudUser) loadCloudSnapshot().then(maybeAutoSyncIcal);
   });
 }
 
