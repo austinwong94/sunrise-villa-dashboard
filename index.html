@@ -1357,12 +1357,30 @@
                   <input id="guestInput" required placeholder="Example: Amira Tan" />
                 </label>
               </div>
+              <label>Villa
+                <select id="villaInput">
+                  <option value="Sunrise">Sunrise Villa</option>
+                  <option value="Windmill">Windmill Villa</option>
+                </select>
+              </label>
+              <label>Booking Status
+                <select id="statusInput">
+                  <option value="inquiry">Inquiry</option>
+                  <option value="quoted">Quoted</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="in-house">In-house</option>
+                  <option value="checked-out">Checked out</option>
+                </select>
+              </label>
               <label class="checkbox-label wide-field">
                 <input id="excludeCalculationsInput" type="checkbox" />
                 Influencer / complimentary stay (record only, exclude from calculations)
               </label>
-              <label class="wide-field">Guest Contact
-                <input id="contactInput" placeholder="Phone or email" />
+              <label>Guest Contact (WhatsApp)
+                <input id="contactInput" placeholder="60123456789" />
+              </label>
+              <label>Guest Email
+                <input id="guestEmailInput" type="email" placeholder="guest@email.com" />
               </label>
             </div>
           </section>

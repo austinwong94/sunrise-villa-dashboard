@@ -224,6 +224,9 @@ const els = {
   guestTitleInput: document.querySelector("#guestTitleInput"),
   guestInput: document.querySelector("#guestInput"),
   contactInput: document.querySelector("#contactInput"),
+  guestEmailInput: document.querySelector("#guestEmailInput"),
+  villaInput: document.querySelector("#villaInput"),
+  statusInput: document.querySelector("#statusInput"),
   arrivalInput: document.querySelector("#arrivalInput"),
   nightsInput: document.querySelector("#nightsInput"),
   nightsManualInput: document.querySelector("#nightsManualInput"),
@@ -393,6 +396,12 @@ function normalizeBooking(booking) {
     depositPaid: Boolean(booking.depositPaid),
     depositRefunded: Boolean(booking.depositRefunded),
     whatsappSent: Boolean(booking.whatsappSent),
+    // --- additive automation/CRM fields (preserved; default-safe for legacy bookings) ---
+    villa: booking.villa === "Windmill" ? "Windmill" : "Sunrise",
+    status: ["inquiry", "quoted", "confirmed", "in-house", "checked-out"].includes(booking.status) ? booking.status : "confirmed",
+    guestEmail: String(booking.guestEmail || ""),
+    checkinSentAt: booking.checkinSentAt || null,
+    reminderSentAt: booking.reminderSentAt || null,
   };
 }
 
@@ -2970,6 +2979,9 @@ function openBookingDialog(booking = null) {
   syncGuestTitleChoice();
   els.guestInput.value = booking?.guest || "";
   els.contactInput.value = booking?.contact || "";
+  if (els.guestEmailInput) els.guestEmailInput.value = booking?.guestEmail || "";
+  if (els.villaInput) els.villaInput.value = booking?.villa === "Windmill" ? "Windmill" : "Sunrise";
+  if (els.statusInput) els.statusInput.value = booking?.status || (booking ? "confirmed" : "confirmed");
   els.excludeCalculationsInput.checked = Boolean(booking?.excludeFromCalculations);
   els.arrivalInput.value = booking?.arrival || `${selectedMonth}-01`;
   setNightsChoice(booking?.nights || 1);
@@ -3739,7 +3751,7 @@ function renderToday() {
       <span class="today-avatar">${prefixFor(b.guest)}</span>
       <div class="today-row-main">
         <strong>${escapeHtml(b.guest)}</strong>
-        <span>${meta}</span>
+        <span>${b.villa === "Windmill" ? "Windmill" : "Sunrise"} · ${meta}</span>
       </div>
       ${channelBadgeFor(b)}
     </div>`;
@@ -3770,7 +3782,7 @@ function renderToday() {
                 (a) => `
           <div class="today-row">
             <span class="today-avatar">${prefixFor(a.b.guest)}</span>
-            <div class="today-row-main"><strong>${escapeHtml(a.b.guest)}</strong><span>${a.sub}</span></div>
+            <div class="today-row-main"><strong>${escapeHtml(a.b.guest)}</strong><span>${a.b.villa === "Windmill" ? "Windmill" : "Sunrise"} · ${a.sub}</span></div>
             <span class="today-flag ${a.tone}">${a.label}</span>
           </div>`,
               )
@@ -3880,6 +3892,7 @@ els.form.addEventListener("submit", (event) => {
   event.preventDefault();
   const id = safeRecordId(els.bookingId.value);
   const excluded = els.excludeCalculationsInput.checked;
+  const existing = bookings.find((booking) => booking.id === id);
   const nextBooking = {
     id,
     channel: els.channelInput.value,
@@ -3894,6 +3907,12 @@ els.form.addEventListener("submit", (event) => {
     depositAmount: excluded ? 0 : Number(els.depositAmountInput.value || 0),
     depositPaid: excluded ? false : els.depositPaidInput.checked,
     depositRefunded: excluded ? false : els.depositPaidInput.checked && els.depositRefundedInput.checked,
+    // additive automation/CRM fields
+    villa: els.villaInput?.value === "Windmill" ? "Windmill" : "Sunrise",
+    status: els.statusInput?.value || "confirmed",
+    guestEmail: els.guestEmailInput?.value.trim() || "",
+    checkinSentAt: existing?.checkinSentAt ?? null,
+    reminderSentAt: existing?.reminderSentAt ?? null,
   };
 
   bookings = bookings.some((booking) => booking.id === id)
