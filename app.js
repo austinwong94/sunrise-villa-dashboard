@@ -3308,7 +3308,12 @@ function parseAirbnbBookingEmail(text) {
   const villa = /windmill/i.test(listing) ? "Windmill" : "Sunrise";
   const ci = t.match(/Check-?in\s+[A-Za-z]{3},\s*([A-Za-z]{3})\s+(\d{1,2})/i);
   const co = t.match(/Check-?out\s+[A-Za-z]{3},\s*([A-Za-z]{3})\s+(\d{1,2})/i);
-  const arrival = ci ? airbnbInferDate(ci[1], Number(ci[2])) : "";
+  let arrival = ci ? airbnbInferDate(ci[1], Number(ci[2])) : "";
+  if (!arrival) {
+    // Fallback: the headline "…arrives Jul 3" is in every booking email (plain-text safe).
+    const am = t.match(/arrives\s+([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})/i);
+    if (am) arrival = airbnbInferDate(am[1], Number(am[2]));
+  }
   const checkout = co ? airbnbInferDate(co[1], Number(co[2])) : "";
   let nights = Number(grab(/x\s*(\d+)\s*night/i)) || 0;
   if (!nights && arrival && checkout) nights = Math.round((new Date(checkout) - new Date(arrival)) / 86400000);
