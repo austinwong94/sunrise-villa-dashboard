@@ -5534,3 +5534,12 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 .villa-switch { display: inline-flex; background: var(--line, #ece7dd); border-radius: 10px; padding: 3px; gap: 2px; }
 .villa-tab { border: none; background: transparent; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted, #8a8275); cursor: pointer; }
 .villa-tab.active { background: #fff; color: var(--accent, #e8913a); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10); }
+
+/* Paste-to-import box in the booking dialog */
+.airbnb-import-box { border: 1px dashed var(--line, #d9d3c7); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; background: #fdf6ee; }
+.airbnb-import-box summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--accent, #c97920); }
+.airbnb-import-box textarea { width: 100%; margin-top: 10px; padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 12px; box-sizing: border-box; font-family: inherit; }
+.airbnb-import-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.airbnb-import-status { font-size: 12px; color: var(--muted, #8a8275); }
+.airbnb-import-status.ok { color: #2e7d54; }
+.airbnb-import-status.err { color: #c0392b; }

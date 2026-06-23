@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-2" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-5" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1391,6 +1391,14 @@
           <button class="icon-button" id="closeBookingDialog" type="button" title="Close">×</button>
         </div>
         <input id="bookingId" type="hidden" />
+        <details class="airbnb-import-box">
+          <summary>📋 Paste an Airbnb booking email to auto-fill</summary>
+          <textarea id="airbnbEmailInput" rows="4" placeholder="Paste the Airbnb &quot;Reservation confirmed&quot; email here, then click Auto-fill."></textarea>
+          <div class="airbnb-import-actions">
+            <button class="ghost-button" id="airbnbAutofillBtn" type="button">Auto-fill from email</button>
+            <span class="airbnb-import-status" id="airbnbAutofillStatus"></span>
+          </div>
+        </details>
         <div class="form-sections">
           <section class="form-section">
             <h4>Guest</h4>
@@ -1499,6 +1507,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-4"></script>
+    <script src="./app.js?v=20260624-5"></script>
   </body>
 </html>

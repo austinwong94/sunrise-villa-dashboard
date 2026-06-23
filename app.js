@@ -237,6 +237,9 @@ const els = {
   depositAmountInput: document.querySelector("#depositAmountInput"),
   depositPaidInput: document.querySelector("#depositPaidInput"),
   depositRefundedInput: document.querySelector("#depositRefundedInput"),
+  airbnbEmailInput: document.querySelector("#airbnbEmailInput"),
+  airbnbAutofillBtn: document.querySelector("#airbnbAutofillBtn"),
+  airbnbAutofillStatus: document.querySelector("#airbnbAutofillStatus"),
   excludeCalculationsInput: document.querySelector("#excludeCalculationsInput"),
   addFromBookingsGuide: document.querySelector("#addFromBookingsGuide"),
   messageBookingSelect: document.querySelector("#messageBookingSelect"),
@@ -3204,6 +3207,65 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
   ctx.fillText(line, x, y + row * lineHeight);
 }
 
+// --- Paste-to-import: auto-fill a booking from a real Airbnb confirmation email ---
+const AIRBNB_MONTHS = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+function airbnbInferDate(mon, day) {
+  const m = AIRBNB_MONTHS[mon];
+  if (!m) return "";
+  const mk = (y) => `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const now = new Date();
+  let y = now.getFullYear();
+  // Airbnb omits the year; if that date already rolled well past, it's next year.
+  if (new Date(`${mk(y)}T00:00:00`) < new Date(now.getTime() - 60 * 86400000)) y += 1;
+  return mk(y);
+}
+function parseAirbnbBookingEmail(text) {
+  const t = String(text || "").replace(/\r/g, "");
+  const grab = (re) => (t.match(re) || [])[1] || "";
+  const name = grab(/New booking confirmed!\s+(.+?)\s+arrives/i) || grab(/Get ready for\s+(.+?)[’']s arrival/i);
+  const listing = grab(/([^\n]*(?:Sunrise|Windmill)[^\n]*)/i);
+  const villa = /windmill/i.test(listing) ? "Windmill" : "Sunrise";
+  const ci = t.match(/Check-?in\s+[A-Za-z]{3},\s*([A-Za-z]{3})\s+(\d{1,2})/i);
+  const co = t.match(/Check-?out\s+[A-Za-z]{3},\s*([A-Za-z]{3})\s+(\d{1,2})/i);
+  const arrival = ci ? airbnbInferDate(ci[1], Number(ci[2])) : "";
+  const checkout = co ? airbnbInferDate(co[1], Number(co[2])) : "";
+  let nights = Number(grab(/x\s*(\d+)\s*night/i)) || 0;
+  if (!nights && arrival && checkout) nights = Math.round((new Date(checkout) - new Date(arrival)) / 86400000);
+  return {
+    name: name.trim(),
+    villa,
+    arrival,
+    nights,
+    guests: grab(/Guests\s+(\d+\s*adults?[^\n]*)/i),
+    code: grab(/Confirmation code\s+([A-Z0-9]{6,})/i),
+    totalPaid: grab(/Total \(MYR\)\s+RM\s*([\d,]+\.\d{2})/i).replace(/,/g, ""),
+    hostPayout: grab(/You earn\s+RM\s*([\d,]+\.\d{2})/i).replace(/,/g, ""),
+  };
+}
+function autofillBookingFromAirbnbEmail() {
+  const parsed = parseAirbnbBookingEmail(els.airbnbEmailInput?.value || "");
+  const status = els.airbnbAutofillStatus;
+  if (!parsed.name && !parsed.arrival) {
+    if (status) {
+      status.textContent = "Couldn't read that — paste the full Airbnb booking email.";
+      status.className = "airbnb-import-status err";
+    }
+    return;
+  }
+  document.querySelector('[data-form-channel="Airbnb"]')?.click(); // channel = Airbnb (+ its deposit default)
+  if (els.villaInput && parsed.villa) els.villaInput.value = parsed.villa; // villa auto-detected from listing
+  if (els.guestInput && parsed.name) els.guestInput.value = parsed.name;
+  if (els.arrivalInput && parsed.arrival) els.arrivalInput.value = parsed.arrival;
+  if (parsed.nights) setNightsChoice(parsed.nights);
+  if (els.revenueInput && parsed.hostPayout) els.revenueInput.value = parsed.hostPayout; // YOUR payout, not guest total
+  if (els.paidInput && parsed.hostPayout) els.paidInput.value = parsed.hostPayout; // Airbnb collects in full -> no balance to chase
+  if (status) {
+    const bits = [parsed.name, parsed.villa, parsed.arrival, parsed.nights ? `${parsed.nights}n` : "", parsed.hostPayout ? `RM ${parsed.hostPayout}` : ""].filter(Boolean).join(" · ");
+    status.textContent = `Filled: ${bits}${parsed.code ? ` · ${parsed.code}` : ""}. Add the guest's phone if you'll WhatsApp them, then Save.`;
+    status.className = "airbnb-import-status ok";
+  }
+}
+
 function openBookingDialog(booking = null) {
   els.dialogTitle.textContent = booking ? "Edit Booking" : "Add Booking";
   els.bookingId.value = booking?.id || "";
@@ -4064,6 +4126,8 @@ document.querySelectorAll(".villa-tab").forEach((tab) => {
     renderAll();
   });
 });
+
+els.airbnbAutofillBtn?.addEventListener("click", autofillBookingFromAirbnbEmail);
 
 els.monthPicker.addEventListener("change", () => {
   setSelectedMonth(els.monthPicker.value);
