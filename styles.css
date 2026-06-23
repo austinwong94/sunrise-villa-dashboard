@@ -5507,3 +5507,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #todayView .today-flag { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: var(--r-pill); white-space: nowrap; }
 #todayView .today-flag.due { background: var(--due-soft); color: var(--due); }
 #todayView .today-flag.pend { background: var(--pend-soft); color: var(--pend); }
+
+/* Today: make the "Needs your attention" card stand out from the neutral columns */
+#todayView .today-card.today-attention { border-color: var(--due-soft); box-shadow: 0 0 0 1px var(--due-soft) inset; }
+#todayView .today-card.today-attention .today-card-head h3 { color: var(--due); }
