@@ -1562,6 +1562,86 @@ function renderVillaSwitch() {
   document.body.dataset.villa = active;
 }
 
+// --- Booking candidates queue (improvement #6): auto-parsed Airbnb bookings awaiting review ---
+let bookingCandidates = [];
+
+async function loadBookingCandidates() {
+  if (!supabaseClient || !cloudUser) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from("booking_candidates")
+      .select("*")
+      .eq("status", "new")
+      .order("created_at", { ascending: false });
+    if (error) return; // table may not exist yet — fail quietly
+    bookingCandidates = Array.isArray(data) ? data : [];
+    renderBookingCandidates();
+  } catch (e) {}
+}
+
+function renderBookingCandidates() {
+  const host = document.querySelector("#bookingCandidatesQueue");
+  if (!host) return;
+  if (!bookingCandidates.length) {
+    host.innerHTML = "";
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = `
+    <div class="candidates-head">${bookingCandidates.length} new Airbnb booking${bookingCandidates.length === 1 ? "" : "s"} to review</div>
+    ${bookingCandidates
+      .map(
+        (c) => `
+      <div class="candidate-row">
+        <div class="candidate-info">
+          <strong>${escapeHtml(c.guest || "Guest")}</strong>
+          <span>${escapeHtml(c.villa || "")} · ${shortDate(c.arrival)} · ${c.nights || "?"} night${Number(c.nights) === 1 ? "" : "s"} · ${c.revenue != null ? money(c.revenue) : "—"}</span>
+        </div>
+        <div class="candidate-actions">
+          <button class="ghost-button compact" data-dismiss-candidate="${escapeHtml(c.id)}" type="button">Dismiss</button>
+          <button class="primary-button compact" data-add-candidate="${escapeHtml(c.id)}" type="button">Add booking</button>
+        </div>
+      </div>`,
+      )
+      .join("")}
+  `;
+}
+
+async function importBookingCandidate(id) {
+  const c = bookingCandidates.find((x) => x.id === id);
+  if (!c) return;
+  const booking = normalizeBooking({
+    channel: "Airbnb",
+    guest: c.guest || "Guest",
+    villa: c.villa === "Windmill" ? "Windmill" : "Sunrise",
+    arrival: c.arrival || `${selectedMonth}-01`,
+    nights: Number(c.nights) || 1,
+    revenue: Number(c.revenue) || 0,
+    paid: Number(c.revenue) || 0,
+    status: "confirmed",
+  });
+  bookings = [...bookings, booking];
+  saveBookings();
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from("booking_candidates").update({ status: "imported" }).eq("id", id);
+    } catch (e) {}
+  }
+  bookingCandidates = bookingCandidates.filter((x) => x.id !== id);
+  renderAll();
+}
+
+async function dismissBookingCandidate(id) {
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from("booking_candidates").update({ status: "dismissed" }).eq("id", id);
+    } catch (e) {}
+  }
+  bookingCandidates = bookingCandidates.filter((x) => x.id !== id);
+  renderBookingCandidates();
+}
+
 function renderDetails() {
   const monthBookings = bookingsForMonth(selectedMonth);
   els.detailMonth.textContent = monthLabel(selectedMonth);
@@ -1990,13 +2070,14 @@ async function initCloudStorage() {
   if (cloudUser) {
     await loadCloudSnapshot();
     maybeAutoSyncIcal();
+    loadBookingCandidates();
   }
 
   client.auth.onAuthStateChange((_event, session) => {
     cloudUser = session?.user || null;
     if (!cloudUser) cloudRecordId = "";
     syncCloudAuthUi();
-    if (cloudUser) loadCloudSnapshot().then(maybeAutoSyncIcal);
+    if (cloudUser) loadCloudSnapshot().then(() => { maybeAutoSyncIcal(); loadBookingCandidates(); });
   });
 }
 
@@ -4092,6 +4173,7 @@ function renderToday() {
 function renderAll() {
   applyAccent();
   renderVillaSwitch();
+  renderBookingCandidates();
   renderToday();
   els.monthPicker.value = selectedMonth;
   renderMonthButtons();
@@ -4128,6 +4210,13 @@ document.querySelectorAll(".villa-tab").forEach((tab) => {
 });
 
 els.airbnbAutofillBtn?.addEventListener("click", autofillBookingFromAirbnbEmail);
+
+document.querySelector("#bookingCandidatesQueue")?.addEventListener("click", (event) => {
+  const add = event.target.closest("[data-add-candidate]");
+  const dismiss = event.target.closest("[data-dismiss-candidate]");
+  if (add) importBookingCandidate(add.dataset.addCandidate);
+  else if (dismiss) dismissBookingCandidate(dismiss.dataset.dismissCandidate);
+});
 
 els.monthPicker.addEventListener("change", () => {
   setSelectedMonth(els.monthPicker.value);
