@@ -120,7 +120,7 @@ let documents = loadDocuments();
 let profitData = loadProfitData();
 let appSettings = loadAppSettings();
 let selectedMonth = initialMonth();
-let activeView = "calendar";
+let activeView = "today";
 let pendingTaxExpenseAttachment = null;
 let removePendingTaxExpenseAttachment = false;
 
@@ -1274,6 +1274,7 @@ function setView(view) {
   document.querySelectorAll(".view").forEach((node) => node.classList.toggle("active", node.id === `${view}View`));
   document.querySelectorAll(".nav-button").forEach((node) => node.classList.toggle("active", node.dataset.view === view));
   els.pageTitle.textContent = {
+    today: "Today",
     calendar: "Monthly Calendar",
     dashboard: "Income Dashboard",
     bookings: "Bookings",
@@ -3711,8 +3712,77 @@ function setSelectedMonth(monthValue, syncBookingFilter = true) {
   }
 }
 
+function renderToday() {
+  const host = document.querySelector("#todayContent");
+  if (!host) return;
+  const todayIso = isoDate(new Date());
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const fmtNights = (n) => `${n} night${Number(n) === 1 ? "" : "s"}`;
+
+  const arrivals = bookings.filter((b) => b.arrival === todayIso).sort((a, b) => a.guest.localeCompare(b.guest));
+  const departures = bookings.filter((b) => departureFor(b) === todayIso);
+  const inhouse = bookings.filter((b) => overlapsDate(b, todayIso));
+
+  const attention = [];
+  bookings.forEach((b) => {
+    if (isExcludedBooking(b)) return;
+    const dep = dateObj(departureFor(b));
+    const bal = balanceFor(b);
+    if (bal > 0 && dep >= today) attention.push({ b, tone: "due", label: `Balance ${money(bal)} unpaid`, sort: dateObj(b.arrival).getTime() });
+    if (b.depositPaid && !b.depositRefunded && Number(b.depositAmount || 0) > 0 && dep < today) attention.push({ b, tone: "pend", label: `Refund ${money(b.depositAmount)} deposit`, sort: dep.getTime() });
+  });
+  attention.sort((a, b) => a.sort - b.sort);
+
+  const guestRow = (b, meta) => `
+    <div class="today-row">
+      <span class="today-avatar">${prefixFor(b.guest)}</span>
+      <div class="today-row-main">
+        <strong>${escapeHtml(b.guest)}</strong>
+        <span>${meta}</span>
+      </div>
+      ${channelBadgeFor(b)}
+    </div>`;
+
+  const emptyMsg = (t) => `<div class="today-empty">${t}</div>`;
+  const col = (title, count, rowsHtml, emptyText) => `
+    <section class="today-card">
+      <div class="today-card-head"><h3>${title}</h3><span class="count-pill">${count}</span></div>
+      <div class="today-card-body">${rowsHtml || emptyMsg(emptyText)}</div>
+    </section>`;
+
+  host.innerHTML = `
+    <div class="today-headline">
+      <p class="eyebrow">Daily operations</p>
+      <h3 class="today-date">${new Date().toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).replace("Sept", "Sep")}</h3>
+    </div>
+    <div class="today-columns">
+      ${col("Arrivals today", arrivals.length, arrivals.map((b) => guestRow(b, `${fmtNights(b.nights)} · out ${shortDate(departureFor(b))}`)).join(""), "No arrivals today.")}
+      ${col("In-house now", inhouse.length, inhouse.map((b) => guestRow(b, `until ${shortDate(departureFor(b))}`)).join(""), "No guests in-house.")}
+      ${col("Departures today", departures.length, departures.map((b) => guestRow(b, "checking out")).join(""), "No departures today.")}
+    </div>
+    <section class="today-card today-attention">
+      <div class="today-card-head"><h3>Needs your attention</h3><span class="count-pill">${attention.length}</span></div>
+      <div class="today-card-body">
+        ${attention.length
+          ? attention
+              .map(
+                (a) => `
+          <div class="today-row">
+            <span class="today-avatar">${prefixFor(a.b.guest)}</span>
+            <div class="today-row-main"><strong>${escapeHtml(a.b.guest)}</strong><span>arrives ${shortDate(a.b.arrival)}</span></div>
+            <span class="today-flag ${a.tone}">${a.label}</span>
+          </div>`,
+              )
+              .join("")
+          : emptyMsg("All caught up — nothing needs action.")}
+      </div>
+    </section>`;
+}
+
 function renderAll() {
   applyAccent();
+  renderToday();
   els.monthPicker.value = selectedMonth;
   renderMonthButtons();
   renderCalendar();

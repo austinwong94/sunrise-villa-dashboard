@@ -184,7 +184,11 @@
         </div>
 
         <nav class="nav-tabs" aria-label="Views">
-          <button class="nav-button active" data-view="calendar" type="button">
+          <button class="nav-button active" data-view="today" type="button">
+            <span aria-hidden="true">☀</span>
+            Today
+          </button>
+          <button class="nav-button" data-view="calendar" type="button">
             <span aria-hidden="true">▦</span>
             Calendar
           </button>
@@ -307,7 +311,11 @@
           <span class="health-pill">Version 2026.05.15</span>
         </section>
 
-        <section class="view active" id="calendarView" aria-labelledby="pageTitle">
+        <section class="view active" id="todayView" aria-labelledby="pageTitle">
+          <div class="today-grid" id="todayContent"></div>
+        </section>
+
+        <section class="view" id="calendarView" aria-labelledby="pageTitle">
           <div class="calendar-layout">
             <section class="calendar-panel" aria-label="Booked dates calendar">
               <div class="weekday-row">
