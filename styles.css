@@ -5553,3 +5553,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 .candidate-info span { font-size: 12px; color: var(--muted, #8a8275); }
 .candidate-actions { display: flex; gap: 8px; }
 .candidate-actions .compact { padding: 6px 12px; font-size: 13px; }
+
+/* One-click WhatsApp action on a booking row */
+.small-action.wa-action { color: #128c4b; border-color: #a7dcbe; }
+.small-action.wa-action:hover { background: #e9f7ef; }

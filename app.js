@@ -3130,6 +3130,7 @@ function renderBookingsTable() {
           ${bookingCell("balance", money(balance), balance > 0 ? "money-cell balance-due" : "money-cell")}
           ${bookingCell("refund", refundControl(booking))}
           ${bookingCell("actions", `
+            <button class="small-action wa-action" type="button" data-wa="${booking.id}" title="Open WhatsApp with the check-in message">WhatsApp</button>
             <button class="small-action" type="button" data-edit="${booking.id}">Edit</button>
             <button class="small-action danger" type="button" data-delete="${booking.id}">Delete</button>
           `, "actions")}
@@ -4335,6 +4336,12 @@ els.form.addEventListener("submit", (event) => {
 els.bookingRows.addEventListener("click", (event) => {
   const editId = event.target.dataset.edit;
   const deleteId = event.target.dataset.delete;
+  const waId = event.target.dataset.wa;
+  if (waId) {
+    const booking = bookings.find((item) => item.id === waId);
+    if (booking) openWhatsappForBooking(booking, "checkin"); // one-click: opens WhatsApp with the check-in message
+    return;
+  }
   if (editId) {
     const booking = bookings.find((item) => item.id === editId);
     if (booking) openBookingDialog(booking);
