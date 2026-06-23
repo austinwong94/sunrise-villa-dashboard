@@ -735,8 +735,11 @@
                   <label>Guest Guide Link
                     <input id="messageGuideLink" placeholder="https://bit.ly/sunrisevilla-guest-guide" />
                   </label>
+                  <label>Bank Details (private — used in payment messages, kept out of the public site code)
+                    <textarea id="messageBankDetails" rows="4" placeholder="Bank Details:&#10;Bank Name: ...&#10;Account Name: ...&#10;Account Number: ..."></textarea>
+                  </label>
                 </div>
-                <p class="helper-text">Used for confirmed guest check-in and guide messages: {guest}, {code}, {address}, {mapsLink}, {checkinTime}, {guideLink}</p>
+                <p class="helper-text">Used for confirmed guest check-in and guide messages: {guest}, {code}, {address}, {mapsLink}, {checkinTime}, {guideLink}, {bankDetails}</p>
               </section>
 
               <section class="message-template-stack">
@@ -1454,6 +1457,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260623-2"></script>
+    <script src="./app.js?v=20260623-3"></script>
   </body>
 </html>

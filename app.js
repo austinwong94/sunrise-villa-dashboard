@@ -108,7 +108,7 @@ const taxExpenseCategories = [
 
 const defaultMessageTemplates = {
   quote:
-    "Hi {guest},\n\nThanks for your interest in Sunrise Villa. Here are the payment details for your stay:\n\nBooking Details:\nCheck-in: {quoteCheckIn}\nCheck-out: {quoteCheckOut}\n\nPayment Breakdown:\nAccommodation Fee: {quoteAccommodationFee}\nCleaning Fee: {quoteCleaningFee}\nDamage Security Deposit: {quoteDamageDeposit} (Refundable)\nSpecial Discount: {quoteDiscount}\nTotal: {quoteActualCharge} + {quoteDamageDeposit}\n\nPayment Terms:\n• A 50% Deposit (Non-Refundable) + Damage Security Deposit (Refundable) are required to secure your booking.\n• Full payment must be made 28 days before arrival.\n\nBank Details:\nBank Name: RHB Bank\nAccount Name: Sunrise Villa Venture\nAccount Number: 2-06021-0006145-4\n\nKindly send the transfer receipt via WhatsApp for confirmation. Thanks",
+    "Hi {guest},\n\nThanks for your interest in Sunrise Villa. Here are the payment details for your stay:\n\nBooking Details:\nCheck-in: {quoteCheckIn}\nCheck-out: {quoteCheckOut}\n\nPayment Breakdown:\nAccommodation Fee: {quoteAccommodationFee}\nCleaning Fee: {quoteCleaningFee}\nDamage Security Deposit: {quoteDamageDeposit} (Refundable)\nSpecial Discount: {quoteDiscount}\nTotal: {quoteActualCharge} + {quoteDamageDeposit}\n\nPayment Terms:\n• A 50% Deposit (Non-Refundable) + Damage Security Deposit (Refundable) are required to secure your booking.\n• Full payment must be made 28 days before arrival.\n\n{bankDetails}\n\nKindly send the transfer receipt via WhatsApp for confirmation. Thanks",
   checkin:
     "Hi {guest},\n\nWe are excited to welcome you to Sunrise Villa. Here are the arrival details for a smooth check-in:\n\n#Confirmation Code: {code}\n\n#Address: {address}\n\n#Google Maps Link: {mapsLink}\n\n#Finding Us: We are located right behind McDonald's at Genting Sempah R&R.\n\n#Steps to Access:\n1. Drive up the slope to the guardhouse.\n2. Show your reservation details and Confirmation Code to the guards.\n3. Fill in the required guest information at the guardhouse.\n4. Continue driving until you reach the top T-junction. Look for the coconut tree as your landmark.\n\n#Guest Guide (MUST READ): {guideLink}\n\nPlease read the guest guide before arrival. Thank you, and we look forward to hosting you.",
   guide:
@@ -246,6 +246,7 @@ const els = {
   messageAddress: document.querySelector("#messageAddress"),
   messageMapsLink: document.querySelector("#messageMapsLink"),
   messageGuideLink: document.querySelector("#messageGuideLink"),
+  messageBankDetails: document.querySelector("#messageBankDetails"),
   checkinTemplateInput: document.querySelector("#checkinTemplateInput"),
   guideTemplateInput: document.querySelector("#guideTemplateInput"),
   quoteTemplateInput: document.querySelector("#quoteTemplateInput"),
@@ -629,6 +630,7 @@ function defaultAppSettings() {
       address: "No. 59, Jalan Rimba 2, Taman Puncak Rimba, 28750 Bentong, Pahang",
       mapsLink: "https://g.co/kgs/DYpYPSh",
       guideLink: GUIDE_LINK,
+      bankDetails: "",
       templates: defaultMessageTemplates,
     },
   };
@@ -640,7 +642,7 @@ function loadAppSettings() {
   if (!stored) return fallback;
   try {
     const parsed = JSON.parse(stored);
-    return {
+    const result = {
       ...fallback,
       ...parsed,
       dashboardHidden: { ...fallback.dashboardHidden, ...(parsed.dashboardHidden || {}) },
@@ -653,6 +655,14 @@ function loadAppSettings() {
       commitments: Array.isArray(parsed.commitments) ? parsed.commitments.map(normalizeCommitment) : fallback.commitments,
       message: { ...fallback.message, ...(parsed.message || {}), templates: { ...defaultMessageTemplates, ...(parsed.message?.templates || {}) } },
     };
+    // One-time migration: lift bank details out of the (now public-sanitized) quote
+    // template into a private field so they live only in your synced data, never in source.
+    if (!result.message.bankDetails) {
+      const savedQuote = result.message.templates?.quote || "";
+      const match = savedQuote.match(/Bank Details:[\s\S]*?Account Number:[^\n]*/i);
+      result.message.bankDetails = match ? match[0] : "";
+    }
+    return result;
   } catch {
     return fallback;
   }
@@ -1744,7 +1754,7 @@ function scheduleCloudSave() {
 }
 
 async function saveCloudSnapshot() {
-  if (!supabaseClient || !cloudUser) return;
+  if (!supabaseClient || !cloudUser) return false;
   const payload = {
     user_id: cloudUser.id,
     data_type: CLOUD_DATA_TYPE,
@@ -1760,12 +1770,13 @@ async function saveCloudSnapshot() {
   const { data, error } = await request;
   if (error) {
     setCloudStatus("error", "Cloud save failed", error.message || "Supabase could not save the latest changes.");
-    return;
+    return false;
   }
   cloudRecordId = data?.id || cloudRecordId;
   appSettings = { ...appSettings, lastCloudSyncAt: new Date().toISOString() };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
   setCloudStatus("connected", "Cloud storage connected", `Saved to Supabase at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`);
+  return true;
 }
 
 async function loadCloudSnapshot() {
@@ -1847,9 +1858,48 @@ cloudEls().form?.addEventListener("submit", async (event) => {
   ui.password.value = "";
 });
 
+function purgeLocalSensitiveData() {
+  // Called on sign-out AFTER the cloud is confirmed to hold the latest data.
+  // Clears every local copy so a shared/stolen device can't read the P&C data after
+  // logout. Everything is restored from Supabase on the next login. In-memory is left
+  // EMPTY (not via the loaders, which would seed demo data) so the cloud copy always
+  // wins the "is the incoming data smaller?" guard on the next load.
+  cloudUser = null;
+  cloudRecordId = "";
+  window.clearTimeout(cloudSaveTimer);
+  try {
+    [STORAGE_KEY, TAX_PLAN_KEY, DOCUMENTS_KEY, PROFIT_KEY, SETTINGS_KEY, RECOVERY_KEY, RECOVERY_SESSION_KEY].forEach((key) =>
+      localStorage.removeItem(key),
+    );
+  } catch (error) {}
+  bookings = [];
+  documents = [];
+  profitData = {};
+  taxPlan = defaultTaxPlan();
+  appSettings = defaultAppSettings();
+  try {
+    renderAll();
+  } catch (error) {}
+}
+
 cloudEls().logout?.addEventListener("click", async () => {
   if (!supabaseClient) return;
+  // Fail-safe: confirm the cloud has the latest data BEFORE clearing anything local.
+  if (cloudUser) {
+    window.clearTimeout(cloudSaveTimer);
+    setCloudStatus("syncing", "Saving before sign out", "Making sure your latest data is safe in the cloud before clearing this device.");
+    const saved = await saveCloudSnapshot();
+    if (!saved) {
+      setCloudStatus(
+        "error",
+        "Stayed signed in",
+        "Could not sync your latest changes, so nothing was cleared and you are still signed in. Reconnect and try again — your data is safe.",
+      );
+      return;
+    }
+  }
   await supabaseClient.auth.signOut();
+  purgeLocalSensitiveData();
 });
 
 function downloadBackup() {
@@ -2152,6 +2202,7 @@ function templateValues({ guest, booking }) {
     mapsLink: els.messageMapsLink?.value?.trim() || appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh",
     checkinTime: els.messageCheckinTime?.value || appSettings.message.checkinTime || "3:00 PM",
     guideLink: els.messageGuideLink?.value?.trim() || appSettings.message.guideLink || GUIDE_LINK,
+    bankDetails: (els.messageBankDetails && els.messageBankDetails.value.trim()) || appSettings.message.bankDetails || "",
     quoteCheckIn: quoteDate(quote.checkIn),
     quoteCheckOut: quoteDate(quote.checkOut),
     quoteAccommodationFee: money(quote.accommodationFee),
@@ -2172,6 +2223,7 @@ function applyTemplate(template, values) {
     .replaceAll("{mapsLink}", values.mapsLink)
     .replaceAll("{checkinTime}", values.checkinTime)
     .replaceAll("{guideLink}", values.guideLink)
+    .replaceAll("{bankDetails}", values.bankDetails || "")
     .replaceAll("{quoteCheckIn}", values.quoteCheckIn)
     .replaceAll("{quoteCheckOut}", values.quoteCheckOut)
     .replaceAll("{quoteAccommodationFee}", values.quoteAccommodationFee)
@@ -2298,6 +2350,7 @@ function fillMessageFromBooking(force = false) {
   if (force || !els.messageAddress.value) els.messageAddress.value = appSettings.message.address || "";
   if (els.messageMapsLink && (force || !els.messageMapsLink.value)) els.messageMapsLink.value = appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh";
   if (els.messageGuideLink && (force || !els.messageGuideLink.value)) els.messageGuideLink.value = appSettings.message.guideLink || GUIDE_LINK;
+  if (els.messageBankDetails && (force || !els.messageBankDetails.value)) els.messageBankDetails.value = appSettings.message.bankDetails || "";
   renderQuickQuote(false);
   renderCheckinMessage();
 }
@@ -2402,6 +2455,7 @@ function renderCheckinMessage() {
       address: els.messageAddress?.value || "",
       mapsLink: els.messageMapsLink?.value || appSettings.message.mapsLink || "https://g.co/kgs/DYpYPSh",
       guideLink: els.messageGuideLink?.value || appSettings.message.guideLink || GUIDE_LINK,
+      bankDetails: els.messageBankDetails ? els.messageBankDetails.value : (appSettings.message.bankDetails || ""),
       templates: {
         quote: els.quoteTemplateInput?.value || defaultMessageTemplates.quote,
         checkin: els.checkinTemplateInput?.value || defaultMessageTemplates.checkin,
