@@ -3729,8 +3729,8 @@ function renderToday() {
     if (isExcludedBooking(b)) return;
     const dep = dateObj(departureFor(b));
     const bal = balanceFor(b);
-    if (bal > 0 && dep >= today) attention.push({ b, tone: "due", label: `Balance ${money(bal)} unpaid`, sort: dateObj(b.arrival).getTime() });
-    if (b.depositPaid && !b.depositRefunded && Number(b.depositAmount || 0) > 0 && dep < today) attention.push({ b, tone: "pend", label: `Refund ${money(b.depositAmount)} deposit`, sort: dep.getTime() });
+    if (bal > 0 && dep >= today) attention.push({ b, tone: "due", label: `Balance ${money(bal)} unpaid`, sub: `arrives ${shortDate(b.arrival)}`, sort: dateObj(b.arrival).getTime() });
+    if (b.depositPaid && !b.depositRefunded && Number(b.depositAmount || 0) > 0 && dep < today) attention.push({ b, tone: "pend", label: `Refund ${money(b.depositAmount)} deposit`, sub: `checked out ${shortDate(departureFor(b))}`, sort: dep.getTime() });
   });
   attention.sort((a, b) => a.sort - b.sort);
 
@@ -3770,7 +3770,7 @@ function renderToday() {
                 (a) => `
           <div class="today-row">
             <span class="today-avatar">${prefixFor(a.b.guest)}</span>
-            <div class="today-row-main"><strong>${escapeHtml(a.b.guest)}</strong><span>arrives ${shortDate(a.b.arrival)}</span></div>
+            <div class="today-row-main"><strong>${escapeHtml(a.b.guest)}</strong><span>${a.sub}</span></div>
             <span class="today-flag ${a.tone}">${a.label}</span>
           </div>`,
               )
