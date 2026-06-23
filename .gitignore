@@ -1,3 +1,21 @@
 node_modules/
 .DS_Store
 outputs/
+
+# --- internal: NEVER published to the public GitHub Pages repo ---
+# Pristine pre-redesign copy (kept locally only)
+_original_backup/
+# Security artifacts (RLS SQL, audit, hardening checklist) — would help an attacker if public
+security/
+# Backend deployed via the Supabase CLI, not via Pages
+supabase/
+# AI skills + OTA email integration (internal)
+skills/
+integrations/
+# Planning / strategy docs (internal)
+IMPROVEMENT-PLAN.md
+ARCHITECTURE-DECISION.md
+DEPLOYMENT-GUIDE.md
+# Local tooling
+deploy.sh
+*.log

@@ -1092,9 +1092,15 @@ function quoteDate(iso) {
 }
 
 function prefixFor(name) {
-const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return (parts[0] || "").slice(0, 2).toUpperCase();
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  const initials =
+    parts.length >= 2
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : (parts[0] || "").slice(0, 2).toUpperCase();
+  // Initials are rendered via innerHTML in several places (avatars, codes); escape
+  // so a malicious guest name like "<img…" can never inject markup. Defense-in-depth
+  // on top of the CSP, and hardens against null/undefined names.
+  return escapeHtml(initials);
 }
 
 function documentTypeCode(type) {

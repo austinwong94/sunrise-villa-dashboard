@@ -3,11 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Content Security Policy: only same-origin scripts may run (libraries are self-hosted),
+         network egress is restricted to Supabase, and injected/inline scripts are blocked.
+         This is the primary defense-in-depth against XSS token theft and supply-chain attacks.
+         Note: frame-ancestors / X-Frame-Options / HSTS cannot be set via <meta> on GitHub Pages
+         (they need response headers) — see security/SECURITY-AUDIT.md for the host-level steps. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://nigzeyamrzrozftbujmm.supabase.co wss://nigzeyamrzrozftbujmm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'self' blob:; worker-src 'self' blob:"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <!-- Clickjacking defense: GitHub Pages can't send X-Frame-Options / frame-ancestors
+         headers, so this same-origin script (CSP-clean) refuses to run inside a frame.
+         Loaded first so it runs before any content paints. -->
+    <script src="./framebuster.js?v=20260623-2"></script>
     <title>Sunrise Villa</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260623-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260623-2" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1437,7 +1451,9 @@
 
     <section class="owner-report-paper" id="ownerReportPrint" aria-label="Owner monthly report"></section>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260623-1"></script>
+    <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
+         server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
+    <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
+    <script src="./app.js?v=20260623-2"></script>
   </body>
 </html>
