@@ -5529,3 +5529,8 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 @media (max-width: 760px) { .ical-sync-fields { grid-template-columns: 1fr; } }
 .day-cell .booking-chip.airbnb-import { display: block; background: #fdf0e3; border: 1px dashed #e0934a; color: #9c5a1c; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px; margin-top: 3px; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-cell a.booking-chip.airbnb-import:hover { background: #fbe6d2; }
+
+/* Villa switch (Sunrise ⇄ Windmill) */
+.villa-switch { display: inline-flex; background: var(--line, #ece7dd); border-radius: 10px; padding: 3px; gap: 2px; }
+.villa-tab { border: none; background: transparent; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted, #8a8275); cursor: pointer; }
+.villa-tab.active { background: #fff; color: var(--accent, #e8913a); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10); }

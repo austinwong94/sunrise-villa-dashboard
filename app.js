@@ -610,6 +610,7 @@ function defaultAppSettings() {
   return {
     lastBackupAt: "",
     lastCloudSyncAt: "",
+    activeVilla: "Sunrise",
     dashboardHidden: {},
     dashboardMode: "monthly",
     bookingMonthFilter: "Selected",
@@ -650,6 +651,7 @@ function loadAppSettings() {
     const result = {
       ...fallback,
       ...parsed,
+      activeVilla: parsed.activeVilla === "Windmill" ? "Windmill" : "Sunrise",
       dashboardHidden: { ...fallback.dashboardHidden, ...(parsed.dashboardHidden || {}) },
       dashboardMode: parsed.dashboardMode === "annual" ? "annual" : "monthly",
       bookingMonthFilter: parsed.bookingMonthFilter || fallback.bookingMonthFilter,
@@ -808,7 +810,14 @@ function isExcludedBooking(booking) {
   return Boolean(booking?.excludeFromCalculations);
 }
 
-function calculationBookings(list = bookings) {
+// Villa scope (Sunrise ⇄ Windmill): every display/financial calc flows through this,
+// so a Windmill booking can NEVER count toward Sunrise's revenue and vice versa.
+function scopedBookings() {
+  const villa = appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise";
+  return bookings.filter((booking) => (booking.villa === "Windmill" ? "Windmill" : "Sunrise") === villa);
+}
+
+function calculationBookings(list = scopedBookings()) {
   return list.filter((booking) => !isExcludedBooking(booking));
 }
 
@@ -1236,7 +1245,7 @@ function arrivalInMonth(booking, monthValue) {
 }
 
 function bookingsForMonth(monthValue) {
-  return bookings
+  return scopedBookings()
     .filter((booking) => bookingMonthOverlap(booking, monthValue))
     .sort((a, b) => a.arrival.localeCompare(b.arrival));
 }
@@ -1367,6 +1376,8 @@ function shouldShowStayLabel(booking, dayIso) {
 }
 
 function renderCalendar() {
+  const bookings = scopedBookings();
+  const activeVilla = appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise";
   const [year, month] = selectedMonth.split("-").map(Number);
   const first = new Date(year, month - 1, 1);
   const mondayOffset = (first.getDay() + 6) % 7;
@@ -1409,7 +1420,7 @@ function renderCalendar() {
 
     // Imported Airbnb blocks (improvement #5): availability only, not financial bookings.
     // A block covers [start, end) — end is the checkout/exclusive date.
-    const importedToday = (appSettings.ical?.imported || []).filter((b) => b.start <= dayIso && dayIso < b.end);
+    const importedToday = (appSettings.ical?.imported || []).filter((b) => (b.villa === "Windmill" ? "Windmill" : "Sunrise") === activeVilla && b.start <= dayIso && dayIso < b.end);
     importedToday.slice(0, 2).forEach((b) => {
       const chip = document.createElement(b.reservationUrl ? "a" : "div");
       chip.className = "booking-chip airbnb-import";
@@ -1532,6 +1543,15 @@ function maybeAutoSyncIcal() {
   const last = ical.lastSyncedAt ? new Date(ical.lastSyncedAt).getTime() : 0;
   const ageHours = (Date.now() - last) / 3600000;
   if (ageHours >= 2) syncIcalNow();
+}
+
+// Villa switch (Sunrise ⇄ Windmill): reflect the active villa on the toggle + body.
+function renderVillaSwitch() {
+  const active = appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise";
+  document.querySelectorAll(".villa-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.villa === active);
+  });
+  document.body.dataset.villa = active;
 }
 
 function renderDetails() {
@@ -2289,6 +2309,7 @@ function restoreAppData(data) {
       ? {
           ...defaultAppSettings(),
           ...data.appSettings,
+          activeVilla: data.appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise",
           dashboardMode: data.appSettings.dashboardMode === "annual" ? "annual" : "monthly",
           bookingMonthFilter: data.appSettings.bookingMonthFilter || defaultAppSettings().bookingMonthFilter,
           bookingColumns: { ...defaultAppSettings().bookingColumns, ...(data.appSettings.bookingColumns || {}) },
@@ -2369,6 +2390,7 @@ function applyTemplate(template, values) {
 }
 
 function messageBookingOptions() {
+  const bookings = scopedBookings();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const upcoming = [...bookings]
@@ -2953,6 +2975,7 @@ function renderDashboard() {
 }
 
 function renderBookingsTable() {
+  const bookings = scopedBookings();
   renderBookingMonthFilter();
   const search = els.bookingSearch?.value.trim().toLowerCase() || "";
   const monthFilter = els.bookingMonthFilter?.value || appSettings.bookingMonthFilter || "Selected";
@@ -3018,6 +3041,7 @@ function renderBookingsTable() {
 }
 
 function renderBookingMonthFilter() {
+  const bookings = scopedBookings();
   if (!els.bookingMonthFilter) return;
   const current = els.bookingMonthFilter.value || appSettings.bookingMonthFilter || "Selected";
   const months = Array.from(new Set([selectedMonth, ...bookings.map((booking) => booking.arrival?.slice(0, 7)).filter(Boolean)])).sort();
@@ -3173,7 +3197,7 @@ function openBookingDialog(booking = null) {
   els.guestInput.value = booking?.guest || "";
   els.contactInput.value = booking?.contact || "";
   if (els.guestEmailInput) els.guestEmailInput.value = booking?.guestEmail || "";
-  if (els.villaInput) els.villaInput.value = booking?.villa === "Windmill" ? "Windmill" : "Sunrise";
+  if (els.villaInput) els.villaInput.value = booking ? (booking.villa === "Windmill" ? "Windmill" : "Sunrise") : (appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise");
   if (els.statusInput) els.statusInput.value = booking?.status || (booking ? "confirmed" : "confirmed");
   els.excludeCalculationsInput.checked = Boolean(booking?.excludeFromCalculations);
   els.arrivalInput.value = booking?.arrival || `${selectedMonth}-01`;
@@ -3918,6 +3942,7 @@ function setSelectedMonth(monthValue, syncBookingFilter = true) {
 }
 
 function renderToday() {
+  const bookings = scopedBookings();
   const host = document.querySelector("#todayContent");
   if (!host) return;
   const todayIso = isoDate(new Date());
@@ -3987,6 +4012,7 @@ function renderToday() {
 
 function renderAll() {
   applyAccent();
+  renderVillaSwitch();
   renderToday();
   els.monthPicker.value = selectedMonth;
   renderMonthButtons();
@@ -4013,6 +4039,14 @@ document.querySelectorAll(".nav-button").forEach((button) => {
 els.icalSyncBtn?.addEventListener("click", syncIcalNow);
 els.icalSunriseUrl?.addEventListener("change", persistIcalSources);
 els.icalWindmillUrl?.addEventListener("change", persistIcalSources);
+
+document.querySelectorAll(".villa-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    appSettings = { ...appSettings, activeVilla: tab.dataset.villa === "Windmill" ? "Windmill" : "Sunrise" };
+    saveAppSettings();
+    renderAll();
+  });
+});
 
 els.monthPicker.addEventListener("change", () => {
   setSelectedMonth(els.monthPicker.value);

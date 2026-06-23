@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-2" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -276,6 +276,10 @@
             <h2 class="page-title" id="pageTitle">Monthly Calendar</h2>
           </div>
           <div class="topbar-actions">
+            <div class="villa-switch" role="group" aria-label="Active villa">
+              <button class="villa-tab" data-villa="Sunrise" type="button">Sunrise</button>
+              <button class="villa-tab" data-villa="Windmill" type="button">Windmill</button>
+            </div>
             <button class="primary-button" id="openAddBooking" type="button">+ Booking</button>
             <div class="theme-menu" id="themeMenu">
               <button class="ghost-button theme-trigger" id="themeTrigger" type="button" aria-haspopup="true" aria-expanded="false"><span class="theme-swatch-dot"></span> Theme</button>
@@ -1478,6 +1482,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-2"></script>
+    <script src="./app.js?v=20260624-3"></script>
   </body>
 </html>
