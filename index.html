@@ -882,6 +882,23 @@
                     <textarea id="guideTemplateInput" rows="7"></textarea>
                   </label>
                 </article>
+
+                <article class="message-template-card checkin-flow-card">
+                  <div class="message-template-head">
+                    <div>
+                      <p class="eyebrow">7 days before arrival</p>
+                      <h3>Pre-arrival Reminder</h3>
+                    </div>
+                    <div class="message-actions">
+                      <button class="ghost-button" id="copyReminderMessage" type="button">Copy Reminder</button>
+                      <button class="primary-button warm" id="openReminderMessage" type="button">Send Reminder</button>
+                    </div>
+                  </div>
+                  <label>
+                    <span class="sr-only">Reminder Template</span>
+                    <textarea id="reminderTemplateInput" rows="9"></textarea>
+                  </label>
+                </article>
                 <p class="helper-text" id="messageCopyStatus" aria-live="polite">Send opens WhatsApp with the guest number and prepared text. You still press Send in WhatsApp.</p>
                 <div class="manual-copy-box hidden" id="manualCopyBox">
                   <label>Copy manually
@@ -1482,6 +1499,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-3"></script>
+    <script src="./app.js?v=20260624-4"></script>
   </body>
 </html>

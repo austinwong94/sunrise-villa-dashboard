@@ -113,6 +113,8 @@ const defaultMessageTemplates = {
     "Hi {guest},\n\nWe are excited to welcome you to Sunrise Villa. Here are the arrival details for a smooth check-in:\n\n#Confirmation Code: {code}\n\n#Address: {address}\n\n#Google Maps Link: {mapsLink}\n\n#Finding Us: We are located right behind McDonald's at Genting Sempah R&R.\n\n#Steps to Access:\n1. Drive up the slope to the guardhouse.\n2. Show your reservation details and Confirmation Code to the guards.\n3. Fill in the required guest information at the guardhouse.\n4. Continue driving until you reach the top T-junction. Look for the coconut tree as your landmark.\n\n#Guest Guide (MUST READ): {guideLink}\n\nPlease read the guest guide before arrival. Thank you, and we look forward to hosting you.",
   guide:
     "Hi {guest},\n\nHere is the Sunrise Villa Guest Guide for your stay:\n\n{guideLink}\n\nPlease read it before arrival so your check-in and stay will be smooth. Thank you.",
+  reminder:
+    "Hi {guest},\n\nA friendly reminder that your stay is coming up in about a week. Here are your details again:\n\nCheck-in time: {checkinTime}\nAddress: {address}\nGoogle Maps: {mapsLink}\n\nGuest Guide (please read before arrival): {guideLink}\n\nKindly confirm your expected arrival time and final guest count. We look forward to hosting you!",
 };
 
 let bookings = loadBookings();
@@ -278,6 +280,9 @@ const els = {
   copyQuoteMessage: document.querySelector("#copyQuoteMessage"),
   openWhatsappMessage: document.querySelector("#openWhatsappMessage"),
   openGuideMessage: document.querySelector("#openGuideMessage"),
+  openReminderMessage: document.querySelector("#openReminderMessage"),
+  copyReminderMessage: document.querySelector("#copyReminderMessage"),
+  reminderTemplateInput: document.querySelector("#reminderTemplateInput"),
   openQuoteMessage: document.querySelector("#openQuoteMessage"),
   messageCopyStatus: document.querySelector("#messageCopyStatus"),
   manualCopyBox: document.querySelector("#manualCopyBox"),
@@ -2414,6 +2419,7 @@ function messageBookingOptions() {
 }
 
 function selectedMessageBooking() {
+  const bookings = scopedBookings();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return (
@@ -2522,6 +2528,10 @@ function guestGuideMessageTextForBooking(booking) {
   return applyTemplate(appSettings.message.templates?.guide || defaultMessageTemplates.guide, templateValuesForBooking(booking));
 }
 
+function reminderMessageTextForBooking(booking) {
+  return applyTemplate(appSettings.message.templates?.reminder || defaultMessageTemplates.reminder, templateValuesForBooking(booking));
+}
+
 function quoteMessageText() {
   return applyTemplate(appSettings.message.templates?.quote || defaultMessageTemplates.quote, templateValuesForQuote());
 }
@@ -2538,7 +2548,12 @@ function openWhatsappMessage(phoneValue, text) {
 }
 
 function openWhatsappForBooking(booking, template) {
-  const text = template === "guide" ? guestGuideMessageTextForBooking(booking) : checkinMessageTextForBooking(booking);
+  const text =
+    template === "guide"
+      ? guestGuideMessageTextForBooking(booking)
+      : template === "reminder"
+        ? reminderMessageTextForBooking(booking)
+        : checkinMessageTextForBooking(booking);
   openWhatsappMessage(booking?.contact || "", text);
 }
 
@@ -2615,6 +2630,7 @@ function renderCheckinMessage() {
         quote: els.quoteTemplateInput?.value || defaultMessageTemplates.quote,
         checkin: els.checkinTemplateInput?.value || defaultMessageTemplates.checkin,
         guide: els.guideTemplateInput?.value || defaultMessageTemplates.guide,
+        reminder: els.reminderTemplateInput?.value || defaultMessageTemplates.reminder,
       },
     },
   };
@@ -2629,6 +2645,7 @@ function renderMessageGenerator() {
   if (els.quoteTemplateInput && !els.quoteTemplateInput.value) els.quoteTemplateInput.value = appSettings.message.templates?.quote || defaultMessageTemplates.quote;
   if (els.checkinTemplateInput && !els.checkinTemplateInput.value) els.checkinTemplateInput.value = appSettings.message.templates?.checkin || defaultMessageTemplates.checkin;
   if (els.guideTemplateInput && !els.guideTemplateInput.value) els.guideTemplateInput.value = appSettings.message.templates?.guide || defaultMessageTemplates.guide;
+  if (els.reminderTemplateInput && !els.reminderTemplateInput.value) els.reminderTemplateInput.value = appSettings.message.templates?.reminder || defaultMessageTemplates.reminder;
   fillMessageFromBooking(false);
 }
 
@@ -4495,6 +4512,20 @@ els.openGuideMessage?.addEventListener("click", () => {
   renderCheckinMessage();
   const booking = selectedMessageBooking();
   if (booking) openWhatsappForBooking(booking, "guide");
+});
+
+els.openReminderMessage?.addEventListener("click", () => {
+  renderCheckinMessage();
+  const booking = selectedMessageBooking();
+  if (booking) openWhatsappForBooking(booking, "reminder");
+});
+
+els.copyReminderMessage?.addEventListener("click", async () => {
+  const booking = selectedMessageBooking();
+  const message = booking
+    ? reminderMessageTextForBooking(booking)
+    : applyTemplate(appSettings.message.templates?.reminder || defaultMessageTemplates.reminder, templateValuesForBooking());
+  await copyMessageWithFeedback(message, els.copyReminderMessage, "Copy Reminder");
 });
 
 els.addCommitment?.addEventListener("click", (event) => {
