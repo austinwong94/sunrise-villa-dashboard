@@ -16,6 +16,7 @@
   --line: #ECEBE6;
   --soft: #FAFAF7;
   --neutral: #F2F2EE;
+  --bg: var(--soft); /* control/input surface — defined so newer inputs match the foundation cream, not pure white */
 
   /* Text */
   --ink: #1B1B19;
@@ -39,7 +40,7 @@
   /* Status */
   --due: #B9544C;
   --due-soft: #F7EBE9;
-  --pend: #B0863A;
+  --pend: #836528; /* darkened from #B0863A to meet AA on white + its soft bg for the 11px badge/pill text */
   --pend-soft: #F5EEE2;
 
   /* Airbnb channel */
@@ -72,6 +73,14 @@
   /* Fonts */
   --font-ui: -apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
   --font-display: 'Spectral', Georgia, serif;
+
+  /* Motion tokens — one shared vocabulary so every transition feels intentional.
+     ease-out for entrances (never ease-in); short durations for a daily tool. */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-soft: cubic-bezier(.34, 1.2, .64, 1); /* gentle overshoot for toggles/presses */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 300ms;
 }
 
 /* ---------- 2/3. RESET & BASELINE ---------- */
@@ -368,7 +377,7 @@ textarea {
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%238C8C84' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%236E6E68' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 32px;
@@ -1285,7 +1294,7 @@ details summary::marker { content: ""; }
   width: 12px;
   height: 8px;
   flex: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%238C8C84' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") no-repeat center / contain;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%236E6E68' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") no-repeat center / contain;
   transition: transform .15s ease;
 }
 .data-menu[open] > summary {
@@ -1366,7 +1375,7 @@ details summary::marker { content: ""; }
   margin-left: auto;
   width: 12px;
   height: 8px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%238C8C84' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") no-repeat center / contain;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%236E6E68' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") no-repeat center / contain;
   transition: transform .15s ease;
 }
 .recovery-menu-row[open] > summary::after { transform: rotate(180deg); }
@@ -5534,10 +5543,10 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 .ical-sync-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .ical-sync-head h3 { margin: 2px 0 0; }
 .ical-sync-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.ical-sync-status { font-size: 13px; color: var(--muted, #8a8275); }
+.ical-sync-status { font-size: 13px; color: var(--muted); }
 .ical-sync-status.ok { color: #2e7d54; font-weight: 600; }
 .ical-sync-status.err { color: #c0392b; font-weight: 600; }
-.sync-now-button { background: var(--accent, #e8913a); color: #fff; border: none; border-radius: 10px; padding: 9px 18px; font-weight: 600; font-size: 14px; cursor: pointer; }
+.sync-now-button { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 9px 18px; font-weight: 600; font-size: 14px; cursor: pointer; }
 .sync-now-button:hover { filter: brightness(0.96); }
 .sync-now-button:disabled { opacity: 0.6; cursor: default; }
 .ical-sync-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
@@ -5549,15 +5558,15 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 
 /* Villa switch (Sunrise ⇄ Windmill) */
 .villa-switch { display: inline-flex; background: var(--line, #ece7dd); border-radius: 10px; padding: 3px; gap: 2px; }
-.villa-tab { border: none; background: transparent; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted, #8a8275); cursor: pointer; }
+.villa-tab { border: none; background: transparent; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .villa-tab.active { background: #fff; color: var(--accent-ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10); }
 
 /* Paste-to-import box in the booking dialog */
 .airbnb-import-box { border: 1px dashed var(--line, #d9d3c7); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; background: #fdf6ee; }
-.airbnb-import-box summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--accent, #c97920); }
+.airbnb-import-box summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--accent-ink); }
 .airbnb-import-box textarea { width: 100%; margin-top: 10px; padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 12px; box-sizing: border-box; font-family: inherit; }
 .airbnb-import-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
-.airbnb-import-status { font-size: 12px; color: var(--muted, #8a8275); }
+.airbnb-import-status { font-size: 12px; color: var(--muted); }
 .airbnb-import-status.ok { color: #2e7d54; }
 .airbnb-import-status.err { color: #c0392b; }
 
@@ -5567,7 +5576,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 .candidate-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #f3e2c6; flex-wrap: wrap; }
 .candidate-info { display: flex; flex-direction: column; gap: 2px; }
 .candidate-info strong { font-size: 14px; }
-.candidate-info span { font-size: 12px; color: var(--muted, #8a8275); }
+.candidate-info span { font-size: 12px; color: var(--muted); }
 .candidate-actions { display: flex; gap: 8px; }
 .candidate-actions .compact { padding: 6px 12px; font-size: 13px; }
 
@@ -5644,7 +5653,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 /* --- Accessibility & mobile quick wins --- */
 /* Visible keyboard focus on every interactive control */
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid var(--accent, #c97920);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -5654,4 +5663,32 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .booking-channel-option, .month-button { min-height: 44px; }
   #guestsView .guest-card-edit input[type="text"] { min-height: 40px; }
   #guestsView .guests-list { grid-template-columns: 1fr; }
+}
+
+/* ---------- Tasteful motion & micro-interactions (interaction-driven; gated below) ---------- */
+/* Tactile press feedback on controls — clearly "I received your tap" */
+.small-action, .primary-button, .ghost-button, .villa-tab, .booking-channel-option, .month-button, .theme-swatch {
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-soft);
+}
+.small-action:active, .primary-button:active, .ghost-button:active, .villa-tab:active,
+.booking-channel-option:active, .month-button:active { transform: translateY(1px) scale(.985); }
+.villa-tab:hover:not(.active) { color: var(--ink); }
+#calendarView .booking-chip.clickable:active { transform: translateY(1px); }
+
+/* Booking dialog: smooth scale-fade entrance */
+@keyframes svDialogIn { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-out); }
+
+/* View switch: a subtle fade-up when a view becomes active (once per switch, not on data re-render) */
+@keyframes svViewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.view.active { animation: svViewIn var(--dur-base) var(--ease-out); }
+
+/* Non-negotiable for a daily tool: kill all of the above under reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .small-action, .primary-button, .ghost-button, .villa-tab, .booking-channel-option, .month-button, .theme-swatch { transition: none; }
+  .small-action:active, .primary-button:active, .ghost-button:active, .villa-tab:active,
+  .booking-channel-option:active, .month-button:active, #calendarView .booking-chip.clickable:active { transform: none; }
+  dialog#bookingDialog[open], .view.active { animation: none; }
 }
