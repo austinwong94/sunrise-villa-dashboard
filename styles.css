@@ -19,7 +19,7 @@
 
   /* Text */
   --ink: #1B1B19;
-  --muted: #8C8C84;
+  --muted: #6E6E68; /* darkened from #8C8C84 to meet WCAG AA 4.5:1 on white for small secondary text */
   --faint: #B7B7AE;
 
   /* Accent (themeable at runtime — JS overrides --accent / --accent-soft / --cbc) */
@@ -5597,6 +5597,18 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #guestsView .guest-card-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--line); padding-top: 10px; }
 #guestsView .guest-card-edit input[type="text"] { flex: 1 1 140px; padding: 7px 9px; border: 1px solid var(--line, #d9d3c7); border-radius: 9px; font-size: 12.5px; background: var(--bg, #fff); color: inherit; }
 #guestsView .guest-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* Digital guidebook editor */
+#guideView .guide-help { font-size: 13px; color: var(--muted); margin: 4px 0 18px; max-width: 640px; }
+#guideView .guide-form { display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+#guideView .guide-form > label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
+#guideView .guide-grid.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { #guideView .guide-grid.two { grid-template-columns: 1fr; } }
+#guideView .guide-grid.two > label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
+#guideView .guide-form input[type="text"], #guideView .guide-form textarea {
+  padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 13px; font-family: inherit; font-weight: 400; background: var(--bg, #fff); color: inherit; box-sizing: border-box; width: 100%;
+}
+#guideView .guide-form textarea { resize: vertical; }
 
 /* Incident/damage log field in the booking dialog */
 .booking-form .full-width-label { display: block; }

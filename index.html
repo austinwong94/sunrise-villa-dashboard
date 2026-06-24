@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-10" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-12" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -221,6 +221,10 @@
           <button class="nav-button" data-view="messages" type="button">
             <span aria-hidden="true">✉</span>
             Messages
+          </button>
+          <button class="nav-button" data-view="guide" type="button">
+            <span aria-hidden="true">❒</span>
+            Guidebook
           </button>
           <button class="nav-button" data-view="documents" type="button">
             <span aria-hidden="true">▤</span>
@@ -751,6 +755,31 @@
           </section>
         </section>
 
+        <section class="view" id="guideView" aria-labelledby="pageTitle">
+          <section class="table-panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Cuts down repeat guest questions · <span id="guideVillaLabel">Sunrise</span> Villa</p>
+                <h3>Digital Guidebook</h3>
+              </div>
+              <button class="primary-button" id="previewGuidebook" type="button">Preview / Print guide</button>
+            </div>
+            <p class="guide-help">Fill this in once per villa. Use <strong>Preview / Print guide</strong> to open a clean page you can save as PDF and share, or screenshot into WhatsApp. Switch the villa tab at the top to edit the other villa.</p>
+            <div class="guide-form">
+              <div class="guide-grid two">
+                <label>WiFi network<input type="text" data-guide="wifiName" placeholder="SunriseVilla_5G" /></label>
+                <label>WiFi password<input type="text" data-guide="wifiPassword" placeholder="welcome123" /></label>
+              </div>
+              <label>Check-in steps<textarea data-guide="checkin" rows="3" placeholder="Drive to the guardhouse, show your confirmation code…"></textarea></label>
+              <label>Check-out instructions<textarea data-guide="checkout" rows="2" placeholder="Check-out by 11am. Leave keys on the table, bins by the door…"></textarea></label>
+              <label>House rules<textarea data-guide="houseRules" rows="3" placeholder="No smoking indoors. Quiet hours after 11pm. Max 8 guests…"></textarea></label>
+              <label>Appliances &amp; how-tos<textarea data-guide="amenities" rows="3" placeholder="Water heater switch is by the bathroom. AC remote in the drawer…"></textarea></label>
+              <label>Local recommendations<textarea data-guide="localTips" rows="3" placeholder="Best food: … Nearest grocery: … Things to do nearby: …"></textarea></label>
+              <label>Emergency / host contact<textarea data-guide="emergency" rows="2" placeholder="Host: +60… · Nearest clinic: … · Security guardhouse: …"></textarea></label>
+            </div>
+          </section>
+        </section>
+
         <section class="view message-mode-quote" id="messagesView" aria-labelledby="pageTitle">
           <section class="table-panel message-panel">
             <div class="message-flow-tabs" role="tablist" aria-label="Message workflow">
@@ -812,6 +841,7 @@
                       <h3>Quick Quotation Message</h3>
                     </div>
                     <div class="message-actions">
+                      <button class="ghost-button" id="ackInquiry" type="button" title="Send a quick 'got your inquiry, checking availability' reply now">Quick reply</button>
                       <button class="ghost-button" id="copyQuoteMessage" type="button">Copy Quote</button>
                       <button class="primary-button warm" id="openQuoteMessage" type="button">Send Quote</button>
                     </div>
@@ -1551,6 +1581,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-10"></script>
+    <script src="./app.js?v=20260624-12"></script>
   </body>
 </html>

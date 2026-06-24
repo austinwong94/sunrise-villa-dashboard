@@ -122,6 +122,8 @@ const defaultMessageTemplates = {
     "Hi {guest},\n\nJust checking in — is everything going well with your stay at Sunrise Villa? If you need anything at all, please let us know and we'll be happy to help. Enjoy your time! 🌅",
   review:
     "Hi {guest},\n\nThank you so much for staying at Sunrise Villa — it was a pleasure hosting you! If you enjoyed your stay, we'd be really grateful if you could leave us a short review. It genuinely helps us a lot. Hope to welcome you back soon! 🌅",
+  inquiry:
+    "Hi {guest},\n\nThanks for your interest in Sunrise Villa! 🌅 Let me check availability for your dates and I'll get right back to you with the full details. 😊",
 };
 
 let bookings = loadBookings();
@@ -290,6 +292,7 @@ const els = {
   copyCheckinMessage: document.querySelector("#copyCheckinMessage"),
   copyGuideMessage: document.querySelector("#copyGuideMessage"),
   copyQuoteMessage: document.querySelector("#copyQuoteMessage"),
+  ackInquiry: document.querySelector("#ackInquiry"),
   openWhatsappMessage: document.querySelector("#openWhatsappMessage"),
   openGuideMessage: document.querySelector("#openGuideMessage"),
   openReminderMessage: document.querySelector("#openReminderMessage"),
@@ -630,6 +633,7 @@ function defaultAppSettings() {
     lastCloudSyncAt: "",
     activeVilla: "Sunrise",
     guestProfiles: {}, // CRM: keyed by normalized phone/name -> { notes, tags:[], blocklist, consent, displayName }
+    guidebook: {}, // per-villa guest guidebook content -> { Sunrise: {...}, Windmill: {...} }
     dashboardHidden: {},
     dashboardMode: "monthly",
     bookingMonthFilter: "Selected",
@@ -682,6 +686,7 @@ function loadAppSettings() {
       ...parsed,
       activeVilla: parsed.activeVilla === "Windmill" ? "Windmill" : "Sunrise",
       guestProfiles: { ...fallback.guestProfiles, ...(parsed.guestProfiles || {}) },
+      guidebook: { ...fallback.guidebook, ...(parsed.guidebook || {}) },
       dashboardHidden: { ...fallback.dashboardHidden, ...(parsed.dashboardHidden || {}) },
       dashboardMode: parsed.dashboardMode === "annual" ? "annual" : "monthly",
       bookingMonthFilter: parsed.bookingMonthFilter || fallback.bookingMonthFilter,
@@ -965,6 +970,60 @@ function renderGuests() {
       </article>`;
     })
     .join("");
+}
+
+// --- Digital guidebook (per villa) ---
+function guidebookFor(villa) {
+  return (appSettings.guidebook && appSettings.guidebook[villa]) || {};
+}
+function setGuidebookField(field, value) {
+  const villa = activeVillaKey();
+  appSettings = { ...appSettings, guidebook: { ...(appSettings.guidebook || {}), [villa]: { ...guidebookFor(villa), [field]: value } } };
+  saveAppSettings();
+}
+function renderGuide() {
+  const villa = activeVillaKey();
+  const label = document.querySelector("#guideVillaLabel");
+  if (label) label.textContent = villa;
+  const g = guidebookFor(villa);
+  document.querySelectorAll("#guideView [data-guide]").forEach((el) => {
+    el.value = g[el.dataset.guide] || "";
+  });
+}
+function guidebookHtml(villa) {
+  const g = guidebookFor(villa);
+  const block = messageBlockForVilla(villa) || {};
+  const section = (title, body) => (body && String(body).trim() ? `<section><h2>${escapeHtml(title)}</h2><p>${escapeMultiline(body)}</p></section>` : "");
+  const wifi = g.wifiName || g.wifiPassword
+    ? `<section><h2>WiFi</h2><p><strong>Network:</strong> ${escapeHtml(g.wifiName || "—")}<br><strong>Password:</strong> ${escapeHtml(g.wifiPassword || "—")}</p></section>`
+    : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(villa)} Villa — Guest Guide</title>
+    <style>body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,sans-serif;max-width:680px;margin:0 auto;padding:32px 22px;color:#2a2a2a;line-height:1.55}
+    h1{font-size:26px;margin:0 0 2px}.sub{color:#b07a30;font-weight:600;margin:0 0 22px;letter-spacing:.02em}
+    h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#c08a3e;border-bottom:1px solid #eee;padding-bottom:6px;margin:24px 0 8px}
+    p{margin:0 0 6px;white-space:pre-wrap}@media print{body{padding:0}}</style></head>
+    <body>
+      <h1>${escapeHtml(villa)} Villa</h1>
+      <p class="sub">Guest Guide</p>
+      ${section("Welcome", g.welcome)}
+      ${section("Address", block.address)}
+      ${wifi}
+      ${section("Check-in", g.checkin)}
+      ${section("Check-out", g.checkout)}
+      ${section("House Rules", g.houseRules)}
+      ${section("Appliances & How-tos", g.amenities)}
+      ${section("Local Recommendations", g.localTips)}
+      ${section("Emergency / Host Contact", g.emergency)}
+    </body></html>`;
+}
+function previewGuidebook() {
+  const win = window.open("", "_blank");
+  if (!win) {
+    window.alert("Allow pop-ups to preview the guide.");
+    return;
+  }
+  win.document.write(guidebookHtml(activeVillaKey()));
+  win.document.close();
 }
 
 // Compliance: Registration of Guests Act 1965 — exportable register of all stays.
@@ -1493,6 +1552,7 @@ function setView(view) {
     dashboard: "Income Dashboard",
     bookings: "Bookings",
     guests: "Guest Book",
+    guide: "Digital Guidebook",
     messages: "Guest Messages",
     documents: "Villa Documents",
     tax: "Tax Plan",
@@ -2604,6 +2664,7 @@ function restoreAppData(data) {
           ...data.appSettings,
           activeVilla: data.appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise",
           guestProfiles: { ...defaultAppSettings().guestProfiles, ...(data.appSettings.guestProfiles || {}) },
+          guidebook: { ...defaultAppSettings().guidebook, ...(data.appSettings.guidebook || {}) },
           dashboardMode: data.appSettings.dashboardMode === "annual" ? "annual" : "monthly",
           bookingMonthFilter: data.appSettings.bookingMonthFilter || defaultAppSettings().bookingMonthFilter,
           bookingColumns: { ...defaultAppSettings().bookingColumns, ...(data.appSettings.bookingColumns || {}) },
@@ -2662,7 +2723,7 @@ function templateValuesForBooking(booking = selectedMessageBooking()) {
 function templateValuesForQuote() {
   const title = els.quoteGuestTitle?.value === "Ms" ? "Ms" : "Mr";
   const name = String(els.quoteGuestName?.value || "Guest").trim();
-  const guest = name === "Guest" ? guest : `${title} ${name}`;
+  const guest = name === "Guest" ? name : `${title} ${name}`;
   return templateValues({ guest, booking: null });
 }
 
@@ -2896,6 +2957,13 @@ function openWhatsappForBooking(booking, template) {
     : template === "review" ? reviewMessageTextForBooking(booking)
     : checkinMessageTextForBooking(booking);
   openWhatsappMessage(booking?.contact || "", text);
+}
+
+function inquiryAckText() {
+  return applyTemplate(templateForVilla(activeVillaKey(), "inquiry"), templateValuesForQuote());
+}
+function openInquiryAck() {
+  openWhatsappMessage(els.quotePhone?.value || "", inquiryAckText());
 }
 
 function openWhatsappForQuote() {
@@ -3439,29 +3507,35 @@ function renderBookingMonthFilter() {
 
 function renderOwnerReport() {
   if (!els.ownerReportPrint) return;
+  const villa = activeVillaKey();
+  const isWindmill = villa === "Windmill";
   const totals = totalsFor(selectedMonth);
   const performance = stayPerformanceForMonth(selectedMonth);
   const breakdown = expenseBreakdownFor(selectedMonth);
   const netProfit = totals.revenue - breakdown.total;
   const paidBookings = calculationBookings(arrivalsForMonth(selectedMonth));
   const influencerBookings = arrivalsForMonth(selectedMonth).filter(isExcludedBooking);
-  els.ownerReportPrint.innerHTML = `
-    <div class="owner-report-head">
-      <div>
-        <p>Sunrise Villa</p>
-        <h1>Monthly Owner Report</h1>
-        <span>${monthLabel(selectedMonth)}</span>
-      </div>
-      <strong>${isoDate(new Date())}</strong>
-    </div>
-
+  // Windmill is managed for its owner (Austin earns nothing from it) and the expense data
+  // tracked here is Sunrise's, so a Windmill statement reports revenue/occupancy/bookings
+  // only — never Sunrise's P&L. Sunrise keeps the full owner report.
+  const summaryGrid = isWindmill
+    ? `
+    <section class="owner-report-grid">
+      <article><span>Accommodation Fees</span><strong>${money(totals.revenue)}</strong></article>
+      <article><span>Occupancy</span><strong>${percent(performance.occupancyRate)}</strong></article>
+      <article><span>Nights Booked</span><strong>${performance.bookedNights}</strong></article>
+      <article><span>Bookings</span><strong>${paidBookings.length}</strong></article>
+    </section>`
+    : `
     <section class="owner-report-grid">
       <article><span>Accommodation Fees</span><strong>${money(totals.revenue)}</strong></article>
       <article><span>Total Expenses</span><strong>${money(breakdown.total)}</strong></article>
       <article><span>Net Profit</span><strong>${money(netProfit)}</strong></article>
       <article><span>Occupancy</span><strong>${percent(performance.occupancyRate)}</strong></article>
-    </section>
-
+    </section>`;
+  const pnlSection = isWindmill
+    ? ""
+    : `
     <section class="owner-report-section">
       <h2>P&L Breakdown</h2>
       <table>
@@ -3476,8 +3550,18 @@ function renderOwnerReport() {
           <tr class="report-total"><td>Net Profit</td><td>${money(netProfit)}</td></tr>
         </tbody>
       </table>
-    </section>
-
+    </section>`;
+  els.ownerReportPrint.innerHTML = `
+    <div class="owner-report-head">
+      <div>
+        <p>${escapeHtml(villa)} Villa</p>
+        <h1>Monthly Owner Report</h1>
+        <span>${monthLabel(selectedMonth)}</span>
+      </div>
+      <strong>${isoDate(new Date())}</strong>
+    </div>
+    ${summaryGrid}
+    ${pnlSection}
     <section class="owner-report-section">
       <h2>Paid Booking Summary</h2>
       <table>
@@ -4607,6 +4691,7 @@ function renderAll() {
   renderDashboard();
   renderBookingsTable();
   renderGuests();
+  renderGuide();
   renderMessageGenerator();
   renderDataHealth();
   renderDocuments();
@@ -4873,6 +4958,13 @@ guestsListEl?.addEventListener("click", (event) => {
 document.querySelector("#guestSearch")?.addEventListener("input", renderGuests);
 document.querySelector("#guestReturningOnly")?.addEventListener("change", renderGuests);
 document.querySelector("#exportGuestRegister")?.addEventListener("click", exportGuestRegister);
+
+// Digital guidebook wiring
+document.querySelector("#guideView")?.addEventListener("input", (event) => {
+  const field = event.target.dataset.guide;
+  if (field) setGuidebookField(field, event.target.value);
+});
+document.querySelector("#previewGuidebook")?.addEventListener("click", previewGuidebook);
 
 function csvEscape(value) {
   const text = String(value ?? "");
@@ -5155,6 +5247,8 @@ els.openQuoteMessage?.addEventListener("click", () => {
   renderCheckinMessage();
   openWhatsappForQuote();
 });
+
+els.ackInquiry?.addEventListener("click", openInquiryAck);
 
 els.openGuideMessage?.addEventListener("click", () => {
   renderCheckinMessage();
