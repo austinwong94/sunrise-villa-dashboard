@@ -5573,3 +5573,47 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 
 /* Bookings table: "no phone" badge */
 .bookings-table .contact-missing { color: var(--due, #c0392b); font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+/* Returning-guest + flagged badges (Guest CRM) */
+.returning-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--accent, #c97920); background: var(--accent-soft, #fbe6d2); padding: 1px 7px; border-radius: var(--r-pill, 999px); vertical-align: middle; white-space: nowrap; }
+.blocklist-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--due, #c0392b); background: var(--due-soft, #fbe3e0); padding: 1px 7px; border-radius: var(--r-pill, 999px); vertical-align: middle; white-space: nowrap; }
+
+/* Guest Book (CRM) view */
+#guestsView .guests-summary { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 16px; }
+#guestsView .guest-stat { background: var(--card, #fff); border: 1px solid var(--line, #e7e3da); border-radius: 12px; padding: 12px 18px; min-width: 96px; }
+#guestsView .guest-stat strong { display: block; font-size: 22px; font-weight: 700; color: var(--ink); }
+#guestsView .guest-stat span { font-size: 12px; color: var(--muted); }
+#guestsView .guests-toolbar { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }
+#guestsView .guests-toolbar label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+#guestsView .guests-toolbar input[type="search"] { padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 13px; background: var(--bg, #fff); color: inherit; min-width: 220px; }
+#guestsView .guests-filter-returning { flex-direction: row !important; align-items: center; gap: 8px; }
+#guestsView .guests-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+#guestsView .guest-card { background: var(--card, #fff); border: 1px solid var(--line, #e7e3da); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+#guestsView .guest-card.flagged { border-color: var(--due-soft, #f3c6c0); box-shadow: 0 0 0 1px var(--due-soft, #f3c6c0) inset; }
+#guestsView .guest-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+#guestsView .guest-card-name { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+#guestsView .guest-card-name strong { font-size: 15px; color: var(--ink); }
+#guestsView .guest-card-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+#guestsView .guest-card-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--line); padding-top: 10px; }
+#guestsView .guest-card-edit input[type="text"] { flex: 1 1 140px; padding: 7px 9px; border: 1px solid var(--line, #d9d3c7); border-radius: 9px; font-size: 12.5px; background: var(--bg, #fff); color: inherit; }
+#guestsView .guest-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* Incident/damage log field in the booking dialog */
+.booking-form .full-width-label { display: block; }
+.booking-form .full-width-label textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-family: inherit; font-size: 13px; background: var(--bg, #fff); color: inherit; }
+.booking-form .form-hint { font-weight: 400; font-size: 12px; color: var(--muted); }
+
+/* --- Accessibility & mobile quick wins --- */
+/* Visible keyboard focus on every interactive control */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent, #c97920);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* Comfortable touch targets on phones (you do ops on mobile) */
+@media (max-width: 760px) {
+  .small-action, .ghost-button, .primary-button, .nav-button, .villa-tab,
+  .booking-channel-option, .month-button { min-height: 44px; }
+  #guestsView .guest-card-edit input[type="text"] { min-height: 40px; }
+  #guestsView .guests-list { grid-template-columns: 1fr; }
+}

@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-9" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-10" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -213,6 +213,10 @@
           <button class="nav-button" data-view="bookings" type="button">
             <span aria-hidden="true">☷</span>
             Bookings
+          </button>
+          <button class="nav-button" data-view="guests" type="button">
+            <span aria-hidden="true">☺</span>
+            Guests
           </button>
           <button class="nav-button" data-view="messages" type="button">
             <span aria-hidden="true">✉</span>
@@ -721,6 +725,30 @@
             </div>
           </section>
 
+        </section>
+
+        <section class="view" id="guestsView" aria-labelledby="pageTitle">
+          <section class="table-panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Repeat guests &amp; retention</p>
+                <h3>Guest Book</h3>
+              </div>
+              <button class="ghost-button" id="exportGuestRegister" type="button">Export guest register (CSV)</button>
+            </div>
+            <div class="guests-summary" id="guestsSummary"></div>
+            <div class="guests-toolbar">
+              <label>
+                <span>Search</span>
+                <input id="guestSearch" type="search" placeholder="Guest name or phone" />
+              </label>
+              <label class="guests-filter-returning">
+                <input id="guestReturningOnly" type="checkbox" />
+                <span>Returning only</span>
+              </label>
+            </div>
+            <div class="guests-list" id="guestsList"></div>
+          </section>
         </section>
 
         <section class="view message-mode-quote" id="messagesView" aria-labelledby="pageTitle">
@@ -1503,6 +1531,13 @@
               </label>
             </div>
           </section>
+
+          <section class="form-section">
+            <h4>Incident / damage log <span class="form-hint">(private — what happened, cost, resolved?)</span></h4>
+            <label class="full-width-label">
+              <textarea id="incidentLogInput" rows="2" placeholder="e.g. Broken wine glass, RM20 deducted from deposit — resolved 12 Jun"></textarea>
+            </label>
+          </section>
         </div>
         <div class="dialog-actions">
           <button class="ghost-button" id="cancelBookingDialog" type="button">Cancel</button>
@@ -1516,6 +1551,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-9"></script>
+    <script src="./app.js?v=20260624-10"></script>
   </body>
 </html>

@@ -49,6 +49,7 @@ const svAuthStorage = {
 let supabaseClient = null;
 let cloudUser = null;
 let cloudRecordId = "";
+let cloudKnownUpdatedAt = ""; // last updated_at we loaded/saved — used for optimistic-lock conflict detection
 let cloudSaveTimer = null;
 let isRestoringCloudData = false;
 
@@ -115,6 +116,12 @@ const defaultMessageTemplates = {
     "Hi {guest},\n\nHere is the Sunrise Villa Guest Guide for your stay:\n\n{guideLink}\n\nPlease read it before arrival so your check-in and stay will be smooth. Thank you.",
   reminder:
     "Hi {guest},\n\nA friendly reminder that your stay is coming up in about a week. Here are your details again:\n\nCheck-in time: {checkinTime}\nAddress: {address}\nGoogle Maps: {mapsLink}\n\nGuest Guide (please read before arrival): {guideLink}\n\nKindly confirm your expected arrival time and final guest count. We look forward to hosting you!",
+  deposit:
+    "Hi {guest},\n\nTo confirm your booking at Sunrise Villa, kindly proceed with the deposit/payment to secure your dates:\n\n{bankDetails}\n\nKindly send the transfer receipt via WhatsApp once done. Thank you!",
+  midstay:
+    "Hi {guest},\n\nJust checking in — is everything going well with your stay at Sunrise Villa? If you need anything at all, please let us know and we'll be happy to help. Enjoy your time! 🌅",
+  review:
+    "Hi {guest},\n\nThank you so much for staying at Sunrise Villa — it was a pleasure hosting you! If you enjoyed your stay, we'd be really grateful if you could leave us a short review. It genuinely helps us a lot. Hope to welcome you back soon! 🌅",
 };
 
 let bookings = loadBookings();
@@ -228,6 +235,7 @@ const els = {
   guestInput: document.querySelector("#guestInput"),
   contactInput: document.querySelector("#contactInput"),
   guestEmailInput: document.querySelector("#guestEmailInput"),
+  incidentLogInput: document.querySelector("#incidentLogInput"),
   villaInput: document.querySelector("#villaInput"),
   statusInput: document.querySelector("#statusInput"),
   arrivalInput: document.querySelector("#arrivalInput"),
@@ -416,6 +424,7 @@ function normalizeBooking(booking) {
     guestEmail: String(booking.guestEmail || ""),
     checkinSentAt: booking.checkinSentAt || null,
     reminderSentAt: booking.reminderSentAt || null,
+    incidentLog: String(booking.incidentLog || ""),
   };
 }
 
@@ -620,6 +629,7 @@ function defaultAppSettings() {
     lastBackupAt: "",
     lastCloudSyncAt: "",
     activeVilla: "Sunrise",
+    guestProfiles: {}, // CRM: keyed by normalized phone/name -> { notes, tags:[], blocklist, consent, displayName }
     dashboardHidden: {},
     dashboardMode: "monthly",
     bookingMonthFilter: "Selected",
@@ -671,6 +681,7 @@ function loadAppSettings() {
       ...fallback,
       ...parsed,
       activeVilla: parsed.activeVilla === "Windmill" ? "Windmill" : "Sunrise",
+      guestProfiles: { ...fallback.guestProfiles, ...(parsed.guestProfiles || {}) },
       dashboardHidden: { ...fallback.dashboardHidden, ...(parsed.dashboardHidden || {}) },
       dashboardMode: parsed.dashboardMode === "annual" ? "annual" : "monthly",
       bookingMonthFilter: parsed.bookingMonthFilter || fallback.bookingMonthFilter,
@@ -847,6 +858,124 @@ function scopedBookings() {
 
 function calculationBookings(list = scopedBookings()) {
   return list.filter((booking) => !isExcludedBooking(booking));
+}
+
+// --- Guest CRM (improvement: repeat-guest detection + lightweight profiles) ---
+// Derived stats come straight from bookings; only notes/tags/blocklist/consent are stored
+// (in appSettings.guestProfiles, keyed by normalized phone or name — additive, cloud-synced).
+function guestKeyFor(booking) {
+  const phone = formatPhoneForWhatsapp(booking?.contact);
+  if (phone) return "p:" + phone;
+  const name = String(booking?.guest || "").trim().toLowerCase();
+  return name ? "n:" + name : "";
+}
+function guestProfile(key) {
+  return (appSettings.guestProfiles && appSettings.guestProfiles[key]) || {};
+}
+function setGuestProfile(key, patch) {
+  if (!key) return;
+  const next = { ...guestProfile(key), ...patch };
+  appSettings = { ...appSettings, guestProfiles: { ...(appSettings.guestProfiles || {}), [key]: next } };
+  saveAppSettings();
+}
+function guestStatsList(list = scopedBookings()) {
+  const map = new Map();
+  [...list].sort((a, b) => a.arrival.localeCompare(b.arrival)).forEach((b) => {
+    const key = guestKeyFor(b);
+    if (!key) return;
+    if (!map.has(key)) map.set(key, { key, name: b.guest, phone: formatPhoneForWhatsapp(b.contact), email: b.guestEmail || "", stays: 0, revenue: 0, nights: 0, firstStay: b.arrival, lastStay: b.arrival, channels: new Set() });
+    const g = map.get(key);
+    g.stays += 1;
+    g.revenue += isExcludedBooking(b) ? 0 : Number(b.revenue || 0);
+    g.nights += Number(b.nights || 0);
+    if (b.arrival < g.firstStay) g.firstStay = b.arrival;
+    if (b.arrival > g.lastStay) g.lastStay = b.arrival;
+    if (b.guest) g.name = b.guest;
+    if (!g.phone && formatPhoneForWhatsapp(b.contact)) g.phone = formatPhoneForWhatsapp(b.contact);
+    if (!g.email && b.guestEmail) g.email = b.guestEmail;
+    g.channels.add(b.channel);
+  });
+  return [...map.values()].map((g) => ({ ...g, channels: [...g.channels] }));
+}
+function guestStayTotal(booking, list = scopedBookings()) {
+  const key = guestKeyFor(booking);
+  if (!key) return 1;
+  return list.reduce((n, b) => n + (guestKeyFor(b) === key ? 1 : 0), 0);
+}
+function returningBadgeHtml(booking, list = scopedBookings()) {
+  const total = guestStayTotal(booking, list);
+  if (total <= 1) return "";
+  return `<span class="returning-badge" title="Returning guest — ${total} stays on record">★ ${total}× guest</span>`;
+}
+function blocklistBadgeHtml(booking) {
+  return guestProfile(guestKeyFor(booking)).blocklist ? `<span class="blocklist-badge" title="Flagged guest">⚑ flagged</span>` : "";
+}
+
+function renderGuests() {
+  const host = document.querySelector("#guestsList");
+  const summary = document.querySelector("#guestsSummary");
+  if (!host) return;
+  const search = (document.querySelector("#guestSearch")?.value || "").trim().toLowerCase();
+  const returningOnly = !!document.querySelector("#guestReturningOnly")?.checked;
+  let guests = guestStatsList().sort((a, b) => b.stays - a.stays || b.revenue - a.revenue || (a.name || "").localeCompare(b.name || ""));
+  const totalGuests = guests.length;
+  const returningCount = guests.filter((g) => g.stays > 1).length;
+  if (summary) {
+    const repeatRate = totalGuests ? Math.round((returningCount / totalGuests) * 100) : 0;
+    summary.innerHTML = `
+      <div class="guest-stat"><strong>${totalGuests}</strong><span>guests</span></div>
+      <div class="guest-stat"><strong>${returningCount}</strong><span>returning</span></div>
+      <div class="guest-stat"><strong>${repeatRate}%</strong><span>repeat rate</span></div>`;
+  }
+  if (returningOnly) guests = guests.filter((g) => g.stays > 1);
+  if (search) guests = guests.filter((g) => `${g.name} ${g.phone} ${g.email}`.toLowerCase().includes(search));
+  if (!guests.length) {
+    host.innerHTML = `<div class="today-empty">No guests match. Add bookings with a name or phone to build your guest book for ${escapeHtml(activeVillaKey())}.</div>`;
+    return;
+  }
+  host.innerHTML = guests
+    .map((g) => {
+      const p = guestProfile(g.key);
+      const tags = Array.isArray(p.tags) ? p.tags.join(", ") : p.tags || "";
+      return `
+      <article class="guest-card${p.blocklist ? " flagged" : ""}" data-guest-key="${escapeHtml(g.key)}">
+        <div class="guest-card-head">
+          <div class="guest-card-name">
+            <strong>${escapeHtml(g.name || "—")}</strong>
+            ${g.stays > 1 ? `<span class="returning-badge">★ ${g.stays}× guest</span>` : ""}
+            ${p.blocklist ? `<span class="blocklist-badge">⚑ flagged</span>` : ""}
+          </div>
+          ${g.phone ? `<button class="small-action wa-action" type="button" data-guest-wa="${escapeHtml(g.phone)}" title="Open WhatsApp chat">WhatsApp</button>` : ""}
+        </div>
+        <div class="guest-card-meta">
+          <span>${g.stays} stay${g.stays === 1 ? "" : "s"}</span>
+          <span>${g.nights} nights</span>
+          <span>LTV ${money(g.revenue)}</span>
+          <span>Last ${shortDate(g.lastStay)}</span>
+          <span>${escapeHtml(g.channels.join(" / "))}</span>
+          ${g.phone ? `<span>${escapeHtml(g.phone)}</span>` : `<span class="contact-missing">no phone</span>`}
+          ${g.email ? `<span>${escapeHtml(g.email)}</span>` : ""}
+        </div>
+        <div class="guest-card-edit">
+          <input type="text" data-guest-notes placeholder="Private notes (preferences…)" value="${escapeHtml(p.notes || "")}" aria-label="Notes for ${escapeHtml(g.name || "guest")}" />
+          <input type="text" data-guest-tags placeholder="Tags (family, pet…)" value="${escapeHtml(tags)}" aria-label="Tags" />
+          <label class="guest-toggle"><input type="checkbox" data-guest-blocklist ${p.blocklist ? "checked" : ""} /> Flag</label>
+          <label class="guest-toggle"><input type="checkbox" data-guest-consent ${p.consent ? "checked" : ""} /> Consent</label>
+        </div>
+      </article>`;
+    })
+    .join("");
+}
+
+// Compliance: Registration of Guests Act 1965 — exportable register of all stays.
+function exportGuestRegister() {
+  const rows = [["Guest name", "Phone", "Email", "Check-in", "Check-out", "Nights", "Villa", "Channel", "Confirmation code"]];
+  [...bookings]
+    .sort((a, b) => a.arrival.localeCompare(b.arrival))
+    .forEach((b) => {
+      rows.push([b.guest || "", b.contact || "", b.guestEmail || "", b.arrival || "", departureFor(b), b.nights || "", b.villa === "Windmill" ? "Windmill" : "Sunrise", b.channel || "", bookingConfirmationCode(b)]);
+    });
+  downloadCsv(`guest-register-${isoDate(new Date())}.csv`, rows);
 }
 
 function applyChannelDepositDefault(force = false) {
@@ -1363,6 +1492,7 @@ function setView(view) {
     calendar: "Monthly Calendar",
     dashboard: "Income Dashboard",
     bookings: "Bookings",
+    guests: "Guest Book",
     messages: "Guest Messages",
     documents: "Villa Documents",
     tax: "Tax Plan",
@@ -2039,19 +2169,41 @@ function scheduleCloudSave() {
   cloudSaveTimer = window.setTimeout(saveCloudSnapshot, 700);
 }
 
-async function saveCloudSnapshot() {
+async function saveCloudSnapshot(force = false) {
   if (!supabaseClient || !cloudUser) return false;
+  const stamp = new Date().toISOString();
+
+  // Optimistic concurrency: before a normal auto-save, check whether the row changed on
+  // another device since we last loaded/saved it. If so, HOLD the save instead of
+  // clobbering the whole dataset. "Sync cloud now" forces past this. Both timestamps come
+  // from PostgREST responses, so the comparison is exact (no format-mismatch false alarms).
+  if (cloudRecordId && !force && cloudKnownUpdatedAt) {
+    const { data: current, error: checkError } = await supabaseClient
+      .from("app_data")
+      .select("updated_at")
+      .eq("id", cloudRecordId)
+      .maybeSingle();
+    if (!checkError && current && current.updated_at && current.updated_at !== cloudKnownUpdatedAt) {
+      createRecoverySnapshot("Save held — data changed on another device");
+      setCloudStatus(
+        "error",
+        "Save paused — changed on another device",
+        "Another device updated your data, so this save was held to avoid overwriting it. Your edits are safe on this device. Reload to pull the other version, or click ‘Sync cloud now’ to force-save this one.",
+      );
+      return false;
+    }
+  }
+
   const payload = {
     user_id: cloudUser.id,
     data_type: CLOUD_DATA_TYPE,
     record_key: CLOUD_RECORD_KEY,
     data: allAppData(),
-    updated_at: new Date().toISOString(),
+    updated_at: stamp,
   };
-
   const request = cloudRecordId
-    ? supabaseClient.from("app_data").update(payload).eq("id", cloudRecordId).select("id").single()
-    : supabaseClient.from("app_data").insert(payload).select("id").single();
+    ? supabaseClient.from("app_data").update(payload).eq("id", cloudRecordId).select("id, updated_at").single()
+    : supabaseClient.from("app_data").insert(payload).select("id, updated_at").single();
 
   const { data, error } = await request;
   if (error) {
@@ -2059,7 +2211,8 @@ async function saveCloudSnapshot() {
     return false;
   }
   cloudRecordId = data?.id || cloudRecordId;
-  appSettings = { ...appSettings, lastCloudSyncAt: new Date().toISOString() };
+  cloudKnownUpdatedAt = data?.updated_at || stamp;
+  appSettings = { ...appSettings, lastCloudSyncAt: stamp };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
   setCloudStatus("connected", "Cloud storage connected", `Saved to Supabase at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`);
   return true;
@@ -2085,6 +2238,7 @@ async function loadCloudSnapshot() {
 
   if (data?.data) {
     cloudRecordId = data.id;
+    cloudKnownUpdatedAt = data.updated_at || "";
     if (incomingDataLooksSmaller(data.data)) {
       createRecoverySnapshot("Cloud load paused before overwrite");
       setCloudStatus(
@@ -2156,6 +2310,7 @@ function purgeLocalSensitiveData() {
   // wins the "is the incoming data smaller?" guard on the next load.
   cloudUser = null;
   cloudRecordId = "";
+  cloudKnownUpdatedAt = "";
   window.clearTimeout(cloudSaveTimer);
   try {
     [STORAGE_KEY, TAX_PLAN_KEY, DOCUMENTS_KEY, PROFIT_KEY, SETTINGS_KEY, RECOVERY_KEY, RECOVERY_SESSION_KEY].forEach((key) =>
@@ -2253,7 +2408,7 @@ async function syncCloudNow() {
     return;
   }
   setCloudStatus("syncing", "Saving cloud backup", "Sending your latest website data to Supabase.");
-  await saveCloudSnapshot();
+  await saveCloudSnapshot(true); // manual sync = force-push, overriding the optimistic-lock guard
 }
 
 async function restoreJsonFromInput(event, label = "backup file") {
@@ -2448,6 +2603,7 @@ function restoreAppData(data) {
           ...defaultAppSettings(),
           ...data.appSettings,
           activeVilla: data.appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise",
+          guestProfiles: { ...defaultAppSettings().guestProfiles, ...(data.appSettings.guestProfiles || {}) },
           dashboardMode: data.appSettings.dashboardMode === "annual" ? "annual" : "monthly",
           bookingMonthFilter: data.appSettings.bookingMonthFilter || defaultAppSettings().bookingMonthFilter,
           bookingColumns: { ...defaultAppSettings().bookingColumns, ...(data.appSettings.bookingColumns || {}) },
@@ -2704,6 +2860,18 @@ function reminderMessageTextForBooking(booking) {
   return applyTemplate(templateForVilla(villaOf(booking), "reminder"), templateValuesForBooking(booking));
 }
 
+function depositMessageTextForBooking(booking) {
+  return applyTemplate(templateForVilla(villaOf(booking), "deposit"), templateValuesForBooking(booking));
+}
+
+function midstayMessageTextForBooking(booking) {
+  return applyTemplate(templateForVilla(villaOf(booking), "midstay"), templateValuesForBooking(booking));
+}
+
+function reviewMessageTextForBooking(booking) {
+  return applyTemplate(templateForVilla(villaOf(booking), "review"), templateValuesForBooking(booking));
+}
+
 function quoteMessageText() {
   return applyTemplate(templateForVilla(activeVillaKey(), "quote"), templateValuesForQuote());
 }
@@ -2721,11 +2889,12 @@ function openWhatsappMessage(phoneValue, text) {
 
 function openWhatsappForBooking(booking, template) {
   const text =
-    template === "guide"
-      ? guestGuideMessageTextForBooking(booking)
-      : template === "reminder"
-        ? reminderMessageTextForBooking(booking)
-        : checkinMessageTextForBooking(booking);
+    template === "guide" ? guestGuideMessageTextForBooking(booking)
+    : template === "reminder" ? reminderMessageTextForBooking(booking)
+    : template === "deposit" ? depositMessageTextForBooking(booking)
+    : template === "midstay" ? midstayMessageTextForBooking(booking)
+    : template === "review" ? reviewMessageTextForBooking(booking)
+    : checkinMessageTextForBooking(booking);
   openWhatsappMessage(booking?.contact || "", text);
 }
 
@@ -3230,7 +3399,7 @@ function renderBookingsTable() {
         <tr>
           ${bookingCell("channel", channelBadgeFor(booking))}
           ${bookingCell("record", isExcludedBooking(booking) ? `<span class="channel-badge influencer">Record only</span>` : `<span class="channel-badge direct">Financial</span>`)}
-          ${bookingCell("guest", escapeHtml(booking.guest), "booking-guest-cell")}
+          ${bookingCell("guest", `${escapeHtml(booking.guest)} ${returningBadgeHtml(booking, bookings)}${blocklistBadgeHtml(booking)}`, "booking-guest-cell")}
           ${bookingCell("contact", formatPhoneForWhatsapp(booking.contact) ? escapeHtml(booking.contact) : `<span class="contact-missing" title="No WhatsApp number saved">⚠ no phone</span>`, "contact-cell")}
           ${bookingCell("prefix", `<strong>${prefixFor(booking.guest)}</strong>`)}
           ${bookingCell("arrival", shortDate(booking.arrival), "date-cell")}
@@ -3476,6 +3645,7 @@ function openBookingDialog(booking = null) {
   els.guestInput.value = booking?.guest || "";
   els.contactInput.value = booking?.contact || "";
   if (els.guestEmailInput) els.guestEmailInput.value = booking?.guestEmail || "";
+  if (els.incidentLogInput) els.incidentLogInput.value = booking?.incidentLog || "";
   if (els.villaInput) els.villaInput.value = booking ? (booking.villa === "Windmill" ? "Windmill" : "Sunrise") : (appSettings.activeVilla === "Windmill" ? "Windmill" : "Sunrise");
   if (els.statusInput) els.statusInput.value = booking?.status || (booking ? "confirmed" : "confirmed");
   els.excludeCalculationsInput.checked = Boolean(booking?.excludeFromCalculations);
@@ -4221,19 +4391,37 @@ function setSelectedMonth(monthValue, syncBookingFilter = true) {
 }
 
 // Improvement #1: guests arriving soon who still need their check-in info OR a phone number.
-function messagesToSendToday(daysAhead = 7) {
+// Typed Send-today items across the guest lifecycle. Each type ages out naturally
+// (no extra stored flags) so the list stays a clean "what to message right now".
+function sendTodayItems() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const horizon = addDays(today, daysAhead);
-  return scopedBookings()
-    .filter((b) => {
-      const arr = dateObj(b.arrival);
-      if (arr < today || arr > horizon) return false;
-      const needsPhone = !formatPhoneForWhatsapp(b.contact);
-      const needsCheckin = !b.checkinSentAt;
-      return needsPhone || needsCheckin;
-    })
-    .sort((a, b) => a.arrival.localeCompare(b.arrival));
+  const todayIso = isoDate(today);
+  const horizon7 = addDays(today, 7);
+  const items = [];
+  scopedBookings().forEach((b) => {
+    const arr = dateObj(b.arrival);
+    const dep = dateObj(departureFor(b));
+    const hasPhone = !!formatPhoneForWhatsapp(b.contact);
+    // 1) Pre-arrival check-in info (≤7 days out, not yet sent OR phone missing)
+    if (arr >= today && arr <= horizon7 && (!b.checkinSentAt || !hasPhone)) {
+      items.push({ booking: b, type: "checkin", label: `arrives ${shortDate(b.arrival)} · check-in info` });
+    }
+    // 2) Deposit not received (current/future booking with an expected deposit)
+    if (dep >= today && Number(b.depositAmount || 0) > 0 && !b.depositPaid) {
+      items.push({ booking: b, type: "deposit", label: `arrives ${shortDate(b.arrival)} · deposit ${money(b.depositAmount)} unpaid` });
+    }
+    // 3) Mid-stay check-in (stay ≥3 nights, the day after arrival only)
+    if (Number(b.nights || 0) >= 3 && isoDate(addDays(arr, 1)) === todayIso) {
+      items.push({ booking: b, type: "midstay", label: `in-house · mid-stay check` });
+    }
+    // 4) Review request (departed today or in the last 2 days) — optional, not nagged beyond the window
+    if (dep <= today && dep >= addDays(today, -2)) {
+      items.push({ booking: b, type: "review", label: `checked out ${shortDate(departureFor(b))} · ask for review` });
+    }
+  });
+  const order = { checkin: 0, deposit: 1, midstay: 2, review: 3 };
+  return items.sort((a, b) => (order[a.type] - order[b.type]) || a.booking.arrival.localeCompare(b.booking.arrival));
 }
 
 // Improvement #3: open / gap nights in the active villa's calendar for the next window.
@@ -4306,7 +4494,7 @@ function renderToday() {
     <div class="today-row">
       <span class="today-avatar">${prefixFor(b.guest)}</span>
       <div class="today-row-main">
-        <strong>${escapeHtml(b.guest)}</strong>
+        <strong>${escapeHtml(b.guest)} ${returningBadgeHtml(b, bookings)}${blocklistBadgeHtml(b)}</strong>
         <span>${b.villa === "Windmill" ? "Windmill" : "Sunrise"} · ${meta}</span>
       </div>
       ${channelBadgeFor(b)}
@@ -4319,25 +4507,26 @@ function renderToday() {
       <div class="today-card-body">${rowsHtml || emptyMsg(emptyText)}</div>
     </section>`;
 
-  // --- Improvement #1 + #2: "Send today" with inline phone capture ---
+  // --- "Send today": typed lifecycle nudges with inline phone capture ---
   const fmtN = (n) => `${n} night${Number(n) === 1 ? "" : "s"}`;
-  const sendList = messagesToSendToday(7);
+  const sendList = sendTodayItems();
+  const sendBtnLabel = { checkin: "Send check-in", deposit: "Request deposit", midstay: "Mid-stay check", review: "Ask for review" };
   const sendRows = sendList
-    .map((b) => {
+    .map(({ booking: b, type, label }) => {
       const villa = b.villa === "Windmill" ? "Windmill" : "Sunrise";
       const hasPhone = !!formatPhoneForWhatsapp(b.contact);
       const action = hasPhone
-        ? `<button class="small-action wa-action" type="button" data-send-checkin="${b.id}">${b.checkinSentAt ? "Resend check-in" : "Send check-in"}</button>`
+        ? `<button class="small-action wa-action" type="button" data-send="${type}" data-send-id="${b.id}">${type === "checkin" && b.checkinSentAt ? "Resend check-in" : sendBtnLabel[type]}</button>`
         : `<div class="send-phone">
              <input type="tel" inputmode="tel" placeholder="+60 12-345 6789" data-contact-input="${b.id}" aria-label="WhatsApp number for ${escapeHtml(b.guest)}" />
              <button class="small-action" type="button" data-set-contact="${b.id}">Save</button>
            </div>`;
       return `
-        <div class="today-row send-row">
+        <div class="today-row send-row send-${type}">
           <span class="today-avatar">${prefixFor(b.guest)}</span>
           <div class="today-row-main">
-            <strong>${escapeHtml(b.guest)}</strong>
-            <span>${villa} · arrives ${shortDate(b.arrival)} · ${fmtN(b.nights)}${hasPhone ? "" : " · <em>needs WhatsApp number</em>"}</span>
+            <strong>${escapeHtml(b.guest)} ${returningBadgeHtml(b, bookings)}${blocklistBadgeHtml(b)}</strong>
+            <span>${villa} · ${label}${hasPhone ? "" : " · <em>needs WhatsApp number</em>"}</span>
           </div>
           ${action}
         </div>`;
@@ -4346,7 +4535,7 @@ function renderToday() {
   const sendCard = `
     <section class="today-card today-send">
       <div class="today-card-head"><h3>Send today</h3><span class="count-pill">${sendList.length}</span></div>
-      <div class="today-card-body">${sendRows || emptyMsg("No check-in messages waiting.")}</div>
+      <div class="today-card-body">${sendRows || emptyMsg("Nothing to send right now.")}</div>
     </section>`;
 
   // --- Improvement #3: open / gap nights ahead ---
@@ -4417,6 +4606,7 @@ function renderAll() {
   renderDetails();
   renderDashboard();
   renderBookingsTable();
+  renderGuests();
   renderMessageGenerator();
   renderDataHealth();
   renderDocuments();
@@ -4551,6 +4741,7 @@ els.form.addEventListener("submit", (event) => {
     guestEmail: els.guestEmailInput?.value.trim() || "",
     checkinSentAt: existing?.checkinSentAt ?? null,
     reminderSentAt: existing?.reminderSentAt ?? null,
+    incidentLog: els.incidentLogInput?.value.trim() ?? (existing?.incidentLog || ""),
   };
 
   bookings = bookings.some((booking) => booking.id === id)
@@ -4589,16 +4780,18 @@ els.bookingRows.addEventListener("click", (event) => {
 // Improvement #1 + #2: "Send today" card — one-click check-in send + inline phone capture.
 const todayContentEl = document.querySelector("#todayContent");
 todayContentEl?.addEventListener("click", (event) => {
-  const sendBtn = event.target.closest("[data-send-checkin]");
+  const sendBtn = event.target.closest("[data-send]");
   if (sendBtn) {
-    const booking = bookings.find((b) => b.id === sendBtn.dataset.sendCheckin);
+    const type = sendBtn.dataset.send;
+    const booking = bookings.find((b) => b.id === sendBtn.dataset.sendId);
     if (booking) {
       try {
-        openWhatsappForBooking(booking, "checkin");
+        openWhatsappForBooking(booking, type);
       } catch (_) {
-        /* popup blocked in some browsers — still record it as messaged below */
+        /* popup blocked in some browsers — still record below */
       }
-      markBookingMessaged(booking.id, "checkin");
+      if (type === "checkin") markBookingMessaged(booking.id, "checkin");
+      else renderToday();
     }
     return;
   }
@@ -4661,6 +4854,25 @@ els.downloadQuickView.addEventListener("click", () => {
 document.querySelector("#exportJson").addEventListener("click", () => {
   downloadBackup();
 });
+
+// Guest Book (CRM) wiring
+const guestsListEl = document.querySelector("#guestsList");
+guestsListEl?.addEventListener("change", (event) => {
+  const card = event.target.closest("[data-guest-key]");
+  if (!card) return;
+  const key = card.dataset.guestKey;
+  if (event.target.matches("[data-guest-notes]")) setGuestProfile(key, { notes: event.target.value });
+  else if (event.target.matches("[data-guest-tags]")) setGuestProfile(key, { tags: event.target.value.split(",").map((s) => s.trim()).filter(Boolean) });
+  else if (event.target.matches("[data-guest-blocklist]")) { setGuestProfile(key, { blocklist: event.target.checked }); renderGuests(); }
+  else if (event.target.matches("[data-guest-consent]")) setGuestProfile(key, { consent: event.target.checked });
+});
+guestsListEl?.addEventListener("click", (event) => {
+  const wa = event.target.closest("[data-guest-wa]");
+  if (wa) openWhatsappMessage(wa.dataset.guestWa, "");
+});
+document.querySelector("#guestSearch")?.addEventListener("input", renderGuests);
+document.querySelector("#guestReturningOnly")?.addEventListener("change", renderGuests);
+document.querySelector("#exportGuestRegister")?.addEventListener("click", exportGuestRegister);
 
 function csvEscape(value) {
   const text = String(value ?? "");
