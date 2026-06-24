@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-12" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-13" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -708,19 +708,19 @@
                 <thead>
                   <tr>
                     <th data-col="channel">Channel</th>
-                    <th data-col="record">Record Type</th>
+                    <th data-col="record" title="Record type">Type</th>
                     <th data-col="guest">Guest</th>
                     <th data-col="contact">Contact</th>
                     <th data-col="prefix">Prefix</th>
                     <th data-col="arrival">Arrival</th>
                     <th data-col="nights">Nights</th>
-                    <th data-col="revenue">Accommodation Fees</th>
-                    <th data-col="deposit">Damage Deposit</th>
-                    <th data-col="total">Total to Receive</th>
-                    <th data-col="received">Received</th>
-                    <th data-col="full">Full Received</th>
+                    <th data-col="revenue" title="Accommodation fees">Fees</th>
+                    <th data-col="deposit" title="Damage deposit">Deposit</th>
+                    <th data-col="total" title="Total to receive">Total Due</th>
+                    <th data-col="received" title="Amount received">Paid</th>
+                    <th data-col="full" title="Fully received? (yes/no)">Paid?</th>
                     <th data-col="balance">Balance</th>
-                    <th data-col="refund">Refunded</th>
+                    <th data-col="refund" title="Deposit refunded?">Refund?</th>
                     <th data-col="actions"></th>
                   </tr>
                 </thead>
@@ -809,7 +809,7 @@
                     <input id="messageGuestName" placeholder="Guest name" />
                   </label>
                   <label>Guest WhatsApp Number
-                    <input id="messagePhone" placeholder="60123456789" />
+                    <input id="messagePhone" type="tel" inputmode="tel" placeholder="60123456789" />
                   </label>
                   <label>Confirmation Code
                     <input id="messageSecurityCode" readonly placeholder="Auto generated" />
@@ -862,7 +862,7 @@
                         <input id="quoteGuestName" placeholder="Eva" />
                       </label>
                       <label>Guest WhatsApp Number
-                        <input id="quotePhone" placeholder="60123456789" />
+                        <input id="quotePhone" type="tel" inputmode="tel" placeholder="60123456789" />
                       </label>
                     </div>
                   </div>
@@ -1511,7 +1511,7 @@
                 Influencer / complimentary stay (record only, exclude from calculations)
               </label>
               <label>Guest Contact (WhatsApp)
-                <input id="contactInput" placeholder="60123456789" />
+                <input id="contactInput" type="tel" inputmode="tel" placeholder="60123456789" />
               </label>
               <label>Guest Email
                 <input id="guestEmailInput" type="email" placeholder="guest@email.com" />
@@ -1581,6 +1581,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-12"></script>
+    <script src="./app.js?v=20260624-13"></script>
   </body>
 </html>

@@ -428,6 +428,7 @@ function normalizeBooking(booking) {
     checkinSentAt: booking.checkinSentAt || null,
     reminderSentAt: booking.reminderSentAt || null,
     incidentLog: String(booking.incidentLog || ""),
+    sentLog: booking.sentLog && typeof booking.sentLog === "object" ? booking.sentLog : {}, // { type: 'YYYY-MM-DD' } — which nudges were sent today
   };
 }
 
@@ -1208,6 +1209,27 @@ function markBookingMessaged(id, field) {
   renderToday();
 }
 
+// Brief visual "saved" confirmation on a field that persists silently (reuses the calm
+// feedback idiom rather than a toast framework). Gated behind prefers-reduced-motion in CSS.
+function flashSaved(el) {
+  if (!el) return;
+  el.classList.add("just-saved");
+  window.setTimeout(() => el.classList.remove("just-saved"), 1100);
+}
+
+// Record that a Send-today nudge of a given type was sent today, so the list reflects it
+// (check-in/mid-stay/review self-clear; deposit stays until paid but shows "requested").
+function markNudgeSent(id, type) {
+  const stamp = isoDate(new Date());
+  bookings = bookings.map((booking) =>
+    booking.id === id
+      ? { ...booking, sentLog: { ...(booking.sentLog || {}), [type]: stamp }, ...(type === "checkin" ? { checkinSentAt: stamp } : {}) }
+      : booking,
+  );
+  saveBookings();
+  renderToday();
+}
+
 function currentYear() {
   return new Date().getFullYear();
 }
@@ -1651,7 +1673,9 @@ function renderCalendar() {
     booked.slice(0, 3).forEach((booking) => {
       const chip = document.createElement("div");
       const label = shouldShowStayLabel(booking, dayIso);
-      chip.className = `booking-chip stay-segment ${isExcludedBooking(booking) ? "influencer" : booking.channel.toLowerCase()} ${staySegmentClass(booking, dayIso)} ${label ? "" : "label-hidden"}`;
+      chip.className = `booking-chip stay-segment clickable ${isExcludedBooking(booking) ? "influencer" : booking.channel.toLowerCase()} ${staySegmentClass(booking, dayIso)} ${label ? "" : "label-hidden"}`;
+      chip.dataset.bookingId = booking.id;
+      chip.title = `Edit ${booking.guest}'s booking`;
       chip.innerHTML = label
         ? `<strong>${escapeHtml(booking.guest)}</strong><span>${isExcludedBooking(booking) ? "Influencer" : escapeHtml(booking.channel)} · ${booking.nights} nights</span>`
         : `<span aria-label="${escapeHtml(booking.guest)} ${escapeHtml(booking.channel)} booking">&nbsp;</span>`;
@@ -4495,12 +4519,12 @@ function sendTodayItems() {
     if (dep >= today && Number(b.depositAmount || 0) > 0 && !b.depositPaid) {
       items.push({ booking: b, type: "deposit", label: `arrives ${shortDate(b.arrival)} · deposit ${money(b.depositAmount)} unpaid` });
     }
-    // 3) Mid-stay check-in (stay ≥3 nights, the day after arrival only)
-    if (Number(b.nights || 0) >= 3 && isoDate(addDays(arr, 1)) === todayIso) {
+    // 3) Mid-stay check-in (stay ≥3 nights, the day after arrival only) — clears once sent today
+    if (Number(b.nights || 0) >= 3 && isoDate(addDays(arr, 1)) === todayIso && b.sentLog?.midstay !== todayIso) {
       items.push({ booking: b, type: "midstay", label: `in-house · mid-stay check` });
     }
-    // 4) Review request (departed today or in the last 2 days) — optional, not nagged beyond the window
-    if (dep <= today && dep >= addDays(today, -2)) {
+    // 4) Review request (departed today or in the last 2 days) — clears once sent today; not nagged beyond the window
+    if (dep <= today && dep >= addDays(today, -2) && b.sentLog?.review !== todayIso) {
       items.push({ booking: b, type: "review", label: `checked out ${shortDate(departureFor(b))} · ask for review` });
     }
   });
@@ -4599,14 +4623,16 @@ function renderToday() {
     .map(({ booking: b, type, label }) => {
       const villa = b.villa === "Windmill" ? "Windmill" : "Sunrise";
       const hasPhone = !!formatPhoneForWhatsapp(b.contact);
+      const sentToday = !!(b.sentLog && b.sentLog[type] === todayIso);
+      const btnText = sentToday ? "✓ Sent · resend" : type === "checkin" && b.checkinSentAt ? "Resend check-in" : sendBtnLabel[type];
       const action = hasPhone
-        ? `<button class="small-action wa-action" type="button" data-send="${type}" data-send-id="${b.id}">${type === "checkin" && b.checkinSentAt ? "Resend check-in" : sendBtnLabel[type]}</button>`
+        ? `<button class="small-action wa-action${sentToday ? " sent" : ""}" type="button" data-send="${type}" data-send-id="${b.id}">${btnText}</button>`
         : `<div class="send-phone">
              <input type="tel" inputmode="tel" placeholder="+60 12-345 6789" data-contact-input="${b.id}" aria-label="WhatsApp number for ${escapeHtml(b.guest)}" />
              <button class="small-action" type="button" data-set-contact="${b.id}">Save</button>
            </div>`;
       return `
-        <div class="today-row send-row send-${type}">
+        <div class="today-row send-row send-${type}${sentToday ? " sent" : ""}">
           <span class="today-avatar">${prefixFor(b.guest)}</span>
           <div class="today-row-main">
             <strong>${escapeHtml(b.guest)} ${returningBadgeHtml(b, bookings)}${blocklistBadgeHtml(b)}</strong>
@@ -4805,6 +4831,14 @@ els.form.addEventListener("submit", (event) => {
   event.preventDefault();
   const id = safeRecordId(els.bookingId.value);
   const excluded = els.excludeCalculationsInput.checked;
+  // Guard the costliest data-entry mistake: a paying booking saved at RM 0 silently
+  // corrupts every downstream total. Confirm before allowing it (skip for complimentary).
+  if (!excluded && Number(els.revenueInput.value || 0) === 0) {
+    if (!window.confirm("Accommodation fee is RM 0 for this booking. Save it as a zero-revenue booking?")) {
+      els.revenueInput.focus();
+      return;
+    }
+  }
   const existing = bookings.find((booking) => booking.id === id);
   const nextBooking = {
     id,
@@ -4837,6 +4871,14 @@ els.form.addEventListener("submit", (event) => {
   saveBookings();
   els.dialog.close();
   renderAll();
+});
+
+// Calendar: a manual booking chip opens that booking (it looked clickable but was inert).
+els.calendarGrid?.addEventListener("click", (event) => {
+  const chip = event.target.closest(".booking-chip.clickable");
+  if (!chip || !chip.dataset.bookingId) return;
+  const booking = bookings.find((b) => b.id === chip.dataset.bookingId);
+  if (booking) openBookingDialog(booking);
 });
 
 els.bookingRows.addEventListener("click", (event) => {
@@ -4875,8 +4917,7 @@ todayContentEl?.addEventListener("click", (event) => {
       } catch (_) {
         /* popup blocked in some browsers — still record below */
       }
-      if (type === "checkin") markBookingMessaged(booking.id, "checkin");
-      else renderToday();
+      markNudgeSent(booking.id, type);
     }
     return;
   }
@@ -4946,8 +4987,8 @@ guestsListEl?.addEventListener("change", (event) => {
   const card = event.target.closest("[data-guest-key]");
   if (!card) return;
   const key = card.dataset.guestKey;
-  if (event.target.matches("[data-guest-notes]")) setGuestProfile(key, { notes: event.target.value });
-  else if (event.target.matches("[data-guest-tags]")) setGuestProfile(key, { tags: event.target.value.split(",").map((s) => s.trim()).filter(Boolean) });
+  if (event.target.matches("[data-guest-notes]")) { setGuestProfile(key, { notes: event.target.value }); flashSaved(event.target); }
+  else if (event.target.matches("[data-guest-tags]")) { setGuestProfile(key, { tags: event.target.value.split(",").map((s) => s.trim()).filter(Boolean) }); flashSaved(event.target); }
   else if (event.target.matches("[data-guest-blocklist]")) { setGuestProfile(key, { blocklist: event.target.checked }); renderGuests(); }
   else if (event.target.matches("[data-guest-consent]")) setGuestProfile(key, { consent: event.target.checked });
 });
@@ -5500,18 +5541,24 @@ els.exportTaxExpensesPdf?.addEventListener("click", exportTaxExpensesPdf);
 
 // ---------------- Theme picker (8 accents, persisted in appSettings.accent -> cloud) ----------------
 const SV_THEMES = [
-  { name: "Sage", hex: "#4B6B5B" },
-  { name: "Meadow", hex: "#3FAE7C" },
-  { name: "Teal", hex: "#2FAFA3" },
-  { name: "Sky", hex: "#4C9FD6" },
-  { name: "Lavender", hex: "#8A7BD8" },
-  { name: "Blossom", hex: "#E175A4" },
-  { name: "Coral", hex: "#F26D5B" },
-  { name: "Honey", hex: "#E0A23C" },
+  // `ink` = a darkened accent that stays AA-readable (>=4.5:1 on white) for small text.
+  { name: "Sage", hex: "#4B6B5B", ink: "#3E5A4C" },
+  { name: "Meadow", hex: "#3FAE7C", ink: "#1F7048" },
+  { name: "Teal", hex: "#2FAFA3", ink: "#1B6F67" },
+  { name: "Sky", hex: "#4C9FD6", ink: "#2A6A99" },
+  { name: "Lavender", hex: "#8A7BD8", ink: "#574BA0" },
+  { name: "Blossom", hex: "#E175A4", ink: "#A83C68" },
+  { name: "Coral", hex: "#F26D5B", ink: "#B23F2E" },
+  { name: "Honey", hex: "#E0A23C", ink: "#7E5A12" },
 ];
 
 function svActiveAccent() {
   return (appSettings && typeof appSettings.accent === "string" && appSettings.accent) || "#4B6B5B";
+}
+function svActiveInk() {
+  const a = svActiveAccent().toLowerCase();
+  const theme = SV_THEMES.find((t) => t.hex.toLowerCase() === a);
+  return (theme && theme.ink) || a; // custom accent (no theme match) falls back to the raw accent
 }
 
 function applyAccent() {
@@ -5520,6 +5567,7 @@ function applyAccent() {
   root.style.setProperty("--accent", a);
   root.style.setProperty("--accent-soft", a + "22");
   root.style.setProperty("--cbc", a);
+  root.style.setProperty("--accent-ink", svActiveInk());
   // faint accent wash over the warm page base (matches the reference prototypes)
   document.body.style.background = `linear-gradient(${a}12, ${a}12), #F8F8F5`;
   const dot = document.querySelector(".theme-swatch-dot");

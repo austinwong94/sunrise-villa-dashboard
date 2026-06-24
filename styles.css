@@ -22,10 +22,19 @@
   --muted: #6E6E68; /* darkened from #8C8C84 to meet WCAG AA 4.5:1 on white for small secondary text */
   --faint: #B7B7AE;
 
-  /* Accent (themeable at runtime — JS overrides --accent / --accent-soft / --cbc) */
+  /* Accent (themeable at runtime — JS overrides --accent / --accent-soft / --cbc / --accent-ink) */
   --accent: #4B6B5B;
   --accent-soft: rgba(75, 107, 91, .13);
   --cbc: var(--accent);
+  --accent-ink: #3E5A4C; /* darkened accent for SMALL TEXT only — kept AA on white per theme by applyAccent() */
+
+  /* Fixed semantic colors — must NOT follow the swappable accent, or a theme choice
+     would recolor the channel signal / make "data is safe" look like an error. */
+  --direct: #2F7D6E;       /* Direct channel — fixed teal-green */
+  --direct-bg: #E4F0EC;
+  --direct-text: #1F6657;
+  --ok: #277049;           /* positive / connected / safe — fixed green (AA on its soft bg) */
+  --ok-soft: #E6F3EC;
 
   /* Status */
   --due: #B9544C;
@@ -478,8 +487,10 @@ thead th {
   font-weight: 600;
   letter-spacing: .02em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 tbody td {
@@ -557,8 +568,8 @@ tbody tr:hover { background: var(--row-hover); }
   white-space: nowrap;
 }
 .channel-badge.direct {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--direct-bg);
+  color: var(--direct-text);
 }
 .channel-badge.airbnb {
   background: var(--airbnb-bg);
@@ -912,13 +923,13 @@ details summary::marker { content: ""; }
 .nav-button > span[aria-hidden] {
   width: 20px; flex: none; text-align: center; font-size: 15px; line-height: 1;
 }
-.nav-button.active { background: var(--accent-soft); color: var(--accent); }
+.nav-button.active { background: var(--accent-soft); color: var(--accent-ink); }
 .nav-button.active::before {
   content: ""; position: absolute; left: 0; top: 50%;
   transform: translateY(-50%);
   width: 3px; height: 20px; border-radius: 0 3px 3px 0; background: var(--accent);
 }
-.nav-button.active:hover { background: var(--accent-soft); color: var(--accent); }
+.nav-button.active:hover { background: var(--accent-soft); color: var(--accent-ink); }
 
 /* ============================================================
    DESKTOP STATE MACHINE — scoped so it cannot reach <=760px
@@ -1073,9 +1084,9 @@ details summary::marker { content: ""; }
 .month-button.active {
   border-color: transparent;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
-.month-button.active span:last-child { color: var(--accent); }
+.month-button.active span:last-child { color: var(--accent-ink); }
 
 /* The prev/next icon-buttons flanking the panel inherit foundation .icon-button.
    Give them a slightly rounder, sidebar-tuned look. */
@@ -1411,12 +1422,12 @@ details summary::marker { content: ""; }
 
 /* status variants (JS sets data-status on #dataHealthStatus) */
 #dataHealthStatus[data-status="connected"] {
-  background: var(--accent-soft);
+  background: var(--ok-soft);
   border-color: transparent;
-  color: var(--accent);
+  color: var(--ok);
 }
-#dataHealthStatus[data-status="connected"]::before { background: var(--accent); }
-#dataHealthStatus[data-status="connected"] strong { color: var(--accent); }
+#dataHealthStatus[data-status="connected"]::before { background: var(--ok); }
+#dataHealthStatus[data-status="connected"] strong { color: var(--ok); }
 
 #dataHealthStatus[data-status="syncing"] {
   background: var(--pend-soft);
@@ -2012,6 +2023,8 @@ details summary::marker { content: ""; }
   white-space: nowrap;
   overflow: hidden;
 }
+#calendarView .booking-chip.clickable { cursor: pointer; transition: filter .12s ease, box-shadow .12s ease; }
+#calendarView .booking-chip.clickable:hover { filter: brightness(.96); box-shadow: 0 0 0 1.5px var(--accent-soft) inset; }
 #calendarView .booking-chip strong {
   font-weight: 600;
   overflow: hidden;
@@ -2044,8 +2057,8 @@ details summary::marker { content: ""; }
   position: relative;
 }
 #calendarView .stay-segment.direct {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--direct-bg);
+  color: var(--direct-text);
 }
 #calendarView .stay-segment.airbnb {
   background: var(--airbnb-bg);
@@ -3104,7 +3117,7 @@ details summary::marker { content: ""; }
 #bookingsView .bookings-table thead th[data-col="arrival"],
 #bookingsView .bookings-table thead th[data-col="nights"],
 #bookingsView .bookings-table thead th[data-col="total"] { cursor: pointer; }
-#bookingsView .bookings-table thead th[aria-sort] { color: var(--accent); }
+#bookingsView .bookings-table thead th[aria-sort] { color: var(--accent-ink); }
 
 /* ---------- BODY: comfortable rows ---------- */
 #bookingsView .bookings-table tbody td {
@@ -4830,9 +4843,13 @@ dialog#bookingDialog::backdrop {
     z-index: auto;
   }
   .sidebar .nav-tabs {
+    display: flex; /* base rule is display:grid — must override or flex props below are inert */
     flex-direction: row;
     flex-wrap: wrap;
     gap: 6px;
+  }
+  .sidebar .nav-button {
+    flex: 0 0 auto; /* size to content so buttons wrap into compact rows, not full-width stacks */
   }
   /* The month switcher + payment snapshot live inside the views on small screens */
   .sidebar .month-switcher,
@@ -5148,8 +5165,8 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  overflow: hidden;          /* clip rather than spill the page when many columns are on */
-  text-overflow: clip;
+  overflow: hidden;
+  text-overflow: ellipsis;   /* ellipsis, never clip — a chopped "RM 4,200"→"RM 4,20" reads as a wrong number */
 }
 
 /* per-column widths (fixed layout reads these off header + first row) */
@@ -5499,7 +5516,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #todayView .today-card-body { padding: 2px 14px 10px; display: flex; flex-direction: column; }
 #todayView .today-row { display: flex; align-items: center; gap: 11px; padding: 10px 6px; }
 #todayView .today-row + .today-row { border-top: 1px solid var(--line); }
-#todayView .today-avatar { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 700; }
+#todayView .today-avatar { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--accent-soft); color: var(--accent-ink); font-size: 10.5px; font-weight: 700; }
 #todayView .today-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 #todayView .today-row-main strong { font-size: 13.5px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #todayView .today-row-main span { font-size: 11.5px; color: var(--muted); }
@@ -5533,7 +5550,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 /* Villa switch (Sunrise ⇄ Windmill) */
 .villa-switch { display: inline-flex; background: var(--line, #ece7dd); border-radius: 10px; padding: 3px; gap: 2px; }
 .villa-tab { border: none; background: transparent; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted, #8a8275); cursor: pointer; }
-.villa-tab.active { background: #fff; color: var(--accent, #e8913a); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10); }
+.villa-tab.active { background: #fff; color: var(--accent-ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10); }
 
 /* Paste-to-import box in the booking dialog */
 .airbnb-import-box { border: 1px dashed var(--line, #d9d3c7); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; background: #fdf6ee; }
@@ -5574,8 +5591,17 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 /* Bookings table: "no phone" badge */
 .bookings-table .contact-missing { color: var(--due, #c0392b); font-size: 12px; font-weight: 600; white-space: nowrap; }
 
+/* Save-confirmation flash on fields that persist silently (guest notes/tags) */
+@keyframes savedFlash { 0%, 55% { box-shadow: 0 0 0 3px var(--ok-soft); border-color: var(--ok); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.just-saved { animation: savedFlash 1.1s ease; }
+@media (prefers-reduced-motion: reduce) { .just-saved { animation: none; } }
+
+/* Send-today: a nudge already sent today reads as done */
+#todayView .send-row.sent { opacity: .72; }
+.small-action.wa-action.sent { color: var(--ok); border-color: var(--ok-soft); background: var(--ok-soft); }
+
 /* Returning-guest + flagged badges (Guest CRM) */
-.returning-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--accent, #c97920); background: var(--accent-soft, #fbe6d2); padding: 1px 7px; border-radius: var(--r-pill, 999px); vertical-align: middle; white-space: nowrap; }
+.returning-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--accent-ink); background: var(--accent-soft); padding: 1px 7px; border-radius: var(--r-pill, 999px); vertical-align: middle; white-space: nowrap; }
 .blocklist-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--due, #c0392b); background: var(--due-soft, #fbe3e0); padding: 1px 7px; border-radius: var(--r-pill, 999px); vertical-align: middle; white-space: nowrap; }
 
 /* Guest Book (CRM) view */
