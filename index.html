@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-18" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-19" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -325,7 +325,7 @@
         </header>
 
         <section class="data-health-panel" aria-label="Website data health">
-          <span class="health-pill" id="dataHealthStatus">Cloud: checking</span>
+          <span class="health-pill" id="dataHealthStatus" role="status" aria-live="polite">Cloud: checking</span>
           <span class="health-pill secondary" id="dataHealthLastSync">Last synced: -</span>
           <span class="health-pill secondary" id="dataHealthBackup">JSON export: not yet</span>
           <span class="health-pill secondary" id="dataHealthRecords">0 bookings saved</span>
@@ -756,7 +756,7 @@
               </div>
               <button class="primary-button" id="previewGuidebook" type="button">Preview / Print guide</button>
             </div>
-            <p class="guide-help">Fill this in once per villa. Use <strong>Preview / Print guide</strong> to open a clean page you can save as PDF and share, or screenshot into WhatsApp. Switch the villa tab at the top to edit the other villa.</p>
+            <p class="guide-help">Fill this in once per villa. Use <strong>Preview / Print guide</strong> to open a clean page you can save as PDF and share, or screenshot into WhatsApp. Switch the villa tab at the top to edit the other villa. <strong>These facts also ground the AI reply drafter on the Messages tab.</strong></p>
             <div class="guide-form">
               <div class="guide-grid two">
                 <label>WiFi network<input type="text" data-guide="wifiName" placeholder="SunriseVilla_5G" /></label>
@@ -775,8 +775,8 @@
         <section class="view message-mode-quote" id="messagesView" aria-labelledby="pageTitle">
           <section class="table-panel message-panel">
             <div class="message-flow-tabs" role="tablist" aria-label="Message workflow">
-              <button class="message-flow-tab active" type="button" data-message-flow="quote">Quick Quotation</button>
-              <button class="message-flow-tab" type="button" data-message-flow="checkin">Check-in Flow</button>
+              <button class="message-flow-tab active" type="button" role="tab" data-message-flow="quote">Quick Quotation</button>
+              <button class="message-flow-tab" type="button" role="tab" data-message-flow="checkin">Check-in Flow</button>
             </div>
 
             <div class="message-layout">
@@ -1055,6 +1055,9 @@
                     <h3>Guest Details</h3>
                   </div>
                 </div>
+                <label class="wide-field">Prefill from a booking <span class="form-hint">(optional — copies guest, dates, nights, fee, deposit)</span>
+                  <select id="docFromBooking"><option value="">— Start blank —</option></select>
+                </label>
                 <div class="form-grid two-col">
                   <label>Guest / Customer Name
                     <input id="docGuestName" required placeholder="Example: Michelle Tan" />
@@ -1179,8 +1182,8 @@
 
         <section class="view" id="taxView" aria-labelledby="pageTitle">
           <div class="message-flow-tabs tax-inner-tabs" role="tablist" aria-label="Tax workspace">
-            <button class="message-flow-tab active" type="button" data-tax-inner-tab="plan">Tax Plan</button>
-            <button class="message-flow-tab" type="button" data-tax-inner-tab="expenses">Expense Records</button>
+            <button class="message-flow-tab active" type="button" role="tab" data-tax-inner-tab="plan">Tax Plan</button>
+            <button class="message-flow-tab" type="button" role="tab" data-tax-inner-tab="expenses">Expense Records</button>
           </div>
 
           <div class="tax-inner-panel active" data-tax-inner-panel="plan">
@@ -1595,6 +1598,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-18"></script>
+    <script src="./app.js?v=20260624-19"></script>
   </body>
 </html>

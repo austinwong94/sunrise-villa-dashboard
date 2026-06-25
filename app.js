@@ -328,6 +328,7 @@ const els = {
   docNights: document.querySelector("#docNights"),
   docAccommodationFee: document.querySelector("#docAccommodationFee"),
   docDepositAmount: document.querySelector("#docDepositAmount"),
+  docFromBooking: document.querySelector("#docFromBooking"),
   docRemarks: document.querySelector("#docRemarks"),
   receiptPaymentSection: document.querySelector("#receiptPaymentSection"),
   paymentRows: document.querySelector("#paymentRows"),
@@ -960,7 +961,7 @@ function renderGuests() {
             ${g.stays > 1 ? `<span class="returning-badge">★ ${g.stays}× guest</span>` : ""}
             ${p.blocklist ? `<span class="blocklist-badge">⚑ flagged</span>` : ""}
           </div>
-          ${g.phone ? `<button class="small-action wa-action" type="button" data-guest-wa="${escapeHtml(g.phone)}" title="Open WhatsApp chat">WhatsApp</button>` : ""}
+          ${g.phone ? `<button class="small-action wa-action" type="button" data-guest-wa="${escapeHtml(g.phone)}" data-guest-name="${escapeHtml((g.name || "").split(" ")[0])}" title="Open WhatsApp chat">WhatsApp</button>` : ""}
         </div>
         <div class="guest-card-meta">
           <span>${g.stays} stay${g.stays === 1 ? "" : "s"}</span>
@@ -974,8 +975,8 @@ function renderGuests() {
         <div class="guest-card-edit">
           <input type="text" data-guest-notes placeholder="Private notes (preferences…)" value="${escapeHtml(p.notes || "")}" aria-label="Notes for ${escapeHtml(g.name || "guest")}" />
           <input type="text" data-guest-tags placeholder="Tags (family, pet…)" value="${escapeHtml(tags)}" aria-label="Tags" />
-          <label class="guest-toggle"><input type="checkbox" data-guest-blocklist ${p.blocklist ? "checked" : ""} /> Flag</label>
-          <label class="guest-toggle"><input type="checkbox" data-guest-consent ${p.consent ? "checked" : ""} /> Consent</label>
+          <label class="guest-toggle" title="Flag this guest as do-not-rebook / problem guest"><input type="checkbox" data-guest-blocklist ${p.blocklist ? "checked" : ""} aria-label="Flag guest as do-not-rebook" /> Flag</label>
+          <label class="guest-toggle" title="Guest agreed to be contacted for future offers (PDPA marketing consent)"><input type="checkbox" data-guest-consent ${p.consent ? "checked" : ""} aria-label="Marketing contact consent (PDPA)" /> Consent</label>
         </div>
       </article>`;
     })
@@ -1592,7 +1593,11 @@ function stayPerformanceForMonth(monthValue) {
 function setView(view) {
   activeView = view;
   document.querySelectorAll(".view").forEach((node) => node.classList.toggle("active", node.id === `${view}View`));
-  document.querySelectorAll(".nav-button").forEach((node) => node.classList.toggle("active", node.dataset.view === view));
+  document.querySelectorAll(".nav-button").forEach((node) => {
+    const isActive = node.dataset.view === view;
+    node.classList.toggle("active", isActive);
+    node.setAttribute("aria-current", isActive ? "page" : "false");
+  });
   els.pageTitle.textContent = {
     today: "Today",
     calendar: "Monthly Calendar",
@@ -1700,6 +1705,9 @@ function renderCalendar() {
       const label = shouldShowStayLabel(booking, dayIso);
       chip.className = `booking-chip stay-segment clickable ${isExcludedBooking(booking) ? "influencer" : booking.channel.toLowerCase()} ${staySegmentClass(booking, dayIso)} ${label ? "" : "label-hidden"}`;
       chip.dataset.bookingId = booking.id;
+      chip.tabIndex = 0; // keyboard-reachable (Enter/Space handled on the grid)
+      chip.setAttribute("role", "button");
+      chip.setAttribute("aria-label", `${booking.guest}, ${isExcludedBooking(booking) ? "Influencer" : booking.channel}, ${booking.nights} night${booking.nights === 1 ? "" : "s"} — edit booking`);
       // Channel is already carried by the chip's color + dot, so the in-cell text shows only
       // the guest name (full width = readable). Channel/nights move to the hover title.
       chip.title = `${booking.guest} · ${isExcludedBooking(booking) ? "Influencer" : booking.channel} · ${booking.nights} night${booking.nights === 1 ? "" : "s"} — click to edit`;
@@ -3070,11 +3078,19 @@ async function draftGuestReply() {
     if (els.aiDraft) els.aiDraft.value = data.draft || "";
     if (els.aiPhone && !els.aiPhone.value && selectedMessageBooking()?.contact) els.aiPhone.value = selectedMessageBooking().contact;
     setAiStatus("Draft ready — review and edit before sending.", "ok");
+    syncAiActionButtons();
   } catch (e) {
     setAiStatus(e?.message || "Could not draft a reply.", "err");
   } finally {
     if (els.aiDraftBtn) els.aiDraftBtn.disabled = false;
   }
+}
+
+// Copy/Send only make sense once there's a draft — keep them disabled until then.
+function syncAiActionButtons() {
+  const has = !!els.aiDraft?.value?.trim();
+  if (els.aiCopyBtn) els.aiCopyBtn.disabled = !has;
+  if (els.aiSendBtn) els.aiSendBtn.disabled = !has;
 }
 
 function openWhatsappForQuote() {
@@ -3171,6 +3187,11 @@ function renderMessageGenerator() {
   if (els.guideTemplateInput && !els.guideTemplateInput.value) els.guideTemplateInput.value = templateForVilla(activeVillaKey(), "guide");
   if (els.reminderTemplateInput && !els.reminderTemplateInput.value) els.reminderTemplateInput.value = templateForVilla(activeVillaKey(), "reminder");
   if (els.aiVillaName) els.aiVillaName.textContent = activeVillaKey();
+  // AI drafter: if this villa has no Guidebook facts yet, say so up front + block drafting.
+  const aiFacts = gatherVillaFacts(activeVillaKey());
+  if (els.aiDraftBtn) els.aiDraftBtn.disabled = !aiFacts;
+  if (!aiFacts && els.aiDraftStatus && !els.aiDraftStatus.textContent) setAiStatus(`Fill the ${activeVillaKey()} Guidebook first so drafts ground on real facts.`, "");
+  syncAiActionButtons();
   fillMessageFromBooking(false);
 }
 
@@ -3876,7 +3897,7 @@ function defaultDocumentDraft() {
     guestName: "",
     billTo: "",
     billAddress: "",
-    propertyName: "Sunrise Villa",
+    propertyName: activeVillaKey() === "Windmill" ? "Windmill Villa" : "Sunrise Villa",
     checkIn: today,
     checkOut: isoDate(addDays(new Date(), 1)),
     nights: 1,
@@ -3885,6 +3906,30 @@ function defaultDocumentDraft() {
     remarks: "",
     payments: [],
   });
+}
+
+// "Prefill from booking" — stop re-typing guest/dates/fee/deposit that already live on a booking.
+function renderDocBookingPicker() {
+  if (!els.docFromBooking) return;
+  const current = els.docFromBooking.value;
+  const opts = [...scopedBookings()]
+    .sort((a, b) => b.arrival.localeCompare(a.arrival))
+    .map((b) => `<option value="${b.id}">${escapeHtml(quickDate(b.arrival))} · ${escapeHtml(b.guest)}</option>`)
+    .join("");
+  els.docFromBooking.innerHTML = `<option value="">— Start blank —</option>${opts}`;
+  if (current && [...els.docFromBooking.options].some((o) => o.value === current)) els.docFromBooking.value = current;
+}
+function prefillDocFromBooking(id) {
+  const b = bookings.find((x) => x.id === id);
+  if (!b) return;
+  if (els.docGuestName) els.docGuestName.value = b.guest || "";
+  if (els.docProperty) els.docProperty.value = b.villa === "Windmill" ? "Windmill Villa" : "Sunrise Villa";
+  if (els.docCheckIn) els.docCheckIn.value = b.arrival || "";
+  if (els.docCheckOut) els.docCheckOut.value = departureFor(b);
+  if (els.docNights) els.docNights.value = b.nights || 1;
+  if (els.docAccommodationFee) els.docAccommodationFee.value = b.revenue || 0;
+  if (els.docDepositAmount) els.docDepositAmount.value = b.depositAmount || 0;
+  renderDocumentPreview();
 }
 
 function formDocument() {
@@ -4127,6 +4172,7 @@ function renderDocumentPreview(doc = formDocument()) {
 function renderDocuments() {
   if (!els.documentForm) return;
   updateReceiptVisibility();
+  renderDocBookingPicker();
   const current = formDocument();
   if (els.documentCodePreview) els.documentCodePreview.textContent = current.code;
   renderDocumentArchive();
@@ -4713,7 +4759,7 @@ function renderToday() {
   const attentionCount = airbnbPayouts.length + directBalances.length + depositRefunds.length;
 
   const guestRow = (b, meta) => `
-    <div class="today-row">
+    <div class="today-row row-clickable" data-open-booking="${b.id}" title="Open ${escapeHtml(b.guest)}'s booking">
       <span class="today-avatar">${prefixFor(b.guest)}</span>
       <div class="today-row-main">
         <strong>${escapeHtml(b.guest)} ${returningBadgeHtml(b, bookings)}${blocklistBadgeHtml(b)}</strong>
@@ -4787,7 +4833,7 @@ function renderToday() {
 
   // --- Needs your attention: split by money type (Airbnb payouts / Direct balances / refunds) ---
   const attnRow = (b, flag, sub) => `
-    <div class="today-row">
+    <div class="today-row row-clickable" data-open-booking="${b.id}" title="Open ${escapeHtml(b.guest)}'s booking">
       <span class="today-avatar">${prefixFor(b.guest)}</span>
       <div class="today-row-main"><strong>${escapeHtml(b.guest)} ${returningBadgeHtml(b, bookings)}${blocklistBadgeHtml(b)}</strong><span>${b.villa === "Windmill" ? "Windmill" : "Sunrise"} · ${sub}</span></div>
       ${flag}
@@ -5017,6 +5063,14 @@ els.calendarGrid?.addEventListener("click", (event) => {
   const booking = bookings.find((b) => b.id === chip.dataset.bookingId);
   if (booking) openBookingDialog(booking);
 });
+els.calendarGrid?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const chip = event.target.closest?.(".booking-chip.clickable");
+  if (!chip || !chip.dataset.bookingId) return;
+  event.preventDefault();
+  const booking = bookings.find((b) => b.id === chip.dataset.bookingId);
+  if (booking) openBookingDialog(booking);
+});
 
 els.bookingRows.addEventListener("click", (event) => {
   const editId = event.target.dataset.edit;
@@ -5044,6 +5098,13 @@ els.bookingRows.addEventListener("click", (event) => {
 // Improvement #1 + #2: "Send today" card — one-click check-in send + inline phone capture.
 const todayContentEl = document.querySelector("#todayContent");
 todayContentEl?.addEventListener("click", (event) => {
+  // A clickable attention / arrival / in-house / departure row opens that booking.
+  const openRow = event.target.closest("[data-open-booking]");
+  if (openRow && !event.target.closest("button, input, a")) {
+    const booking = bookings.find((b) => b.id === openRow.dataset.openBooking);
+    if (booking) openBookingDialog(booking);
+    return;
+  }
   const sendBtn = event.target.closest("[data-send]");
   if (sendBtn) {
     const type = sendBtn.dataset.send;
@@ -5131,7 +5192,7 @@ guestsListEl?.addEventListener("change", (event) => {
 });
 guestsListEl?.addEventListener("click", (event) => {
   const wa = event.target.closest("[data-guest-wa]");
-  if (wa) openWhatsappMessage(wa.dataset.guestWa, "");
+  if (wa) openWhatsappMessage(wa.dataset.guestWa, wa.dataset.guestName ? `Hi ${wa.dataset.guestName}, ` : ""); // open with a greeting, not a blank chat
 });
 document.querySelector("#guestSearch")?.addEventListener("input", renderGuests);
 document.querySelector("#guestReturningOnly")?.addEventListener("change", renderGuests);
@@ -5141,6 +5202,9 @@ document.querySelector("#exportGuestRegister")?.addEventListener("click", export
 document.querySelector("#guideView")?.addEventListener("input", (event) => {
   const field = event.target.dataset.guide;
   if (field) setGuidebookField(field, event.target.value);
+});
+document.querySelector("#guideView")?.addEventListener("change", (event) => {
+  if (event.target.dataset.guide) flashSaved(event.target); // confirm the silent per-keystroke save on blur
 });
 document.querySelector("#previewGuidebook")?.addEventListener("click", previewGuidebook);
 
@@ -5430,7 +5494,7 @@ els.ackInquiry?.addEventListener("click", openInquiryAck);
 // AI guest Q&A drafter wiring
 els.aiDraftBtn?.addEventListener("click", draftGuestReply);
 els.aiCopyBtn?.addEventListener("click", () => {
-  if (els.aiDraft?.value) copyMessageWithFeedback(els.aiDraft.value, els.aiCopyBtn, "Copy");
+  if (els.aiDraft?.value?.trim()) copyMessageWithFeedback(els.aiDraft.value, els.aiCopyBtn, "Copy");
 });
 els.aiSendBtn?.addEventListener("click", () => {
   const text = els.aiDraft?.value?.trim();
@@ -5438,8 +5502,14 @@ els.aiSendBtn?.addEventListener("click", () => {
     setAiStatus("Draft a reply first.", "err");
     return;
   }
-  openWhatsappMessage(els.aiPhone?.value || "", text);
+  if (!formatPhoneForWhatsapp(els.aiPhone?.value)) {
+    setAiStatus("Add the guest's WhatsApp number first.", "err");
+    els.aiPhone?.focus();
+    return;
+  }
+  openWhatsappMessage(els.aiPhone.value, text);
 });
+els.aiDraft?.addEventListener("input", syncAiActionButtons);
 
 els.openGuideMessage?.addEventListener("click", () => {
   renderCheckinMessage();
@@ -5593,6 +5663,7 @@ els.addPaymentRow?.addEventListener("click", () => {
 
 els.generateDocument?.addEventListener("click", () => renderDocumentPreview(formDocument()));
 els.saveDocument?.addEventListener("click", saveCurrentDocument);
+els.docFromBooking?.addEventListener("change", (event) => { if (event.target.value) prefillDocFromBooking(event.target.value); });
 els.newDocument?.addEventListener("click", () => fillDocumentForm(defaultDocumentDraft()));
 els.duplicateDocument?.addEventListener("click", duplicateCurrentDocument);
 els.printDocument?.addEventListener("click", printDocumentPreview);

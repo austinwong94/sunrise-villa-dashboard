@@ -5539,7 +5539,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #todayView .today-card.today-attention .today-card-head h3 { color: var(--due); }
 
 /* Airbnb calendar sync panel (improvement #5) */
-.ical-sync-card { background: var(--card, #fff); border: 1px solid var(--line, #e7e3da); border-radius: 16px; padding: 16px 18px; margin-bottom: 16px; }
+.ical-sync-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-popover); padding: 16px 18px; margin-bottom: 16px; }
 .ical-sync-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .ical-sync-head h3 { margin: 2px 0 0; }
 .ical-sync-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -5550,28 +5550,28 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 .sync-now-button:hover { filter: brightness(0.96); }
 .sync-now-button:disabled { opacity: 0.6; cursor: default; }
 .ical-sync-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
-.ical-sync-fields label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted, #6f6a60); }
-.ical-sync-fields input { padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 13px; background: var(--bg, #fff); color: inherit; }
+.ical-sync-fields label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.ical-sync-fields input { padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; background: var(--bg); color: inherit; }
 @media (max-width: 760px) { .ical-sync-fields { grid-template-columns: 1fr; } }
 .day-cell .booking-chip.airbnb-import { display: block; background: #fdf0e3; border: 1px dashed #e0934a; color: #9c5a1c; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px; margin-top: 3px; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-cell a.booking-chip.airbnb-import:hover { background: #fbe6d2; }
 
 /* Villa switch (Sunrise ⇄ Windmill) */
-.villa-switch { display: inline-flex; background: var(--line, #ece7dd); border-radius: 10px; padding: 3px; gap: 2px; }
+.villa-switch { display: inline-flex; background: var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
 .villa-tab { border: none; background: transparent; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .villa-tab.active { background: #fff; color: var(--accent-ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10); }
 
 /* Paste-to-import box in the booking dialog */
-.airbnb-import-box { border: 1px dashed var(--line, #d9d3c7); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; background: #fdf6ee; }
+.airbnb-import-box { border: 1px dashed var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; background: #fdf6ee; }
 .airbnb-import-box summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--accent-ink); }
-.airbnb-import-box textarea { width: 100%; margin-top: 10px; padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 12px; box-sizing: border-box; font-family: inherit; }
+.airbnb-import-box textarea { width: 100%; margin-top: 10px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; font-size: 12px; box-sizing: border-box; font-family: inherit; }
 .airbnb-import-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
 .airbnb-import-status { font-size: 12px; color: var(--muted); }
 .airbnb-import-status.ok { color: #2e7d54; }
 .airbnb-import-status.err { color: #c0392b; }
 
 /* Review new bookings queue (improvement #6) */
-.candidates-queue { background: #fff7ec; border: 1px solid #f0c98a; border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+.candidates-queue { background: #fff7ec; border: 1px solid #f0c98a; border-radius: var(--r-card); padding: 14px 16px; margin-bottom: 16px; }
 .candidates-head { font-weight: 600; font-size: 14px; color: #9c5a1c; margin-bottom: 8px; }
 .candidate-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #f3e2c6; flex-wrap: wrap; }
 .candidate-info { display: flex; flex-direction: column; gap: 2px; }
@@ -5598,7 +5598,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #todayView .today-row.vacancy-row .today-row-main strong { white-space: normal; }
 
 /* Bookings table: "no phone" badge */
-.bookings-table .contact-missing { color: var(--due, #c0392b); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.bookings-table .contact-missing { color: var(--due); font-size: 12px; font-weight: 600; white-space: nowrap; }
 
 /* Save-confirmation flash on fields that persist silently (guest notes/tags) */
 @keyframes savedFlash { 0%, 55% { box-shadow: 0 0 0 3px var(--ok-soft); border-color: var(--ok); } 100% { box-shadow: 0 0 0 0 transparent; } }
@@ -5610,27 +5610,27 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 .small-action.wa-action.sent { color: var(--ok); border-color: var(--ok-soft); background: var(--ok-soft); }
 
 /* Returning-guest + flagged badges (Guest CRM) */
-.returning-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--accent-ink); background: var(--accent-soft); padding: 1px 7px; border-radius: var(--r-pill, 999px); vertical-align: middle; white-space: nowrap; }
-.blocklist-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--due, #c0392b); background: var(--due-soft, #fbe3e0); padding: 1px 7px; border-radius: var(--r-pill, 999px); vertical-align: middle; white-space: nowrap; }
+.returning-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--accent-ink); background: var(--accent-soft); padding: 1px 7px; border-radius: var(--r-pill); vertical-align: middle; white-space: nowrap; }
+.blocklist-badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--due); background: var(--due-soft); padding: 1px 7px; border-radius: var(--r-pill); vertical-align: middle; white-space: nowrap; }
 
 /* Guest Book (CRM) view */
 #guestsView .guests-summary { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 16px; }
-#guestsView .guest-stat { background: var(--card, #fff); border: 1px solid var(--line, #e7e3da); border-radius: 12px; padding: 12px 18px; min-width: 96px; }
+#guestsView .guest-stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-control); padding: 12px 18px; min-width: 96px; }
 #guestsView .guest-stat strong { display: block; font-size: 22px; font-weight: 700; color: var(--ink); }
 #guestsView .guest-stat span { font-size: 12px; color: var(--muted); }
 #guestsView .guests-toolbar { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }
 #guestsView .guests-toolbar label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
-#guestsView .guests-toolbar input[type="search"] { padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 13px; background: var(--bg, #fff); color: inherit; min-width: 220px; }
+#guestsView .guests-toolbar input[type="search"] { padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; background: var(--bg); color: inherit; min-width: 220px; }
 #guestsView .guests-filter-returning { flex-direction: row !important; align-items: center; gap: 8px; }
 #guestsView .guests-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
-#guestsView .guest-card { background: var(--card, #fff); border: 1px solid var(--line, #e7e3da); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-#guestsView .guest-card.flagged { border-color: var(--due-soft, #f3c6c0); box-shadow: 0 0 0 1px var(--due-soft, #f3c6c0) inset; }
+#guestsView .guest-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+#guestsView .guest-card.flagged { border-color: var(--due-soft); box-shadow: 0 0 0 1px var(--due-soft) inset; }
 #guestsView .guest-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 #guestsView .guest-card-name { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 #guestsView .guest-card-name strong { font-size: 15px; color: var(--ink); }
 #guestsView .guest-card-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
 #guestsView .guest-card-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--line); padding-top: 10px; }
-#guestsView .guest-card-edit input[type="text"] { flex: 1 1 140px; padding: 7px 9px; border: 1px solid var(--line, #d9d3c7); border-radius: 9px; font-size: 12.5px; background: var(--bg, #fff); color: inherit; }
+#guestsView .guest-card-edit input[type="text"] { flex: 1 1 140px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 9px; font-size: 12.5px; background: var(--bg); color: inherit; }
 #guestsView .guest-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; }
 
 /* Digital guidebook editor */
@@ -5641,13 +5641,13 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 @media (max-width: 640px) { #guideView .guide-grid.two { grid-template-columns: 1fr; } }
 #guideView .guide-grid.two > label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); }
 #guideView .guide-form input[type="text"], #guideView .guide-form textarea {
-  padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-size: 13px; font-family: inherit; font-weight: 400; background: var(--bg, #fff); color: inherit; box-sizing: border-box; width: 100%;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; font-family: inherit; font-weight: 400; background: var(--bg); color: inherit; box-sizing: border-box; width: 100%;
 }
 #guideView .guide-form textarea { resize: vertical; }
 
 /* Incident/damage log field in the booking dialog */
 .booking-form .full-width-label { display: block; }
-.booking-form .full-width-label textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--line, #d9d3c7); border-radius: 10px; font-family: inherit; font-size: 13px; background: var(--bg, #fff); color: inherit; }
+.booking-form .full-width-label textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; font-family: inherit; font-size: 13px; background: var(--bg); color: inherit; }
 .booking-form .form-hint { font-weight: 400; font-size: 12px; color: var(--muted); }
 
 /* --- Accessibility & mobile quick wins --- */
@@ -5661,19 +5661,27 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 760px) {
   .small-action, .ghost-button, .primary-button, .nav-button, .villa-tab,
   .booking-channel-option, .month-button { min-height: 44px; }
+  .guest-toggle, .refund-toggle { min-height: 44px; } /* checkbox labels were ~19px taps */
   #guestsView .guest-card-edit input[type="text"] { min-height: 40px; }
   #guestsView .guests-list { grid-template-columns: 1fr; }
+  /* Section headings wrap so the action button drops to its own row instead of crushing the title */
+  .section-heading { flex-wrap: wrap; }
+  /* Messages workspace: reclaim the triple-nested side padding for the fields you type into */
+  #messagesView .message-panel { padding-left: 13px; padding-right: 13px; }
+  #messagesView .message-template-card { padding-left: 15px; padding-right: 15px; }
 }
 
 /* ---------- Tasteful motion & micro-interactions (interaction-driven; gated below) ---------- */
 /* Tactile press feedback on controls — clearly "I received your tap" */
-.small-action, .primary-button, .ghost-button, .villa-tab, .booking-channel-option, .month-button, .theme-swatch {
+.small-action, .primary-button, .ghost-button, .villa-tab, .booking-channel-option, .month-button, .theme-swatch,
+.message-flow-tab, .tax-inner-tab, #dashboardView .dashboard-mode-option, .sync-now-button {
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-soft);
 }
 .small-action:active, .primary-button:active, .ghost-button:active, .villa-tab:active,
-.booking-channel-option:active, .month-button:active { transform: translateY(1px) scale(.985); }
+.booking-channel-option:active, .month-button:active,
+.message-flow-tab:active, .tax-inner-tab:active, #dashboardView .dashboard-mode-option:active, .sync-now-button:active { transform: translateY(1px) scale(.985); }
 .villa-tab:hover:not(.active) { color: var(--ink); }
 #calendarView .booking-chip.clickable:active { transform: translateY(1px); }
 
@@ -5687,9 +5695,11 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 
 /* Non-negotiable for a daily tool: kill all of the above under reduced-motion */
 @media (prefers-reduced-motion: reduce) {
-  .small-action, .primary-button, .ghost-button, .villa-tab, .booking-channel-option, .month-button, .theme-swatch { transition: none; }
+  .small-action, .primary-button, .ghost-button, .villa-tab, .booking-channel-option, .month-button, .theme-swatch,
+  .message-flow-tab, .tax-inner-tab, #dashboardView .dashboard-mode-option, .sync-now-button { transition: none; }
   .small-action:active, .primary-button:active, .ghost-button:active, .villa-tab:active,
-  .booking-channel-option:active, .month-button:active, #calendarView .booking-chip.clickable:active { transform: none; }
+  .booking-channel-option:active, .month-button:active, #calendarView .booking-chip.clickable:active,
+  .message-flow-tab:active, .tax-inner-tab:active, #dashboardView .dashboard-mode-option:active, .sync-now-button:active { transform: none; }
   dialog#bookingDialog[open], .view.active { animation: none; }
 }
 
@@ -5718,6 +5728,8 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .checkout-echo { margin: 10px 2px 0; font-size: 12.5px; font-weight: 600; color: var(--muted); min-height: 1em; }
 
 /* Needs-your-attention sub-section labels (Airbnb payout / Direct balance / Refunds) */
+#todayView .today-row.row-clickable { cursor: pointer; border-radius: 9px; transition: background var(--dur-fast) var(--ease-out); }
+#todayView .today-row.row-clickable:hover { background: var(--row-hover); }
 #todayView .attn-group-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 13px 6px 3px; }
 #todayView .today-attention .today-card-body > .attn-group-label:first-child { padding-top: 2px; }
 
