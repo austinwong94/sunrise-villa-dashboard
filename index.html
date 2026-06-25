@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260626-21" />
+    <link rel="stylesheet" href="./styles.css?v=20260626-22" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1608,6 +1608,10 @@
               <p class="tax-scan-help">This rolls up your Enterprise / sole-proprietor records for one calendar year the way Form B is built: revenue deductions, capital allowances from the register, and the items that need a decision. <strong>A review aid, not a filed return.</strong></p>
               <section class="tax-summary-grid" id="taxYaCards"></section>
               <div class="tax-ya-detail" id="taxYaDetail"></div>
+              <details class="tax-year-rules" id="taxYearRulesBox">
+                <summary>📅 LHDN rules that apply to this year (YA-specific)</summary>
+                <div id="taxYearRules"></div>
+              </details>
             </section>
 
             <section class="dashboard-section tax-review-section">
@@ -1769,6 +1773,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260626-21"></script>
+    <script src="./app.js?v=20260626-22"></script>
   </body>
 </html>

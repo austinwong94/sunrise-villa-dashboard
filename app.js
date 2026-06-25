@@ -147,11 +147,11 @@ const taxExpenseCategories = [
 // acquisition YA), aa = annual allowance (each YA on original cost until written
 // off). All percentages of qualifying expenditure (QE).
 const MY_CA_RATES = {
-  "computer-ict": { ia: 20, aa: 40, label: "Computer / ICT / software", note: "Accelerated (ICT Rules 2024) — full write-off ~2 yrs; expires after YA 2027." },
+  "computer-ict": { ia: 40, aa: 20, label: "Computer / ICT / software", confirm: true, note: "Accelerated ICT allowance: IA 40% + AA 20% (gazette P.U.(A) 156/2018 → 328/2024 from YA2024). Confirm the split + whether a YA2027 sunset applies — the gazette is open-ended." },
   "furniture-office": { ia: 20, aa: 10, label: "Furniture, fittings & office equipment" },
   "plant": { ia: 20, aa: 14, label: "Plant, machinery & appliances" },
   "motor": { ia: 20, aa: 20, label: "Motor vehicle (non-commercial)", motorCap: true, note: "QE capped: RM100k (new & cost ≤ RM150k) else RM50k." },
-  "small-value": { ia: 0, aa: 100, sva: true, label: "Small value asset (≤ RM2,000)", note: "100% written off in the acquisition year (SME — uncapped aggregate)." },
+  "small-value": { ia: 0, aa: 100, sva: true, label: "Small value asset (≤ RM2,000)", note: "100% in the acquisition year. Sole-proprietor aggregate cap RM20,000 per YA (PR 3/2021) — the engine flags if a year exceeds it." },
 };
 const MY_CA_CLASS_KEYS = Object.keys(MY_CA_RATES);
 
@@ -179,7 +179,7 @@ const TAX_RULES = {
   "Loan Interest": { treatment: "deduct", rule: "Interest on borrowings used for the business — s33(1)(a).", source: "PR 2/2011", flag: "Only the INTEREST portion. Split interest vs principal from the bank statement." },
   "Furniture & Fittings": { treatment: "capital", capitalClass: "furniture-office", rule: "Durable asset → capital allowance (or 100% if ≤ RM2,000 each).", source: "Sch 3; PR 3/2021" },
   "Appliances/Electronics": { treatment: "capital", capitalClass: "plant", rule: "Plant → capital allowance (or 100% if ≤ RM2,000 each).", source: "Sch 3; PR 12/2014" },
-  "Computer/ICT": { treatment: "capital", capitalClass: "computer-ict", rule: "ICT → accelerated CA 20% + 40% (expires after YA 2027).", source: "ICT ACA Rules 2024" },
+  "Computer/ICT": { treatment: "capital", capitalClass: "computer-ict", rule: "ICT → accelerated CA, IA 40% + AA 20%. Confirm the split + any YA2027 sunset against the gazette.", source: "P.U.(A) 328/2024 (was 156/2018)" },
   "Smart Lock/Security": { treatment: "capital", capitalClass: "plant", rule: "Durable security equipment → capital allowance (or 100% if ≤ RM2,000).", source: "Sch 3; PR 3/2021", flag: "Capital-vs-revenue is grey for cheap units — confirm before you claim it." },
   "Improvement/Renovation": { treatment: "no", rule: "Capital improvement; ordinary accommodation building gets NO capital allowance.", source: "PR 6/2019; s39", flag: "No relief at all. Confirm repair-vs-improvement — a genuine repair would instead be deductible." },
   "Entertainment": { treatment: "partial", pct: 50, rule: "Entertainment restricted to 50% — s39(1)(l).", source: "PR 4/2015", flag: "50% for existing customers · 100% for staff or logo gifts · 0% for potential customers. Adjust if not the default 50%." },
@@ -216,6 +216,117 @@ const TREATMENT_LABEL = {
   no: "Not deductible",
   ask: "Needs review",
 };
+
+// =============================================================================
+// PER-YEAR LHDN FACT BASE (sourced; see tax/MALAYSIAN-TAX-YEARS.md). Each year's
+// rules apply to THAT YA only. Every value carries a source + confidence; values
+// with mustConfirm:true are NOT primary-confirmed and must be checked against the
+// year's own LHDN document (or his uploaded document overrides them). The engine
+// must never apply one year's rate to another year.
+// =============================================================================
+const F_ = (value, source, confidence = "high", mustConfirm = false) => ({ value, source, confidence, mustConfirm });
+
+// Things that are CONSTANT across YA2022–2027 (research engineYearSensitivity).
+const MY_TAX_CONSTANTS = {
+  normalCa: F_("IA 20%; AA general 14% / furniture & office 10% / vehicles 20%", "ITA 1967 Sch 3; PR 6/2022"),
+  smallValue: F_("RM2,000 per asset; RM20,000 aggregate per YA (sole-proprietor non-SMC cap)", "PR 3/2021; Sch 3 para 19A"),
+  secretarialCap: F_("Secretarial + tax-filing fees combined RM15,000/YA, 'incurred' basis (never the old RM5k+RM10k split)", "P.U.(A) 162/2020; 471/2021"),
+  selfRelief: F_("RM9,000 self & dependent relatives (automatic)", "LHDN reliefs"),
+  sstThreshold: F_("RM500,000 accommodation turnover (Group A) — under this you are not registered and charge no service tax", "RMCD Guide on Accommodation V3"),
+  recordRetention: F_("Keep records 7 years", "s82A ITA 1967"),
+  carryForward: F_("Unabsorbed capital allowances carry forward indefinitely; business losses 10 YAs (from YA2019)", "Sch 3 para 75; s44(5F); PR 1/2022"),
+  basis: F_("Calendar-year basis; Form B due 30 Jun (manual) / 15 Jul (e-file)", "ITA 1967"),
+  scopeGuard: F_("Sole proprietor is taxed at INDIVIDUAL graduated rates — never company SME rates (15%/17%), LLP or dividend taxes", "ITA 1967 s4(a)"),
+};
+
+// Year-VARYING values.
+const MY_YEAR_FACTBASE = {
+  2022: {
+    sstRate: F_("6% (only if SST-registered)", "P.U.(A) 213/2018"),
+    ictAca: { ia: 40, aa: 20, citation: "P.U.(A) 156/2018", ...F_("ICT accelerated: IA 40% + AA 20%", "P.U.(A) 156/2018") },
+    einvoice: F_("Exempt (regime not yet in force; sub-RM1m)", "LHDN e-Invoice FAQs"),
+    rateBands: F_("OLD individual bands (8/13/21 mid) — apply to YA2022 ONLY", "LHDN tax-rate page"),
+    reliefs: F_("Self RM9,000; lifestyle RM2,500 (incl sports); medical cap ~RM8,000; COVID extra-lifestyle RM2,500 + domestic-travel RM1,000 (LAST year)", "LHDN reliefs; Budget commentaries", "medium", true),
+    notable: F_("Last year for COVID extra-lifestyle, domestic-travel reliefs and the RM300k COVID renovation deduction (QE to 31 Dec 2022). SST 6%. OLD rate bands.", "P.U.(A) 481/2021"),
+    traps: ["RM300k COVID renovation deduction is claimable only through YA2022."],
+  },
+  2023: {
+    sstRate: F_("6% (only if SST-registered)", "P.U.(A) 213/2018"),
+    ictAca: { ia: 40, aa: 20, citation: "P.U.(A) 156/2018", ...F_("ICT accelerated: IA 40% + AA 20%", "P.U.(A) 156/2018") },
+    einvoice: F_("Exempt (sub-RM1m)", "LHDN e-Invoice FAQs"),
+    rateBands: F_("RESTRUCTURED bands (Budget 2023): mid bands cut 8→6 / 13→11 / 21→19; upper collapsed", "LHDN tax-rate page; Finance Act 2023"),
+    reliefs: F_("Self RM9,000; lifestyle RM2,500 + sports RM500; medical cap raised to RM10,000; COVID reliefs GONE", "LHDN reliefs; Budget commentaries", "medium", true),
+    notable: F_("MAJOR: individual rate bands restructured. Medical cap ~RM8,000→RM10,000. COVID reliefs + RM300k renovation expired — must NOT appear from YA2023.", "Finance Act 2023"),
+    traps: ["Do not apply YA2022 rate bands or the expired COVID reliefs to YA2023+."],
+  },
+  2024: {
+    sstRate: F_("SPLIT YEAR: 6% to 29 Feb 2024, then 8% from 1 Mar 2024 (accommodation follows the standard rate; only if SST-registered)", "P.U.(A) 64/2024", "high", false),
+    sstSplit: "2024-03-01",
+    ictAca: { ia: 40, aa: 20, citation: "P.U.(A) 328/2024 (revokes 156/2018)", ...F_("ICT accelerated: IA 40% + AA 20% — citation changes this YA, same rate", "P.U.(A) 328/2024") },
+    einvoice: F_("Exempt (sub-RM1m). Phase 1 (1 Aug 2024) is >RM100m turnover only", "LHDN e-Invoice timeline"),
+    rateBands: F_("Same restructured bands as YA2023", "LHDN tax-rate page"),
+    reliefs: F_("Self RM9,000; lifestyle RM2,500 (sports/gym removed); sports RM500→RM1,000; new dental sub-limit RM1,000", "Budget 2024 commentaries", "medium", true),
+    notable: F_("ICT & software ACA citation changes (327/2024 & 328/2024 replace 274/2019 & 156/2018) — same 40%/20%. SST accommodation rises 6%→8% on 1 Mar 2024.", "P.U.(A) 64/2024; 327/2024; 328/2024"),
+    traps: ["2024 SST is a split year (boundary 1 Mar 2024).", "ICT/software ACA citation changed — same rate, new gazette."],
+  },
+  2025: {
+    sstRate: F_("8% (only if SST-registered). The July 2025 SST expansion did NOT change accommodation", "P.U.(A) 64/2024; 172/2025", "medium", true),
+    ictAca: { ia: 40, aa: 20, citation: "P.U.(A) 328/2024", ...F_("ICT accelerated: IA 40% + AA 20% (open-ended — no gazette sunset)", "P.U.(A) 328/2024") },
+    einvoice: F_("Exempt (sub-RM1m)", "LHDN e-Invoice FAQs"),
+    rateBands: F_("Same restructured bands as YA2023", "LHDN tax-rate page"),
+    reliefs: F_("Education/medical-insurance RM3,000→RM4,000; disabled self/spouse/child raised; NEW first-time homeowner housing-loan interest relief (S&P 2025–2027)", "Budget 2025 commentaries", "medium", true),
+    notable: F_("Education/medical-insurance relief raised; disabled reliefs raised; new first-time-homeowner relief (YA2025+ only). July 2025 SST expansion did not touch accommodation.", "Budget 2025"),
+    traps: ["First-time-homeowner relief does not exist before YA2025.", "Do NOT lower accommodation SST — the 2025 expansion was other service groups."],
+  },
+  2026: {
+    sstRate: F_("8% (only if SST-registered). The 1 Jan 2026 8%→6% reduction is RENTAL/LEASING ONLY — accommodation stays 8%", "P.U.(A) 125/2026", "high", false),
+    ictAca: { ia: 40, aa: 20, citation: "P.U.(A) 328/2024", ...F_("ICT accelerated: IA 40% + AA 20% (open-ended)", "P.U.(A) 328/2024", "medium", true) },
+    einvoice: F_("Exempt — exemption threshold raised RM500k→RM1m (~Dec 2025); the planned up-to-RM1m mandatory phase was cancelled", "LHDN e-Invoice timeline (7 Dec 2025)"),
+    rateBands: F_("No change (Budget 2026 made no individual rate-band change)", "Skrine Budget 2026", "medium", true),
+    reliefs: F_("Mostly carry YA2025 values (not primary-confirmed for YA2026)", "Budget 2025 extensions", "low", true),
+    notable: F_("KEY TRAP: the 8%→6% SST cut is rental/leasing only — accommodation stays 8%. New Budget 2026 RM500k tourism-renovation deduction is MOTAC-operator-gated — a villa STR may not qualify; do NOT auto-apply.", "P.U.(A) 125/2026; Budget 2026"),
+    traps: ["The 2026 SST reduction does NOT apply to your accommodation income.", "RM500k tourism renovation deduction needs MOTAC tourism-operator registration."],
+  },
+  2027: {
+    sstRate: F_("8% assumed (accommodation untouched by the 2026 rental reduction) — confirm no later amendment", "P.U.(A) 64/2024", "medium", true),
+    ictAca: { ia: 40, aa: 20, citation: "P.U.(A) 328/2024", ...F_("ICT accelerated IA 40% + AA 20% — confirm whether any YA2027 sunset applies", "P.U.(A) 328/2024", "low", true) },
+    einvoice: F_("Exempt while <RM1m", "LHDN e-Invoice FAQs"),
+    rateBands: F_("Unconfirmed — Budget 2027 not tabled as of mid-2026", "—", "low", true),
+    reliefs: F_("Unconfirmed — Budget 2027 not tabled. Confirm all figures from YA2027 documents", "—", "low", true),
+    notable: F_("Budget 2027 not yet tabled — NO gazette/Finance Act exists. Treat YA2027 values as PROVISIONAL until the YA2027 documents are loaded.", "—", "low", true),
+    traps: ["YA2027 figures are provisional — upload the YA2027 documents before relying on them."],
+  },
+};
+
+// Per-YA cross-year change notes (what differs from the year before).
+const MY_YEAR_CHANGES = {
+  2023: ["Individual rate bands restructured (mid bands cut).", "COVID extra-lifestyle + domestic-travel reliefs and RM300k renovation deduction expired.", "Medical-expenses cap raised to RM10,000."],
+  2024: ["ICT/software accelerated-allowance gazette citation changed (327/2024 & 328/2024) — same IA 40% / AA 20% rate.", "SST on accommodation rose 6%→8% on 1 Mar 2024 (split year).", "Lifestyle scope changed; sports relief RM500→RM1,000; new dental RM1,000 sub-limit."],
+  2025: ["Education/medical-insurance relief RM3,000→RM4,000; disabled reliefs raised.", "New first-time-homeowner housing-loan interest relief.", "2% individual dividend tax (personal other-income — not the villa business)."],
+  2026: ["SST 8%→6% reduction applies to rental/leasing ONLY — accommodation stays 8%.", "E-invoice exemption raised to RM1m; planned SME mandatory phase cancelled.", "New MOTAC-gated RM500k tourism-renovation deduction."],
+  2027: ["Budget 2027 not tabled — YA2027 values provisional until its documents are loaded."],
+};
+
+// Resolve the profile for a YA: baseline fact base + his confirmed document
+// overrides (taxPlan.yearProfiles[ya].entries). Unknown years are provisional.
+function taxYearProfile(ya) {
+  const base = MY_YEAR_FACTBASE[ya];
+  const overrides = (taxPlan.yearProfiles && taxPlan.yearProfiles[ya] && Array.isArray(taxPlan.yearProfiles[ya].entries))
+    ? taxPlan.yearProfiles[ya].entries : [];
+  if (base) return { ya, known: true, constants: MY_TAX_CONSTANTS, changes: MY_YEAR_CHANGES[ya] || [], ...base, overrides };
+  // Provisional: no stored baseline for this year.
+  return {
+    ya, known: false, constants: MY_TAX_CONSTANTS, changes: [],
+    sstRate: F_("Not stored for this year — upload the YA document", "—", "low", true),
+    ictAca: { ia: 40, aa: 20, citation: "confirm", ...F_("Assumed IA 40% + AA 20% — confirm for this year", "—", "low", true) },
+    einvoice: F_("Confirm from the YA document", "—", "low", true),
+    rateBands: F_("Confirm from the YA document", "—", "low", true),
+    reliefs: F_("Confirm from the YA document", "—", "low", true),
+    notable: F_("No stored rules for this year. Upload the YA's LHDN documents so the engine can apply that year's rules.", "—", "low", true),
+    traps: ["No stored rules for this year — figures are provisional."],
+    overrides,
+  };
+}
 
 const defaultMessageTemplates = {
   quote:
@@ -545,6 +656,7 @@ const els = {
   taxYaInput: document.querySelector("#taxYaInput"),
   taxYaCards: document.querySelector("#taxYaCards"),
   taxYaDetail: document.querySelector("#taxYaDetail"),
+  taxYearRules: document.querySelector("#taxYearRules"),
   exportTaxYaExcel: document.querySelector("#exportTaxYaExcel"),
   // AI tax review
   runTaxReviewBtn: document.querySelector("#runTaxReviewBtn"),
@@ -615,6 +727,8 @@ function defaultTaxPlan() {
     expenses: [],
     assets: [], // capital assets (capital-allowance schedule, multi-year)
     review: { classificationAffirmed: false, affirmedAt: "" }, // AI tax-review gate state
+    yearProfiles: {}, // per-YA rule overrides extracted from his uploaded LHDN documents
+    lhdnDocs: [], // analyzed LHDN documents (per-year rule sources)
     notes: {
       books: false,
       salary: false,
@@ -1029,6 +1143,17 @@ function buildTaxReview(ya) {
       source: "PR 3/2021", refs: sva.map(refAsset) });
   }
 
+  // 9b. Small-value aggregate cap RM20,000/YA for a sole proprietor (HIGH if breached).
+  const svaThisYa = assets.filter((a) => a.assetClass === "small-value" && yearOf(a.acquisitionDate) === ya);
+  const svaTotal = svaThisYa.reduce((s, a) => s + Number(a.cost || 0), 0);
+  if (svaTotal > 20000) {
+    F({ checkId: "small-value-aggregate-cap", severity: "high", area: "capital-allowance",
+      title: "Small-value 100% write-offs exceed the RM20,000/YA cap",
+      detail: `Small-value assets total ${money(svaTotal)} this year. A sole proprietor (non-SMC) is capped at RM20,000 of 100% small-value allowance per YA — the excess must instead be written down at normal capital-allowance rates.`,
+      recommendation: "Reclassify enough assets above RM20,000 to their normal class (plant/furniture/ICT) so only RM20,000 takes the 100% write-off. Confirm with PR 3/2021.",
+      source: "PR 3/2021; ITA 1967 Sch 3 para 19A", refs: svaThisYa.map(refAsset) });
+  }
+
   // 10. Personal-capable asset at 100% (MEDIUM).
   const personalRe = /tv|laptop|macbook|phone|tablet|ipad|car|camera/i;
   const asset100 = assets.filter((a) => a.businessUsePct === 100 && (["motor", "computer-ict"].includes(a.assetClass) || personalRe.test(a.description || "")));
@@ -1176,13 +1301,16 @@ function buildTaxReview(ya) {
   }
 
   // 22. SST / e-invoice thresholds (MEDIUM) — only if gross turnover known.
+  // Uses THIS year's profile so the right-year rate is cited (6% pre-2024,
+  // split 2024, 8% after — and never the 2026 rental-only reduction).
+  const yProfile = taxYearProfile(ya);
   if (grossTurnover > 0) {
     if (grossTurnover >= 500000) {
       F({ checkId: "sst-threshold", severity: "medium", area: "documentation", ledger: "compliance_separate_regime",
         title: "Accommodation turnover at/over the RM500k SST line",
-        detail: `Gross accommodation turnover ${money(grossTurnover)} is at/over RM500k.`,
+        detail: `Gross accommodation turnover ${money(grossTurnover)} is at/over RM500k. YA${ya} accommodation service-tax rate: ${yProfile.sstRate.value}.`,
         recommendation: "Register for service tax — a separate regime with its own penalties. Confirm the current threshold with LHDN.",
-        source: "SST registration threshold (confirm current)", refs: [`turnover ${money(grossTurnover)}`] });
+        source: `${yProfile.sstRate.source}`, refs: [`turnover ${money(grossTurnover)}`] });
     } else if (grossTurnover >= 450000) {
       F({ checkId: "sst-threshold-near", severity: "low", area: "documentation", ledger: "compliance_separate_regime",
         title: "Turnover within 10% of the RM500k SST line",
@@ -1202,11 +1330,11 @@ function buildTaxReview(ya) {
   // 23. ICT accelerated expiry (INFO).
   const ict = assets.filter((a) => a.assetClass === "computer-ict" && (yearOf(a.acquisitionDate) === ya || a.residual > 0));
   if (ict.length) {
-    F({ checkId: "ict-ya2027-planning", severity: "info", area: "capital-allowance", ledger: "missed_relief_overpayment",
-      title: "ICT accelerated 40% rate expires after YA2027",
-      detail: "The fast 20%+40% write-off for computers/ICT is time-limited.",
-      recommendation: "Bring planned ICT/computer purchases to on/before YA2027. The successor rate is not confirmed — verify before relying on it.",
-      source: "ICT Rules 2024", refs: ict.map(refAsset) });
+    F({ checkId: "ict-citation-confirm", severity: "info", area: "capital-allowance", ledger: "missed_relief_overpayment",
+      title: "Confirm the ICT accelerated allowance split + any YA2027 sunset",
+      detail: "ICT/computer uses an accelerated allowance (IA 40% + AA 20% per gazette P.U.(A) 156/2018 → 328/2024 from YA2024). Some secondary sources invert this to 20%/40% — confirm against the gazette. The gazettes are open-ended, so do NOT assume it expires after YA2027 without an amending gazette.",
+      recommendation: "Verify the IA/AA split and any sunset against P.U.(A) 328/2024 (or upload it so the year profile records it).",
+      source: "P.U.(A) 328/2024 / 156/2018", refs: ict.map(refAsset) });
   }
 
   // Professional-fee cap (MEDIUM) — deterministic on the obvious categories.
@@ -1284,6 +1412,8 @@ function loadTaxPlan() {
       expenses: Array.isArray(parsed.expenses) ? parsed.expenses.map(normalizeTaxExpense) : fallback.expenses,
       assets: Array.isArray(parsed.assets) ? parsed.assets.map(normalizeTaxAsset) : fallback.assets,
       review: { ...fallback.review, ...(parsed.review || {}) },
+      yearProfiles: parsed.yearProfiles && typeof parsed.yearProfiles === "object" ? parsed.yearProfiles : fallback.yearProfiles,
+      lhdnDocs: Array.isArray(parsed.lhdnDocs) ? parsed.lhdnDocs : fallback.lhdnDocs,
       notes: { ...fallback.notes, ...(parsed.notes || {}) },
     };
   } catch {
@@ -3495,6 +3625,8 @@ function restoreAppData(data) {
           expenses: Array.isArray(data.taxPlan.expenses) ? data.taxPlan.expenses.map(normalizeTaxExpense) : [],
           assets: Array.isArray(data.taxPlan.assets) ? data.taxPlan.assets.map(normalizeTaxAsset) : [],
           review: { ...defaultTaxPlan().review, ...(data.taxPlan.review || {}) },
+          yearProfiles: data.taxPlan.yearProfiles && typeof data.taxPlan.yearProfiles === "object" ? data.taxPlan.yearProfiles : {},
+          lhdnDocs: Array.isArray(data.taxPlan.lhdnDocs) ? data.taxPlan.lhdnDocs : [],
           notes: { ...defaultTaxPlan().notes, ...(data.taxPlan.notes || {}) },
         }
       : taxPlan;
@@ -5843,6 +5975,54 @@ function applyScanToAsset() {
 // =============================================================================
 // YEAR-OF-ASSESSMENT SUMMARY — Form B tabulation for the Enterprise source.
 // =============================================================================
+// Confidence badge for a sourced fact-base value.
+function confBadge(v) {
+  if (!v) return "";
+  const tone = { high: "ok", medium: "warn", low: "bad" }[v.confidence] || "info";
+  const label = v.mustConfirm ? `${v.confidence} · confirm` : v.confidence;
+  return `<span class="tax-conf tone-${tone}" title="${escapeHtml(v.source || "")}">${escapeHtml(label)}</span>`;
+}
+
+// Render the LHDN rules that apply to ONE Year of Assessment (his "annual tabs").
+function renderTaxYearRules(ya) {
+  if (!els.taxYearRules) return;
+  const p = taxYearProfile(ya);
+  const c = p.constants;
+  const row = (label, v, extra = "") => `
+    <tr>
+      <td class="tyr-label">${escapeHtml(label)}</td>
+      <td class="tyr-val">${escapeHtml(typeof v === "string" ? v : v.value)}${extra}</td>
+      <td class="tyr-meta">${typeof v === "string" ? "" : `${confBadge(v)}${v.source && v.source !== "—" ? `<span class="tyr-src">${escapeHtml(v.source)}</span>` : ""}`}</td>
+    </tr>`;
+  const ict = p.ictAca;
+  const overrides = (p.overrides || []).filter(Boolean);
+  els.taxYearRules.innerHTML = `
+    ${!p.known ? `<p class="tax-hint-flag">⚠ No stored rules for YA ${ya} — values are provisional. Upload this year's LHDN documents (Public Ruling / Budget / SST notice) so the engine applies that year's rules.</p>` : ""}
+    ${p.changes && p.changes.length ? `<div class="tyr-changes"><strong>What changed in YA ${ya}:</strong><ul>${p.changes.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : ""}
+    ${(p.traps || []).length ? `<div class="tyr-traps">${p.traps.map((t) => `<p class="tax-hint-flag">⚠ ${escapeHtml(t)}</p>`).join("")}</div>` : ""}
+    <table class="tyr-table">
+      <thead><tr><th>Rule (YA ${ya})</th><th>Value</th><th>Confidence · source</th></tr></thead>
+      <tbody>
+        ${row("Service tax on accommodation", p.sstRate)}
+        ${row("SST registration threshold", c.sstThreshold)}
+        ${row("ICT / computer / software allowance", ict, ` <span class="tyr-cite">(${escapeHtml(ict.citation)})</span>`)}
+        ${row("Normal capital allowances", c.normalCa)}
+        ${row("Small-value assets", c.smallValue)}
+        ${row("Secretarial + tax-filing fee cap", c.secretarialCap)}
+        ${row("Individual relief (self)", c.selfRelief)}
+        ${row("Other reliefs (this YA)", p.reliefs)}
+        ${row("Individual rate bands", p.rateBands)}
+        ${row("E-invoice status", p.einvoice)}
+        ${row("Filing & basis period", c.basis)}
+        ${row("Carry-forward", c.carryForward)}
+        ${row("Scope guard", c.scopeGuard)}
+      </tbody>
+    </table>
+    ${overrides.length ? `<div class="tyr-overrides"><strong>From your uploaded documents (override the baseline for YA ${ya}):</strong><ul>${overrides.map((o) => `<li>${escapeHtml(o.ruleType || "rule")}: ${escapeHtml(o.extractedValue || o.value || "")} <span class="tyr-src">${escapeHtml(o.docIdentifier || o.source || "")}</span></li>`).join("")}</ul></div>` : `<p class="tyr-note">No documents uploaded for YA ${ya} yet — these are the researched baseline values. Upload your YA documents to confirm/override them.</p>`}
+    <p class="scan-disclaimer">${escapeHtml(p.notable.value)} · Confidence and sources shown per row. Confirm anything marked “confirm” against that year's LHDN document before filing.</p>
+  `;
+}
+
 function renderTaxYa() {
   if (!els.taxYaCards) return;
   if (els.taxClassifyAffirm) els.taxClassifyAffirm.checked = !!taxPlan.review?.classificationAffirmed;
@@ -5890,6 +6070,7 @@ function renderTaxYa() {
     </div>
     <p class="scan-disclaimer">YA ${ya} · Enterprise / sole-proprietor source (Form B). Suggested figures — run the AI review before filing. Capital allowances and losses not used this year carry forward automatically in the asset schedules above.</p>
   `;
+  renderTaxYearRules(ya);
 }
 
 function exportTaxYaExcel() {
@@ -6034,7 +6215,7 @@ function renderTaxReview(review, opts = {}) {
   const { verdict, verdictReason, findings, checksNotEvaluated, summary, ya } = review;
   const tone = TAX_VERDICT_TONE[verdict];
   const aiFindings = opts.ai?.findings || [];
-  const detFindings = findings.filter((f) => f.checkId !== "ict-ya2027-planning"); // keep info planning separate
+  const detFindings = findings; // info-level planning items render inline with the rest
   const overClaim = [...detFindings, ...aiFindings].filter((f) => f.ledger !== "missed_relief_overpayment");
   const missed = [...detFindings, ...aiFindings].filter((f) => f.ledger === "missed_relief_overpayment");
   const highCount = [...detFindings, ...aiFindings].filter((f) => f.severity === "high").length;
