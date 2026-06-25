@@ -91,6 +91,36 @@ const defaultCommitments = [
 
 const GUIDE_LINK = "https://bit.ly/sunrisevilla-guest-guide";
 const taxExpenseCategories = [
+  // Operating (revenue) — deductible under s33(1). These match the AI scanner + TAX_RULES.
+  "Housekeeping/Cleaning",
+  "Laundry",
+  "Consumables/Supplies",
+  "Utilities",
+  "Internet/WiFi",
+  "Repairs & Maintenance",
+  "OTA/Agent Commission",
+  "Payment/Bank Fees",
+  "Software Subscription",
+  "Marketing/Advertising",
+  "Insurance",
+  "Quit Rent & Assessment",
+  "Professional Fees",
+  "Loan Interest",
+  // Capital — these become a Capital Asset (claim capital allowance over years, not a deduction).
+  "Furniture & Fittings",
+  "Appliances/Electronics",
+  "Computer/ICT",
+  "Smart Lock/Security",
+  "Improvement/Renovation",
+  // Restricted / not deductible
+  "Entertainment",
+  "Vehicle/Transport",
+  "Legal Fees",
+  "Loan Principal",
+  "Pre-commencement/Setup",
+  "Private/Domestic",
+  "Other",
+  // Legacy labels — kept so older records keep their saved category (do not remove).
   "Housekeeping",
   "Maintenance",
   "Electricity & Water",
@@ -102,10 +132,89 @@ const taxExpenseCategories = [
   "Bank Charges",
   "Marketing",
   "Accounting & Tax",
-  "Insurance",
   "Licences & Fees",
-  "Other",
 ];
+
+// =============================================================================
+// MALAYSIAN TAX ENGINE (deterministic — sourced from LHDN Public Rulings + ITA
+// 1967; see tax/MALAYSIAN-TAX-RULES.md). The AI scanner only extracts + suggests
+// a category; THIS table decides the treatment. A licensed agent reviews before
+// filing, so we suggest treatments and FLAG grey areas rather than guessing.
+// =============================================================================
+
+// Capital-allowance rate classes (Schedule 3). ia = initial allowance (once, in
+// acquisition YA), aa = annual allowance (each YA on original cost until written
+// off). All percentages of qualifying expenditure (QE).
+const MY_CA_RATES = {
+  "computer-ict": { ia: 20, aa: 40, label: "Computer / ICT / software", note: "Accelerated (ICT Rules 2024) — full write-off ~2 yrs; expires after YA 2027." },
+  "furniture-office": { ia: 20, aa: 10, label: "Furniture, fittings & office equipment" },
+  "plant": { ia: 20, aa: 14, label: "Plant, machinery & appliances" },
+  "motor": { ia: 20, aa: 20, label: "Motor vehicle (non-commercial)", motorCap: true, note: "QE capped: RM100k (new & cost ≤ RM150k) else RM50k." },
+  "small-value": { ia: 0, aa: 100, sva: true, label: "Small value asset (≤ RM2,000)", note: "100% written off in the acquisition year (SME — uncapped aggregate)." },
+};
+const MY_CA_CLASS_KEYS = Object.keys(MY_CA_RATES);
+
+// Expense treatment table. treatment: deduct | partial | capital | no | ask.
+//   deduct  = revenue expense, deductible (restricted to business-use %)
+//   partial = deductible but statutorily restricted (pct = % allowed, then × business-use %)
+//   capital = not a deduction; should be recorded as a Capital Asset → capital allowance
+//   no      = not deductible and no relief
+//   ask     = judgement call — excluded from the auto total, listed for the agent
+// capitalClass points at MY_CA_RATES. flag = grey-area note surfaced in the UI.
+const TAX_RULES = {
+  "Housekeeping/Cleaning": { treatment: "deduct", rule: "Operating expense — s33(1).", source: "PR 12/2018" },
+  "Laundry": { treatment: "deduct", rule: "Operating expense — s33(1).", source: "ITA s33(1)" },
+  "Consumables/Supplies": { treatment: "deduct", rule: "Consumed in earning rental income — s33(1).", source: "ITA s33(1)" },
+  "Utilities": { treatment: "deduct", rule: "Electricity / water / gas for the let property — s33(1).", source: "PR 12/2018" },
+  "Internet/WiFi": { treatment: "deduct", rule: "Guest internet — s33(1).", source: "ITA s33(1)" },
+  "Repairs & Maintenance": { treatment: "deduct", rule: "Like-for-like repair, no improvement — s33(1)(c).", source: "PR 6/2019", flag: "Deductible ONLY as a genuine repair. An upgrade/improvement, or fixing a newly-bought asset (initial repair), is capital — re-tag it." },
+  "OTA/Agent Commission": { treatment: "deduct", rule: "Cost of securing the booking — s33(1).", source: "ITA s33(1)" },
+  "Payment/Bank Fees": { treatment: "deduct", rule: "Bank / payment-gateway charges — s33(1).", source: "ITA s33(1)" },
+  "Software Subscription": { treatment: "deduct", rule: "Recurring SaaS used for the business — s33(1).", source: "ITA s33(1)" },
+  "Marketing/Advertising": { treatment: "deduct", rule: "Advertising the let — s33(1).", source: "ITA s33(1)", flag: "Allowed only if the villa is taxed as a business (Form B) and after it opened — pre-opening marketing is not deductible." },
+  "Insurance": { treatment: "deduct", rule: "Insurance on the income-producing property — s33(1).", source: "PR 12/2018" },
+  "Quit Rent & Assessment": { treatment: "deduct", rule: "Property outgoings — s33(1).", source: "PR 12/2018" },
+  "Professional Fees": { treatment: "deduct", rule: "Accounting / secretarial / tax-filing — s33(1).", source: "P.U.(A) 162/2022", flag: "Secretarial + tax-filing fees share a combined cap of RM15,000 per YA." },
+  "Loan Interest": { treatment: "deduct", rule: "Interest on borrowings used for the business — s33(1)(a).", source: "PR 2/2011", flag: "Only the INTEREST portion. Split interest vs principal from the bank statement." },
+  "Furniture & Fittings": { treatment: "capital", capitalClass: "furniture-office", rule: "Durable asset → capital allowance (or 100% if ≤ RM2,000 each).", source: "Sch 3; PR 3/2021" },
+  "Appliances/Electronics": { treatment: "capital", capitalClass: "plant", rule: "Plant → capital allowance (or 100% if ≤ RM2,000 each).", source: "Sch 3; PR 12/2014" },
+  "Computer/ICT": { treatment: "capital", capitalClass: "computer-ict", rule: "ICT → accelerated CA 20% + 40% (expires after YA 2027).", source: "ICT ACA Rules 2024" },
+  "Smart Lock/Security": { treatment: "capital", capitalClass: "plant", rule: "Durable security equipment → capital allowance (or 100% if ≤ RM2,000).", source: "Sch 3; PR 3/2021", flag: "Capital-vs-revenue is grey for cheap units — confirm with your agent." },
+  "Improvement/Renovation": { treatment: "no", rule: "Capital improvement; ordinary accommodation building gets NO capital allowance.", source: "PR 6/2019; s39", flag: "No relief at all. Confirm repair-vs-improvement — a genuine repair would instead be deductible." },
+  "Entertainment": { treatment: "partial", pct: 50, rule: "Entertainment restricted to 50% — s39(1)(l).", source: "PR 4/2015", flag: "50% for existing customers · 100% for staff or logo gifts · 0% for potential customers. Adjust if not the default 50%." },
+  "Vehicle/Transport": { treatment: "ask", rule: "Apportion running costs to business use; commuting is private; a vehicle purchase is a capital asset.", source: "PR 5/2014", flag: "Set the business-use %. To capitalise a vehicle purchase, add it under Capital Assets as a Motor vehicle." },
+  "Legal Fees": { treatment: "ask", rule: "Recurring/trade legal = deductible; acquisition / S&P / loan-agreement legal = capital.", source: "PR 6/2006", flag: "Setup & acquisition legal fees are capital (no deduction). Confirm which this is." },
+  "Loan Principal": { treatment: "no", rule: "Capital repayment — only the interest is deductible.", source: "s39" },
+  "Pre-commencement/Setup": { treatment: "no", rule: "Pre-commencement expenditure — not deductible.", source: "PR 11/2013", flag: "Costs incurred before the villa first opened for letting are generally not deductible." },
+  "Private/Domestic": { treatment: "no", rule: "Private / domestic expense — prohibited by s39(1)(a).", source: "ITA s39(1)(a)" },
+  "Other": { treatment: "ask", rule: "Uncategorised — classify manually.", source: "—" },
+  // ---- Legacy labels (existing records) mapped to the same rules ----
+  "Housekeeping": { treatment: "deduct", rule: "Operating expense — s33(1).", source: "PR 12/2018" },
+  "Maintenance": { treatment: "deduct", rule: "Like-for-like repair, no improvement — s33(1)(c).", source: "PR 6/2019", flag: "Deductible only as a genuine repair; an improvement is capital." },
+  "Electricity & Water": { treatment: "deduct", rule: "Utilities for the let — s33(1).", source: "PR 12/2018" },
+  "Groceries": { treatment: "ask", rule: "Guest consumables = deductible; your own food = private.", source: "ITA s33(1)/s39(1)(a)", flag: "Split guest-provisioning from personal groceries — only the guest portion is deductible." },
+  "Gas": { treatment: "deduct", rule: "Utility for the let — s33(1).", source: "PR 12/2018" },
+  "Supplies": { treatment: "deduct", rule: "Consumed in earning income — s33(1).", source: "ITA s33(1)" },
+  "Repairs": { treatment: "deduct", rule: "Like-for-like repair — s33(1)(c).", source: "PR 6/2019", flag: "Deductible only as a genuine repair; improvements/initial repairs are capital." },
+  "Credit Card / Loans": { treatment: "ask", rule: "Interest deductible; principal repayment is not.", source: "s33(1)(a)/s39", flag: "Only finance INTEREST is deductible — principal is capital. Split them." },
+  "Bank Charges": { treatment: "deduct", rule: "Bank / payment charges — s33(1).", source: "ITA s33(1)" },
+  "Marketing": { treatment: "deduct", rule: "Advertising the let — s33(1).", source: "ITA s33(1)", flag: "Only post-opening, business-taxed letting." },
+  "Accounting & Tax": { treatment: "deduct", rule: "Accounting / secretarial / tax-filing — s33(1).", source: "P.U.(A) 162/2022", flag: "Secretarial + tax-filing share a combined RM15,000/YA cap." },
+  "Licences & Fees": { treatment: "deduct", rule: "Business licences, quit rent & assessment — s33(1).", source: "PR 12/2018", flag: "Government fines/penalties are NOT deductible — exclude those." },
+};
+
+function taxRuleFor(category) {
+  return TAX_RULES[category] || TAX_RULES.Other;
+}
+
+// Human label for a treatment code.
+const TREATMENT_LABEL = {
+  deduct: "Deductible",
+  partial: "Partially deductible",
+  capital: "Capital → allowance",
+  no: "Not deductible",
+  ask: "Needs review",
+};
 
 const defaultMessageTemplates = {
   quote:
@@ -398,7 +507,48 @@ const els = {
   clearTaxExpense: document.querySelector("#clearTaxExpense"),
   exportTaxExpensesExcel: document.querySelector("#exportTaxExpensesExcel"),
   exportTaxExpensesPdf: document.querySelector("#exportTaxExpensesPdf"),
+  taxExpenseBizPct: document.querySelector("#taxExpenseBizPct"),
+  taxExpenseHint: document.querySelector("#taxExpenseHint"),
+  // AI receipt scanner
+  taxScanInput: document.querySelector("#taxScanInput"),
+  taxScanFileName: document.querySelector("#taxScanFileName"),
+  taxScanBtn: document.querySelector("#taxScanBtn"),
+  taxScanStatus: document.querySelector("#taxScanStatus"),
+  taxScanResult: document.querySelector("#taxScanResult"),
+  // Capital assets
+  taxAssetForm: document.querySelector("#taxAssetForm"),
+  taxAssetId: document.querySelector("#taxAssetId"),
+  taxAssetDesc: document.querySelector("#taxAssetDesc"),
+  taxAssetCost: document.querySelector("#taxAssetCost"),
+  taxAssetClass: document.querySelector("#taxAssetClass"),
+  taxAssetDate: document.querySelector("#taxAssetDate"),
+  taxAssetBizPct: document.querySelector("#taxAssetBizPct"),
+  taxAssetConditionField: document.querySelector("#taxAssetConditionField"),
+  taxAssetCondition: document.querySelector("#taxAssetCondition"),
+  taxAssetVendor: document.querySelector("#taxAssetVendor"),
+  taxAssetEntity: document.querySelector("#taxAssetEntity"),
+  taxAssetProperty: document.querySelector("#taxAssetProperty"),
+  taxAssetNotes: document.querySelector("#taxAssetNotes"),
+  taxAssetHint: document.querySelector("#taxAssetHint"),
+  taxAssetReceipt: document.querySelector("#taxAssetReceipt"),
+  taxAssetAttachment: document.querySelector("#taxAssetAttachment"),
+  taxAssetAttachmentStatus: document.querySelector("#taxAssetAttachmentStatus"),
+  taxAssetDisposalDate: document.querySelector("#taxAssetDisposalDate"),
+  taxAssetDisposalValue: document.querySelector("#taxAssetDisposalValue"),
+  taxAssetReviewed: document.querySelector("#taxAssetReviewed"),
+  clearTaxAsset: document.querySelector("#clearTaxAsset"),
+  removeTaxAssetAttachment: document.querySelector("#removeTaxAssetAttachment"),
+  taxAssetSummary: document.querySelector("#taxAssetSummary"),
+  taxAssetCards: document.querySelector("#taxAssetCards"),
+  // Year-of-assessment summary
+  taxYaInput: document.querySelector("#taxYaInput"),
+  taxYaCards: document.querySelector("#taxYaCards"),
+  taxYaDetail: document.querySelector("#taxYaDetail"),
+  exportTaxYaExcel: document.querySelector("#exportTaxYaExcel"),
 };
+
+let pendingTaxAssetAttachment = null;
+let removePendingTaxAssetAttachment = false;
 
 let taxPlan = loadTaxPlan();
 
@@ -457,6 +607,7 @@ function defaultTaxPlan() {
     monthlySalary: 0,
     personalReliefs: 9000,
     expenses: [],
+    assets: [], // capital assets (capital-allowance schedule, multi-year)
     notes: {
       books: false,
       salary: false,
@@ -483,7 +634,7 @@ function normalizeTaxExpense(expense = {}) {
     property: ["Sunrise Villa", "Windmill Villa", "Shared"].includes(expense.property) ? expense.property : "Sunrise Villa",
     category: taxExpenseCategories.includes(expense.category) ? expense.category : "Other",
     type: expense.type === "Recurring" ? "Recurring" : "One-off",
-    deductible: ["Deductible", "Partially deductible", "Not deductible", "Ask accountant"].includes(expense.deductible) ? expense.deductible : "Deductible",
+    deductible: ["Auto (from rule)", "Deductible", "Partially deductible", "Not deductible", "Ask accountant"].includes(expense.deductible) ? expense.deductible : "Auto (from rule)",
     vendor: String(expense.vendor || ""),
     payment: String(expense.payment || "Bank Transfer"),
     claimStatus: ["Paid by business", "Paid personally", "Reimbursed", "Not reimbursed"].includes(expense.claimStatus) ? expense.claimStatus : "Paid by business",
@@ -492,9 +643,206 @@ function normalizeTaxExpense(expense = {}) {
     reviewed: Boolean(expense.reviewed),
     notes: String(expense.notes || ""),
     amount: Number(expense.amount || 0),
+    businessUsePct: clampPct(expense.businessUsePct, 100), // apportionment for mixed-use running costs
     createdAt: expense.createdAt || new Date().toISOString(),
     updatedAt: expense.updatedAt || new Date().toISOString(),
   };
+}
+
+function clampPct(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, n));
+}
+
+function yearOf(dateStr) {
+  const y = Number(String(dateStr || "").slice(0, 4));
+  return Number.isFinite(y) && y > 1900 ? y : 0;
+}
+
+// ---- Capital assets (multi-year capital-allowance schedule) --------------
+function normalizeTaxAsset(asset = {}) {
+  const attachment =
+    asset.attachment && typeof asset.attachment === "object"
+      ? {
+          name: String(asset.attachment.name || ""),
+          type: String(asset.attachment.type || ""),
+          dataUrl: safeDataUrl(asset.attachment.dataUrl, ["data:image/", "data:application/pdf"]),
+          attachedAt: asset.attachment.attachedAt || new Date().toISOString(),
+        }
+      : null;
+  const cost = Math.max(0, Number(asset.cost || 0));
+  let assetClass = MY_CA_CLASS_KEYS.includes(asset.assetClass) ? asset.assetClass : "plant";
+  // A small-value class only qualifies at ≤ RM2,000; above that it's ordinary plant.
+  if (assetClass === "small-value" && cost > 2000) assetClass = "plant";
+  const disposed =
+    asset.disposed && typeof asset.disposed === "object" && asset.disposed.date
+      ? { date: String(asset.disposed.date), value: Math.max(0, Number(asset.disposed.value || 0)) }
+      : null;
+  return {
+    id: safeRecordId(asset.id),
+    description: String(asset.description || ""),
+    vendor: String(asset.vendor || ""),
+    entity: ["Enterprise", "Sdn. Bhd.", "Personal / Owner"].includes(asset.entity) ? asset.entity : "Enterprise",
+    property: ["Sunrise Villa", "Windmill Villa", "Shared"].includes(asset.property) ? asset.property : "Sunrise Villa",
+    cost,
+    acquisitionDate: String(asset.acquisitionDate || isoDate(new Date())),
+    assetClass,
+    condition: asset.condition === "used" ? "used" : "new", // motor QE cap depends on this
+    businessUsePct: clampPct(asset.businessUsePct, 100),
+    disposed,
+    receipt: String(asset.receipt || ""),
+    attachment,
+    reviewed: Boolean(asset.reviewed),
+    notes: String(asset.notes || ""),
+    createdAt: asset.createdAt || new Date().toISOString(),
+    updatedAt: asset.updatedAt || new Date().toISOString(),
+  };
+}
+
+// Qualifying expenditure = cost, except a motor vehicle is statutorily capped.
+function assetQE(asset) {
+  const cost = Math.max(0, Number(asset.cost || 0));
+  const rates = MY_CA_RATES[asset.assetClass] || MY_CA_RATES.plant;
+  if (rates.motorCap) {
+    return asset.condition === "new" && cost <= 150000 ? Math.min(cost, 100000) : Math.min(cost, 50000);
+  }
+  return cost;
+}
+
+// Capital allowance for one asset in one Year of Assessment.
+// Returns { gross, claimed, residual, balancing, sva } where claimed/balancing
+// are already restricted to the business-use % (private portion is forgone).
+function assetCaForYA(asset, ya) {
+  const out = { gross: 0, claimed: 0, residual: 0, balancing: 0, sva: false };
+  const acqYA = yearOf(asset.acquisitionDate);
+  if (!acqYA || ya < acqYA) return out;
+  const qe = assetQE(asset);
+  const bizFrac = clampPct(asset.businessUsePct, 100) / 100;
+  const rates = MY_CA_RATES[asset.assetClass] || MY_CA_RATES.plant;
+  const dispYA = asset.disposed ? yearOf(asset.disposed.date) : 0;
+  if (dispYA && ya > dispYA) return out; // already disposed in an earlier YA
+
+  if (rates.sva) {
+    out.sva = true;
+    if (ya === acqYA) {
+      out.gross = qe;
+      out.claimed = qe * bizFrac;
+    }
+    out.residual = 0;
+    return out;
+  }
+
+  // Cumulative gross allowance written off by the END of YA y (IA once + AA each
+  // year), capped at QE.
+  const cumGross = (y) => {
+    if (y < acqYA) return 0;
+    const aaYears = y - acqYA + 1;
+    return Math.min(qe, (qe * rates.ia) / 100 + ((qe * rates.aa) / 100) * aaYears);
+  };
+
+  if (dispYA && ya === dispYA) {
+    // No annual allowance in the year of disposal; instead a balancing
+    // allowance (sale < residual) or charge (sale > residual). PR 7/2017.
+    const residualBefore = Math.max(0, qe - cumGross(dispYA - 1));
+    const proceeds = Math.max(0, Number(asset.disposed.value || 0));
+    out.balancing = (residualBefore - proceeds) * bizFrac; // + allowance, − charge
+    out.residual = 0;
+    return out;
+  }
+
+  const through = cumGross(ya);
+  const prior = cumGross(ya - 1);
+  out.gross = Math.max(0, through - prior);
+  out.claimed = out.gross * bizFrac;
+  out.residual = Math.max(0, qe - through);
+  return out;
+}
+
+// Deductible amount of a revenue expense for the auto-total. Capital / not-
+// deductible / needs-review items contribute 0 here (handled in their own bucket).
+function expenseDeductibleAmount(expense) {
+  const rule = taxRuleFor(expense.category);
+  const amount = Math.max(0, Number(expense.amount || 0));
+  const bizFrac = clampPct(expense.businessUsePct, 100) / 100;
+  // An explicit user override on the record wins over the rule default.
+  const override = expense.deductible;
+  if (override === "Not deductible") return 0;
+  if (override === "Ask accountant") return 0;
+  if (override === "Deductible") return amount * bizFrac;
+  if (override === "Partially deductible") {
+    const pct = rule.treatment === "partial" && rule.pct ? rule.pct / 100 : 0.5;
+    return amount * bizFrac * pct;
+  }
+  // No override → follow the rule.
+  if (rule.treatment === "deduct") return amount * bizFrac;
+  if (rule.treatment === "partial") return amount * bizFrac * ((rule.pct || 50) / 100);
+  return 0; // capital / no / ask
+}
+
+// Which bucket an expense falls into for the YA summary.
+function expenseBucket(expense) {
+  const override = expense.deductible;
+  if (override === "Not deductible") return "no";
+  if (override === "Ask accountant") return "ask";
+  if (override === "Deductible") return "deduct";
+  if (override === "Partially deductible") return "partial";
+  return taxRuleFor(expense.category).treatment;
+}
+
+// Roll everything up for one Year of Assessment (calendar year). Sole-prop /
+// enterprise source — the Sdn. Bhd. entity is excluded from this Form B view.
+function taxYaSummary(ya, opts = {}) {
+  const property = opts.property || "All";
+  const inScope = (rec) =>
+    rec.entity !== "Sdn. Bhd." && (property === "All" || rec.property === property || rec.property === "Shared");
+
+  const expenses = (taxPlan.expenses || []).filter((e) => inScope(e) && yearOf(e.date) === ya);
+  const sum = { deduct: 0, partial: 0, capitalFlagged: 0, no: 0, ask: 0 };
+  expenses.forEach((e) => {
+    const bucket = expenseBucket(e);
+    const amount = Math.max(0, Number(e.amount || 0));
+    if (bucket === "deduct" || bucket === "partial") sum.deduct += expenseDeductibleAmount(e);
+    else if (bucket === "capital") sum.capitalFlagged += amount;
+    else if (bucket === "no") sum.no += amount;
+    else sum.ask += amount;
+  });
+
+  // Capital allowances from the asset register for this YA.
+  const assets = (taxPlan.assets || []).filter(inScope);
+  let capitalAllowance = 0;
+  let balancing = 0;
+  assets.forEach((a) => {
+    const ca = assetCaForYA(a, ya);
+    capitalAllowance += ca.claimed;
+    balancing += ca.balancing;
+  });
+
+  const revenueDeductible = sum.deduct;
+  const totalRelief = revenueDeductible + capitalAllowance + Math.max(0, balancing);
+  const balancingCharge = balancing < 0 ? -balancing : 0; // adds back to income
+
+  return {
+    ya,
+    expenseCount: expenses.length,
+    assetCount: assets.length,
+    revenueDeductible,
+    capitalAllowance,
+    balancingAllowance: Math.max(0, balancing),
+    balancingCharge,
+    capitalFlagged: sum.capitalFlagged,
+    notDeductible: sum.no,
+    needsReview: sum.ask,
+    totalRelief, // revenue deductions + capital allowances (+ balancing allowance)
+  };
+}
+
+// Residual (tax written-down value) carried into the NEXT YA — the multi-year
+// memory: unabsorbed capital allowances carry forward indefinitely.
+function assetResidualAfter(asset, ya) {
+  const ca = assetCaForYA(asset, ya);
+  if (ca.sva) return ya >= yearOf(asset.acquisitionDate) ? 0 : assetQE(asset);
+  return ca.residual;
 }
 
 function loadTaxPlan() {
@@ -507,6 +855,7 @@ function loadTaxPlan() {
       ...fallback,
       ...parsed,
       expenses: Array.isArray(parsed.expenses) ? parsed.expenses.map(normalizeTaxExpense) : fallback.expenses,
+      assets: Array.isArray(parsed.assets) ? parsed.assets.map(normalizeTaxAsset) : fallback.assets,
       notes: { ...fallback.notes, ...(parsed.notes || {}) },
     };
   } catch {
@@ -1631,7 +1980,8 @@ function setMessageFlow(flow) {
 }
 
 function setTaxInnerTab(mode) {
-  const nextMode = mode === "expenses" ? "expenses" : "plan";
+  const valid = ["plan", "expenses", "assets", "claim"];
+  const nextMode = valid.includes(mode) ? mode : "plan";
   document.querySelectorAll("[data-tax-inner-tab]").forEach((button) => {
     const active = button.dataset.taxInnerTab === nextMode;
     button.classList.toggle("active", active);
@@ -1641,6 +1991,8 @@ function setTaxInnerTab(mode) {
     panel.classList.toggle("active", panel.dataset.taxInnerPanel === nextMode);
   });
   if (nextMode === "expenses") renderTaxExpenses();
+  if (nextMode === "assets") renderTaxAssets();
+  if (nextMode === "claim") renderTaxYa();
 }
 
 function staySegmentClass(booking, dayIso) {
@@ -2713,6 +3065,7 @@ function restoreAppData(data) {
           ...defaultTaxPlan(),
           ...data.taxPlan,
           expenses: Array.isArray(data.taxPlan.expenses) ? data.taxPlan.expenses.map(normalizeTaxExpense) : [],
+          assets: Array.isArray(data.taxPlan.assets) ? data.taxPlan.assets.map(normalizeTaxAsset) : [],
           notes: { ...defaultTaxPlan().notes, ...(data.taxPlan.notes || {}) },
         }
       : taxPlan;
@@ -4316,6 +4669,9 @@ function renderTaxPlan() {
   els.reliefOut.textContent = money(personalReliefs);
   els.personalTaxOut.textContent = money(personalTax);
   renderTaxExpenses();
+  renderTaxAssets();
+  if (els.taxYaInput && !els.taxYaInput.value) els.taxYaInput.value = year;
+  renderTaxYa();
 }
 
 function taxExpenseFilters() {
@@ -4362,16 +4718,18 @@ function clearTaxExpenseForm() {
   els.taxExpenseDate.value = isoDate(new Date());
   els.taxExpenseEntity.value = "Enterprise";
   els.taxExpenseProperty.value = "Sunrise Villa";
-  els.taxExpenseCategory.value = "Housekeeping";
+  els.taxExpenseCategory.value = "Housekeeping/Cleaning";
   els.taxExpenseType.value = "One-off";
-  els.taxExpenseDeductible.value = "Deductible";
+  els.taxExpenseDeductible.value = "Auto (from rule)";
   els.taxExpensePayment.value = "Bank Transfer";
   els.taxExpenseClaimStatus.value = "Paid by business";
   els.taxExpenseReviewed.checked = false;
+  if (els.taxExpenseBizPct) els.taxExpenseBizPct.value = 100;
   pendingTaxExpenseAttachment = null;
   removePendingTaxExpenseAttachment = false;
   if (els.taxExpenseAttachment) els.taxExpenseAttachment.value = "";
   if (els.taxExpenseAttachmentStatus) els.taxExpenseAttachmentStatus.textContent = "No file attached";
+  renderTaxExpenseHint();
 }
 
 function formTaxExpense() {
@@ -4393,9 +4751,79 @@ function formTaxExpense() {
     reviewed: els.taxExpenseReviewed.checked,
     notes: els.taxExpenseNotes.value.trim(),
     amount: Number(els.taxExpenseAmount.value || 0),
+    businessUsePct: els.taxExpenseBizPct ? clampPct(els.taxExpenseBizPct.value, 100) : 100,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   });
+}
+
+// Live, sourced treatment hint shown under the expense category. Reads the
+// deterministic TAX_RULES table — never the AI — so what the host sees is what
+// the engine will tabulate.
+function renderTaxExpenseHint() {
+  if (!els.taxExpenseHint) return;
+  const category = els.taxExpenseCategory?.value || "Other";
+  const rule = taxRuleFor(category);
+  const bizPct = els.taxExpenseBizPct ? clampPct(els.taxExpenseBizPct.value, 100) : 100;
+  const amount = Number(els.taxExpenseAmount?.value || 0);
+  const preview = normalizeTaxExpense({
+    category,
+    amount,
+    businessUsePct: bizPct,
+    deductible: els.taxExpenseDeductible?.value,
+  });
+  const claimable = expenseDeductibleAmount(preview);
+  const tone = { deduct: "ok", partial: "warn", capital: "info", no: "bad", ask: "warn" }[rule.treatment] || "info";
+  const bits = [];
+  bits.push(`<span class="tax-hint-badge tone-${tone}">${escapeHtml(TREATMENT_LABEL[rule.treatment] || "Review")}</span>`);
+  bits.push(`<span class="tax-hint-rule">${escapeHtml(rule.rule)}</span>`);
+  if (rule.source && rule.source !== "—") bits.push(`<span class="tax-hint-src">${escapeHtml(rule.source)}</span>`);
+  if (rule.treatment === "capital") {
+    bits.push(`<button type="button" class="tax-hint-link" id="taxHintToAsset">→ Record as a capital asset instead</button>`);
+  }
+  if (amount > 0 && (rule.treatment === "deduct" || rule.treatment === "partial")) {
+    bits.push(`<span class="tax-hint-amt">Deductible: <strong>${money(claimable)}</strong>${bizPct < 100 ? ` (at ${bizPct}% business use)` : ""}</span>`);
+  }
+  let html = `<div class="tax-hint-row">${bits.join("")}</div>`;
+  if (rule.flag) html += `<p class="tax-hint-flag">⚠ ${escapeHtml(rule.flag)}</p>`;
+  els.taxExpenseHint.innerHTML = html;
+  const toAsset = document.querySelector("#taxHintToAsset");
+  if (toAsset) toAsset.addEventListener("click", () => sendExpenseToAsset());
+}
+
+// Move the half-typed expense into the capital-asset form (when the rule says
+// it's capital, not a deduction).
+function sendExpenseToAsset() {
+  const desc = [els.taxExpenseVendor?.value, els.taxExpenseNotes?.value].filter(Boolean).join(" — ");
+  clearTaxAssetForm();
+  setTaxInnerTab("assets");
+  if (els.taxAssetDesc) els.taxAssetDesc.value = desc || els.taxExpenseCategory?.value || "";
+  if (els.taxAssetCost) els.taxAssetCost.value = els.taxExpenseAmount?.value || "";
+  if (els.taxAssetVendor) els.taxAssetVendor.value = els.taxExpenseVendor?.value || "";
+  if (els.taxAssetDate) els.taxAssetDate.value = els.taxExpenseDate?.value || isoDate(new Date());
+  if (els.taxAssetBizPct) els.taxAssetBizPct.value = els.taxExpenseBizPct?.value || 100;
+  if (els.taxAssetClass) els.taxAssetClass.value = suggestAssetClass(els.taxExpenseCategory?.value, Number(els.taxExpenseAmount?.value || 0));
+  // carry a pending attachment across if one was staged
+  if (pendingTaxExpenseAttachment) {
+    pendingTaxAssetAttachment = pendingTaxExpenseAttachment;
+    if (els.taxAssetAttachmentStatus) els.taxAssetAttachmentStatus.textContent = `Attached: ${pendingTaxAssetAttachment.name}`;
+  }
+  updateAssetConditionVisibility();
+  renderTaxAssetHint();
+  if (els.taxAssetDesc) els.taxAssetDesc.focus();
+}
+
+// Map an expense category / cost to the most likely capital-allowance class.
+function suggestAssetClass(category, cost) {
+  if (cost > 0 && cost <= 2000) return "small-value";
+  const map = {
+    "Computer/ICT": "computer-ict",
+    "Furniture & Fittings": "furniture-office",
+    "Appliances/Electronics": "plant",
+    "Smart Lock/Security": "plant",
+    "Vehicle/Transport": "motor",
+  };
+  return map[category] || "plant";
 }
 
 function fileToTaxAttachment(file) {
@@ -4444,12 +4872,14 @@ function fillTaxExpenseForm(id) {
   els.taxExpenseReceipt.value = expense.receipt;
   els.taxExpenseReviewed.checked = Boolean(expense.reviewed);
   els.taxExpenseNotes.value = expense.notes;
+  if (els.taxExpenseBizPct) els.taxExpenseBizPct.value = clampPct(expense.businessUsePct, 100);
   pendingTaxExpenseAttachment = null;
   removePendingTaxExpenseAttachment = false;
   if (els.taxExpenseAttachment) els.taxExpenseAttachment.value = "";
   if (els.taxExpenseAttachmentStatus) {
     els.taxExpenseAttachmentStatus.textContent = expense.attachment?.name ? `Attached: ${expense.attachment.name}` : "No file attached";
   }
+  renderTaxExpenseHint();
 }
 
 function saveTaxExpense(event) {
@@ -4490,6 +4920,7 @@ function taxExpenseExportRows(rows = filteredTaxExpenses()) {
     expense.receipt || "-",
     expense.attachment?.name || "-",
     expense.reviewed ? "Reviewed" : "Pending",
+    `${clampPct(expense.businessUsePct, 100)}%`,
     Number(expense.amount || 0),
   ]);
 }
@@ -4543,7 +4974,7 @@ function renderTaxExpenses() {
 }
 
 function exportTaxExpensesExcel() {
-  const headers = ["Date", "Business", "Property", "Category", "Type", "Tax Status", "Supplier", "Description", "Payment", "Claim Status", "Receipt", "Attachment", "Review", "Amount"];
+  const headers = ["Date", "Business", "Property", "Category", "Type", "Tax Status", "Supplier", "Description", "Payment", "Claim Status", "Receipt", "Attachment", "Review", "Business %", "Amount"];
   const rows = taxExpenseExportRows();
   const tableHtml = `
     <table>
@@ -4611,6 +5042,460 @@ function exportTaxExpensesPdf() {
   printWindow.document.close();
   printWindow.focus();
   printWindow.print();
+}
+
+// =============================================================================
+// CAPITAL ASSETS — form, register, and the multi-year capital-allowance schedule
+// =============================================================================
+function updateAssetConditionVisibility() {
+  if (!els.taxAssetConditionField) return;
+  els.taxAssetConditionField.style.display = els.taxAssetClass?.value === "motor" ? "" : "none";
+}
+
+function clearTaxAssetForm() {
+  if (!els.taxAssetForm) return;
+  els.taxAssetForm.reset();
+  els.taxAssetId.value = "";
+  els.taxAssetDate.value = isoDate(new Date());
+  els.taxAssetClass.value = "furniture-office";
+  els.taxAssetEntity.value = "Enterprise";
+  els.taxAssetProperty.value = "Sunrise Villa";
+  els.taxAssetCondition.value = "new";
+  if (els.taxAssetBizPct) els.taxAssetBizPct.value = 100;
+  pendingTaxAssetAttachment = null;
+  removePendingTaxAssetAttachment = false;
+  if (els.taxAssetAttachment) els.taxAssetAttachment.value = "";
+  if (els.taxAssetAttachmentStatus) els.taxAssetAttachmentStatus.textContent = "No file attached";
+  updateAssetConditionVisibility();
+  renderTaxAssetHint();
+}
+
+function formTaxAsset() {
+  const now = new Date().toISOString();
+  const existing = (taxPlan.assets || []).find((a) => a.id === els.taxAssetId.value);
+  const disposalDate = els.taxAssetDisposalDate?.value || "";
+  return normalizeTaxAsset({
+    id: safeRecordId(els.taxAssetId.value),
+    description: els.taxAssetDesc.value.trim(),
+    vendor: els.taxAssetVendor.value.trim(),
+    entity: els.taxAssetEntity.value,
+    property: els.taxAssetProperty.value,
+    cost: Number(els.taxAssetCost.value || 0),
+    acquisitionDate: els.taxAssetDate.value || isoDate(new Date()),
+    assetClass: els.taxAssetClass.value,
+    condition: els.taxAssetCondition.value,
+    businessUsePct: clampPct(els.taxAssetBizPct?.value, 100),
+    disposed: disposalDate ? { date: disposalDate, value: Number(els.taxAssetDisposalValue?.value || 0) } : null,
+    receipt: els.taxAssetReceipt.value.trim(),
+    attachment: pendingTaxAssetAttachment || (removePendingTaxAssetAttachment ? null : existing?.attachment || null),
+    reviewed: els.taxAssetReviewed.checked,
+    notes: els.taxAssetNotes.value.trim(),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+}
+
+function fillTaxAssetForm(id) {
+  const asset = (taxPlan.assets || []).find((a) => a.id === id);
+  if (!asset) return;
+  els.taxAssetId.value = asset.id;
+  els.taxAssetDesc.value = asset.description;
+  els.taxAssetVendor.value = asset.vendor;
+  els.taxAssetEntity.value = asset.entity;
+  els.taxAssetProperty.value = asset.property;
+  els.taxAssetCost.value = asset.cost;
+  els.taxAssetDate.value = asset.acquisitionDate;
+  els.taxAssetClass.value = asset.assetClass;
+  els.taxAssetCondition.value = asset.condition;
+  if (els.taxAssetBizPct) els.taxAssetBizPct.value = clampPct(asset.businessUsePct, 100);
+  els.taxAssetDisposalDate.value = asset.disposed?.date || "";
+  els.taxAssetDisposalValue.value = asset.disposed?.value || "";
+  els.taxAssetReceipt.value = asset.receipt;
+  els.taxAssetReviewed.checked = Boolean(asset.reviewed);
+  els.taxAssetNotes.value = asset.notes;
+  pendingTaxAssetAttachment = null;
+  removePendingTaxAssetAttachment = false;
+  if (els.taxAssetAttachment) els.taxAssetAttachment.value = "";
+  if (els.taxAssetAttachmentStatus) {
+    els.taxAssetAttachmentStatus.textContent = asset.attachment?.name ? `Attached: ${asset.attachment.name}` : "No file attached";
+  }
+  updateAssetConditionVisibility();
+  renderTaxAssetHint();
+  setTaxInnerTab("assets");
+  els.taxAssetDesc.focus();
+}
+
+function saveTaxAsset(event) {
+  event.preventDefault();
+  if (!els.taxAssetForm.reportValidity()) return;
+  const asset = formTaxAsset();
+  taxPlan = {
+    ...taxPlan,
+    assets: (taxPlan.assets || []).some((a) => a.id === asset.id)
+      ? taxPlan.assets.map((a) => (a.id === asset.id ? asset : a))
+      : [asset, ...(taxPlan.assets || [])],
+  };
+  saveTaxPlan();
+  clearTaxAssetForm();
+  renderTaxAssets();
+}
+
+function deleteTaxAsset(id) {
+  if (!window.confirm("Delete this capital asset and its allowance schedule?")) return;
+  createRecoverySnapshot("Before capital asset deleted");
+  taxPlan = { ...taxPlan, assets: (taxPlan.assets || []).filter((a) => a.id !== id) };
+  saveTaxPlan();
+  renderTaxAssets();
+}
+
+// Live hint on the asset form — shows the class rates and what this YA's
+// allowance and carry-forward will be.
+function renderTaxAssetHint() {
+  if (!els.taxAssetHint) return;
+  const cls = els.taxAssetClass?.value || "plant";
+  const rates = MY_CA_RATES[cls] || MY_CA_RATES.plant;
+  const preview = normalizeTaxAsset({
+    cost: Number(els.taxAssetCost?.value || 0),
+    assetClass: cls,
+    acquisitionDate: els.taxAssetDate?.value || isoDate(new Date()),
+    condition: els.taxAssetCondition?.value || "new",
+    businessUsePct: clampPct(els.taxAssetBizPct?.value, 100),
+  });
+  const acqYA = yearOf(preview.acquisitionDate);
+  const first = assetCaForYA(preview, acqYA);
+  const bits = [];
+  bits.push(`<span class="tax-hint-badge tone-info">${escapeHtml(rates.label)}</span>`);
+  if (rates.sva) bits.push(`<span class="tax-hint-rule">100% written off in ${acqYA}.</span>`);
+  else bits.push(`<span class="tax-hint-rule">Initial ${rates.ia}% + ${rates.aa}%/yr on qualifying cost.</span>`);
+  if (preview.cost > 0) {
+    const qe = assetQE(preview);
+    if (qe < preview.cost) bits.push(`<span class="tax-hint-amt">Qualifying cost capped at <strong>${money(qe)}</strong></span>`);
+    bits.push(`<span class="tax-hint-amt">${acqYA} allowance: <strong>${money(first.claimed)}</strong>${preview.businessUsePct < 100 ? ` (at ${preview.businessUsePct}% business use)` : ""}</span>`);
+    if (!rates.sva) bits.push(`<span class="tax-hint-src">Carries forward to ${acqYA + 1} +</span>`);
+  }
+  let html = `<div class="tax-hint-row">${bits.join("")}</div>`;
+  if (rates.note) html += `<p class="tax-hint-flag">ℹ ${escapeHtml(rates.note)}</p>`;
+  if (preview.businessUsePct < 100) html += `<p class="tax-hint-flag">⚠ The private ${100 - preview.businessUsePct}% is permanently forgone (Sch 3 Para 73) — the asset still writes down on its full cost.</p>`;
+  els.taxAssetHint.innerHTML = html;
+}
+
+// Build the year-by-year allowance schedule for one asset, from acquisition
+// until the residual is written off (cap 12 rows for display).
+function assetScheduleRows(asset) {
+  const acqYA = yearOf(asset.acquisitionDate);
+  if (!acqYA) return [];
+  const rows = [];
+  let ya = acqYA;
+  for (let i = 0; i < 12; i += 1) {
+    const ca = assetCaForYA(asset, ya);
+    const residual = assetResidualAfter(asset, ya);
+    rows.push({ ya, ...ca, residual });
+    const dispYA = asset.disposed ? yearOf(asset.disposed.date) : 0;
+    if (dispYA && ya >= dispYA) break;
+    if (residual <= 0 && ca.gross <= 0 && ya > acqYA) break;
+    if (residual <= 0 && (ca.sva || ca.gross > 0) && i >= 0) {
+      // SVA or fully written off in this year — stop after showing this row.
+      if (residual <= 0) break;
+    }
+    ya += 1;
+  }
+  return rows;
+}
+
+function renderTaxAssets() {
+  if (!els.taxAssetCards) return;
+  const assets = (taxPlan.assets || []).slice().sort((a, b) => String(b.acquisitionDate).localeCompare(String(a.acquisitionDate)));
+  const thisYa = currentYear();
+  if (els.taxAssetSummary) {
+    const totalCost = assets.reduce((s, a) => s + Number(a.cost || 0), 0);
+    const caThisYear = assets.reduce((s, a) => s + assetCaForYA(a, thisYa).claimed, 0);
+    const residual = assets.reduce((s, a) => s + assetResidualAfter(a, thisYa), 0);
+    els.taxAssetSummary.innerHTML = `
+      <article class="tax-expense-card"><span>Assets recorded</span><strong>${assets.length}</strong></article>
+      <article class="tax-expense-card"><span>Total cost</span><strong>${money(totalCost)}</strong></article>
+      <article class="tax-expense-card"><span>${thisYa} allowance</span><strong>${money(caThisYear)}</strong></article>
+      <article class="tax-expense-card"><span>Carries to ${thisYa + 1}</span><strong>${money(residual)}</strong></article>
+    `;
+  }
+  if (!assets.length) {
+    els.taxAssetCards.innerHTML = `<p class="empty-state">No capital assets yet. Add furniture, appliances, a computer or a vehicle above — or scan a receipt in the Expense tab and send it here.</p>`;
+    return;
+  }
+  els.taxAssetCards.innerHTML = assets
+    .map((asset) => {
+      const rates = MY_CA_RATES[asset.assetClass] || MY_CA_RATES.plant;
+      const rows = assetScheduleRows(asset);
+      const qe = assetQE(asset);
+      const capNote = qe < Number(asset.cost || 0) ? ` · qualifying cost ${money(qe)}` : "";
+      const disposed = asset.disposed?.date
+        ? `<span class="tax-asset-flag">Disposed ${shortDate(asset.disposed.date)} · proceeds ${money(asset.disposed.value || 0)}</span>`
+        : "";
+      const bizNote = asset.businessUsePct < 100 ? ` · ${asset.businessUsePct}% business` : "";
+      const scheduleRows = rows
+        .map(
+          (r) => `
+            <tr${r.ya === currentYear() ? ' class="tax-row-now"' : ""}>
+              <td>${r.ya}</td>
+              <td>${r.balancing ? `<em>${r.balancing >= 0 ? "Balancing allowance" : "Balancing charge"}</em>` : (r.sva ? "100% (small value)" : (r.ya === yearOf(asset.acquisitionDate) ? `IA+AA` : "AA"))}</td>
+              <td>${money(r.balancing ? Math.abs(r.balancing) : r.claimed)}</td>
+              <td>${money(r.residual)}</td>
+            </tr>`,
+        )
+        .join("");
+      return `
+        <article class="tax-asset-card">
+          <div class="tax-asset-head">
+            <div>
+              <strong>${escapeHtml(asset.description || "Untitled asset")}</strong>
+              <span class="tax-asset-meta">${escapeHtml(rates.label)} · ${money(asset.cost || 0)}${capNote}${bizNote} · acquired ${shortDate(asset.acquisitionDate)}</span>
+              ${disposed}
+            </div>
+            <div class="actions">
+              <button class="small-action" type="button" data-edit-tax-asset="${asset.id}">Edit</button>
+              <button class="small-action danger-action" type="button" data-delete-tax-asset="${asset.id}">Delete</button>
+            </div>
+          </div>
+          <table class="tax-asset-schedule">
+            <thead><tr><th>YA</th><th>Allowance type</th><th>Claim</th><th>Residual c/f</th></tr></thead>
+            <tbody>${scheduleRows}</tbody>
+          </table>
+        </article>`;
+    })
+    .join("");
+}
+
+// =============================================================================
+// AI RECEIPT SCANNER — calls the receipt-scan Edge Function, then the host
+// confirms before anything saves. The model only extracts + suggests; the
+// deterministic rules above decide the treatment.
+// =============================================================================
+let pendingScanData = null;
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    });
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+function setScanStatus(message, tone = "") {
+  if (!els.taxScanStatus) return;
+  els.taxScanStatus.textContent = message;
+  els.taxScanStatus.className = `tax-scan-status${tone ? ` ${tone}` : ""}`;
+}
+
+async function scanReceipt() {
+  const file = els.taxScanInput?.files?.[0];
+  if (!file) {
+    setScanStatus("Choose a receipt image or PDF first.", "warn");
+    return;
+  }
+  if (!supabaseClient) {
+    setScanStatus("Sign in with cloud sync to use the AI scanner.", "warn");
+    return;
+  }
+  if (file.type === "application/pdf") {
+    setScanStatus("PDFs can't be read directly — please upload a photo/screenshot of the receipt.", "warn");
+    return;
+  }
+  const mediaType = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) ? file.type : "image/jpeg";
+  setScanStatus("Reading the receipt…", "loading");
+  if (els.taxScanBtn) els.taxScanBtn.disabled = true;
+  try {
+    const imageBase64 = await fileToBase64(file);
+    // Keep the image itself so it can be saved as the record's attachment.
+    pendingScanData = { attachment: { name: file.name, type: file.type, dataUrl: `data:${mediaType};base64,${imageBase64}`, attachedAt: new Date().toISOString() } };
+    const { data, error } = await supabaseClient.functions.invoke("receipt-scan", {
+      body: { imageBase64, mediaType },
+    });
+    if (error) throw new Error(error.message || "scan failed");
+    if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not read the receipt.");
+    pendingScanData.fields = data.data;
+    renderScanResult(data.data);
+    setScanStatus("Done — review and confirm below.", "ok");
+  } catch (err) {
+    console.error("receipt-scan", err);
+    setScanStatus(`Scan failed: ${err.message || err}. You can still enter it manually below.`, "bad");
+  } finally {
+    if (els.taxScanBtn) els.taxScanBtn.disabled = false;
+  }
+}
+
+function renderScanResult(fields) {
+  if (!els.taxScanResult) return;
+  const category = TAX_RULES[fields.suggestedCategory] ? fields.suggestedCategory : "Other";
+  const rule = taxRuleFor(category);
+  const isCapital = rule.treatment === "capital" || fields.isLikelyCapitalAsset;
+  const conf = String(fields.confidence || "").toLowerCase();
+  const confTone = conf === "high" ? "ok" : conf === "low" ? "bad" : "warn";
+  els.taxScanResult.hidden = false;
+  els.taxScanResult.innerHTML = `
+    <div class="scan-result-grid">
+      <div><span>Supplier</span><strong>${escapeHtml(fields.vendor || "—")}</strong></div>
+      <div><span>Date</span><strong>${escapeHtml(fields.date || "—")}</strong></div>
+      <div><span>Amount</span><strong>${escapeHtml(fields.currency || "RM")} ${escapeHtml(String(fields.amount ?? 0))}</strong></div>
+      <div><span>What</span><strong>${escapeHtml(fields.description || "—")}</strong></div>
+      <div><span>Suggested category</span><strong>${escapeHtml(category)}</strong></div>
+      <div><span>Confidence</span><strong class="scan-conf tone-${confTone}">${escapeHtml(fields.confidence || "—")}</strong></div>
+    </div>
+    <div class="scan-treatment">
+      <span class="tax-hint-badge tone-${{ deduct: "ok", partial: "warn", capital: "info", no: "bad", ask: "warn" }[rule.treatment] || "info"}">${escapeHtml(TREATMENT_LABEL[rule.treatment])}</span>
+      <span class="tax-hint-rule">${escapeHtml(rule.rule)}</span>
+      ${rule.source && rule.source !== "—" ? `<span class="tax-hint-src">${escapeHtml(rule.source)}</span>` : ""}
+    </div>
+    ${rule.flag ? `<p class="tax-hint-flag">⚠ ${escapeHtml(rule.flag)}</p>` : ""}
+    ${isCapital ? `<p class="tax-hint-flag">ℹ This looks like a durable asset — record it as a Capital Asset so the allowance spreads over years.</p>` : ""}
+    <div class="scan-actions">
+      ${isCapital
+        ? `<button type="button" class="primary-button" id="scanToAsset">Use as capital asset</button><button type="button" class="ghost-button" id="scanToExpense">Use as expense instead</button>`
+        : `<button type="button" class="primary-button" id="scanToExpense">Use for expense</button><button type="button" class="ghost-button" id="scanToAsset">Use as capital asset instead</button>`}
+      <button type="button" class="ghost-button" id="scanDismiss">Dismiss</button>
+    </div>
+    <p class="scan-disclaimer">Always check the figures against the receipt before saving. This is a record-keeping aid, not tax advice — your agent reviews before filing.</p>
+  `;
+  document.querySelector("#scanToExpense")?.addEventListener("click", () => applyScanToExpense());
+  document.querySelector("#scanToAsset")?.addEventListener("click", () => applyScanToAsset());
+  document.querySelector("#scanDismiss")?.addEventListener("click", () => {
+    els.taxScanResult.hidden = true;
+    pendingScanData = null;
+  });
+}
+
+function applyScanToExpense() {
+  if (!pendingScanData?.fields) return;
+  const f = pendingScanData.fields;
+  const category = TAX_RULES[f.suggestedCategory] ? f.suggestedCategory : "Other";
+  clearTaxExpenseForm();
+  setTaxInnerTab("expenses");
+  renderTaxExpenseSelects();
+  if (els.taxExpenseDate && f.date) els.taxExpenseDate.value = f.date;
+  if (els.taxExpenseCategory) els.taxExpenseCategory.value = category;
+  if (els.taxExpenseAmount && f.amount) els.taxExpenseAmount.value = f.amount;
+  if (els.taxExpenseVendor) els.taxExpenseVendor.value = f.vendor || "";
+  if (els.taxExpenseNotes) els.taxExpenseNotes.value = f.description || "";
+  // attach the scanned image to the record
+  if (pendingScanData.attachment) {
+    pendingTaxExpenseAttachment = pendingScanData.attachment;
+    if (els.taxExpenseAttachmentStatus) els.taxExpenseAttachmentStatus.textContent = `Attached: ${pendingScanData.attachment.name}`;
+  }
+  renderTaxExpenseHint();
+  if (els.taxScanResult) els.taxScanResult.hidden = true;
+  els.taxExpenseAmount?.focus();
+  els.taxExpenseAmount?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function applyScanToAsset() {
+  if (!pendingScanData?.fields) return;
+  const f = pendingScanData.fields;
+  clearTaxAssetForm();
+  setTaxInnerTab("assets");
+  if (els.taxAssetDesc) els.taxAssetDesc.value = f.description || f.vendor || "";
+  if (els.taxAssetVendor) els.taxAssetVendor.value = f.vendor || "";
+  if (els.taxAssetCost && f.amount) els.taxAssetCost.value = f.amount;
+  if (els.taxAssetDate && f.date) els.taxAssetDate.value = f.date;
+  if (els.taxAssetClass) els.taxAssetClass.value = suggestAssetClass(f.suggestedCategory, Number(f.amount || 0));
+  if (pendingScanData.attachment) {
+    pendingTaxAssetAttachment = pendingScanData.attachment;
+    if (els.taxAssetAttachmentStatus) els.taxAssetAttachmentStatus.textContent = `Attached: ${pendingScanData.attachment.name}`;
+  }
+  updateAssetConditionVisibility();
+  renderTaxAssetHint();
+  if (els.taxScanResult) els.taxScanResult.hidden = true;
+  els.taxAssetCost?.focus();
+  els.taxAssetCost?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// =============================================================================
+// YEAR-OF-ASSESSMENT SUMMARY — Form B tabulation for the Enterprise source.
+// =============================================================================
+function renderTaxYa() {
+  if (!els.taxYaCards) return;
+  if (els.taxYaInput && !els.taxYaInput.value) els.taxYaInput.value = taxPlan.year || currentYear();
+  const ya = Number(els.taxYaInput?.value || taxPlan.year || currentYear());
+  const s = taxYaSummary(ya);
+  els.taxYaCards.innerHTML = `
+    <article class="tax-card"><span>Revenue deductions</span><strong>${money(s.revenueDeductible)}</strong><small>${s.expenseCount} expense record${s.expenseCount === 1 ? "" : "s"}</small></article>
+    <article class="tax-card"><span>Capital allowances</span><strong>${money(s.capitalAllowance)}</strong><small>${s.assetCount} asset${s.assetCount === 1 ? "" : "s"} in register</small></article>
+    <article class="tax-card"><span>Total relief (YA ${ya})</span><strong>${money(s.totalRelief)}</strong><small>Deductions + allowances</small></article>
+    <article class="tax-card ${s.needsReview > 0 ? "warning" : ""}"><span>Needs your decision</span><strong>${money(s.needsReview)}</strong><small>Items to confirm with agent</small></article>
+  `;
+  if (!els.taxYaDetail) return;
+  const lines = [
+    ["Revenue deductions (s33)", s.revenueDeductible, "Deductible operating costs, restricted to business-use %."],
+    ["Capital allowances (Sch 3)", s.capitalAllowance, "From the asset register — initial + annual allowances for this year."],
+    s.balancingAllowance > 0 ? ["Balancing allowance", s.balancingAllowance, "Extra relief from assets sold below their residual value."] : null,
+    s.balancingCharge > 0 ? ["Balancing charge (adds back)", -s.balancingCharge, "Clawed-back allowance on assets sold above residual value."] : null,
+    s.capitalFlagged > 0 ? ["Tagged capital — not yet in register", s.capitalFlagged, "Expenses marked capital. Add them under Capital Assets so they get an allowance."] : null,
+    s.notDeductible > 0 ? ["Not deductible", s.notDeductible, "Private, capital repayment, renovations, pre-commencement, etc."] : null,
+    s.needsReview > 0 ? ["Needs review", s.needsReview, "Judgement calls (vehicle, legal, groceries…) — confirm with your agent."] : null,
+  ].filter(Boolean);
+  els.taxYaDetail.innerHTML = `
+    <div class="table-scroll">
+      <table class="compact-table">
+        <thead><tr><th>Line</th><th>Amount</th><th>What it means</th></tr></thead>
+        <tbody>
+          ${lines
+            .map(
+              ([label, amt, note]) => `
+            <tr>
+              <td><strong>${escapeHtml(label)}</strong></td>
+              <td>${amt < 0 ? `(${money(Math.abs(amt))})` : money(amt)}</td>
+              <td class="table-muted">${escapeHtml(note)}</td>
+            </tr>`,
+            )
+            .join("")}
+          <tr class="tax-row-now">
+            <td><strong>Total relief against income</strong></td>
+            <td><strong>${money(s.totalRelief)}</strong></td>
+            <td class="table-muted">Subtract from adjusted income; unabsorbed capital allowances carry forward indefinitely.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="scan-disclaimer">YA ${ya} · Enterprise / sole-proprietor source (Form B). Suggested figures for your agent to confirm — capital allowances and losses not used this year carry forward automatically in the asset schedules above.</p>
+  `;
+}
+
+function exportTaxYaExcel() {
+  const ya = Number(els.taxYaInput?.value || currentYear());
+  const s = taxYaSummary(ya);
+  const rows = [
+    ["Year of Assessment", ya],
+    ["Revenue deductions (s33)", s.revenueDeductible],
+    ["Capital allowances (Sch 3)", s.capitalAllowance],
+    ["Balancing allowance", s.balancingAllowance],
+    ["Balancing charge (add back)", s.balancingCharge],
+    ["Capital tagged, not in register", s.capitalFlagged],
+    ["Not deductible", s.notDeductible],
+    ["Needs review", s.needsReview],
+    ["TOTAL RELIEF", s.totalRelief],
+  ];
+  const assetRows = (taxPlan.assets || [])
+    .filter((a) => a.entity !== "Sdn. Bhd.")
+    .map((a) => {
+      const ca = assetCaForYA(a, ya);
+      return [a.description, (MY_CA_RATES[a.assetClass] || {}).label || a.assetClass, a.cost, a.businessUsePct + "%", money(ca.claimed), money(assetResidualAfter(a, ya))];
+    });
+  const tableHtml = `
+    <table>
+      <tr><th colspan="2">Sunrise Villa — YA ${ya} tax summary (Enterprise)</th></tr>
+      ${rows.map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${typeof v === "number" ? v : escapeHtml(String(v))}</td></tr>`).join("")}
+      <tr><th colspan="6">Capital asset schedule (YA ${ya})</th></tr>
+      <tr><th>Asset</th><th>Class</th><th>Cost</th><th>Business %</th><th>Allowance</th><th>Residual c/f</th></tr>
+      ${assetRows.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(String(c))}</td>`).join("")}</tr>`).join("")}
+    </table>`;
+  const blob = new Blob([tableHtml], { type: "application/vnd.ms-excel" });
+  const link = document.createElement("a");
+  link.download = `sunrise-villa-tax-YA${ya}.xls`;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 function renderMonthButtons() {
@@ -5759,6 +6644,65 @@ els.taxExpenseRows?.addEventListener("click", (event) => {
 });
 els.exportTaxExpensesExcel?.addEventListener("click", exportTaxExpensesExcel);
 els.exportTaxExpensesPdf?.addEventListener("click", exportTaxExpensesPdf);
+
+// Live treatment hint as the host edits the expense form.
+[els.taxExpenseCategory, els.taxExpenseDeductible].forEach((c) => c?.addEventListener("change", renderTaxExpenseHint));
+[els.taxExpenseAmount, els.taxExpenseBizPct].forEach((c) => c?.addEventListener("input", renderTaxExpenseHint));
+
+// ---------------- AI receipt scanner ----------------
+els.taxScanInput?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (els.taxScanFileName) els.taxScanFileName.textContent = file ? file.name : "No file chosen";
+  if (els.taxScanBtn) els.taxScanBtn.disabled = !file;
+  setScanStatus("");
+});
+els.taxScanBtn?.addEventListener("click", scanReceipt);
+
+// ---------------- Capital assets ----------------
+els.taxAssetForm?.addEventListener("submit", saveTaxAsset);
+els.clearTaxAsset?.addEventListener("click", clearTaxAssetForm);
+els.taxAssetClass?.addEventListener("change", () => {
+  updateAssetConditionVisibility();
+  renderTaxAssetHint();
+});
+[els.taxAssetCost, els.taxAssetBizPct, els.taxAssetDate, els.taxAssetCondition].forEach((c) =>
+  c?.addEventListener("input", renderTaxAssetHint),
+);
+els.taxAssetCondition?.addEventListener("change", renderTaxAssetHint);
+els.removeTaxAssetAttachment?.addEventListener("click", () => {
+  pendingTaxAssetAttachment = null;
+  removePendingTaxAssetAttachment = true;
+  if (els.taxAssetAttachment) els.taxAssetAttachment.value = "";
+  if (els.taxAssetAttachmentStatus) els.taxAssetAttachmentStatus.textContent = "Attachment will be removed";
+});
+els.taxAssetAttachment?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.size > 2_500_000) {
+    event.target.value = "";
+    if (els.taxAssetAttachmentStatus) els.taxAssetAttachmentStatus.textContent = "File too large. Use below 2.5 MB.";
+    return;
+  }
+  try {
+    pendingTaxAssetAttachment = await fileToTaxAttachment(file);
+    removePendingTaxAssetAttachment = false;
+    if (els.taxAssetAttachmentStatus) els.taxAssetAttachmentStatus.textContent = `Ready: ${file.name}`;
+  } catch {
+    pendingTaxAssetAttachment = null;
+    if (els.taxAssetAttachmentStatus) els.taxAssetAttachmentStatus.textContent = "Could not read file";
+  }
+});
+els.taxAssetCards?.addEventListener("click", (event) => {
+  const editId = event.target.dataset.editTaxAsset;
+  if (editId) fillTaxAssetForm(editId);
+  const deleteId = event.target.dataset.deleteTaxAsset;
+  if (deleteId) deleteTaxAsset(deleteId);
+});
+
+// ---------------- Year-of-assessment summary ----------------
+els.taxYaInput?.addEventListener("input", renderTaxYa);
+els.taxYaInput?.addEventListener("change", renderTaxYa);
+els.exportTaxYaExcel?.addEventListener("click", exportTaxYaExcel);
 
 // ---------------- Theme picker (8 accents, persisted in appSettings.accent -> cloud) ----------------
 const SV_THEMES = [

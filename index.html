@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-19" />
+    <link rel="stylesheet" href="./styles.css?v=20260626-20" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1184,6 +1184,8 @@
           <div class="message-flow-tabs tax-inner-tabs" role="tablist" aria-label="Tax workspace">
             <button class="message-flow-tab active" type="button" role="tab" data-tax-inner-tab="plan">Tax Plan</button>
             <button class="message-flow-tab" type="button" role="tab" data-tax-inner-tab="expenses">Expense Records</button>
+            <button class="message-flow-tab" type="button" role="tab" data-tax-inner-tab="assets">Capital Assets</button>
+            <button class="message-flow-tab" type="button" role="tab" data-tax-inner-tab="claim">Year Summary</button>
           </div>
 
           <div class="tax-inner-panel active" data-tax-inner-panel="plan">
@@ -1288,6 +1290,25 @@
           </div>
 
           <div class="tax-inner-panel" data-tax-inner-panel="expenses">
+            <section class="tax-scan-card dashboard-section" id="taxScanCard">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">AI receipt scanner</p>
+                  <h3>Scan a receipt or invoice</h3>
+                </div>
+              </div>
+              <p class="tax-scan-help">Upload a photo or PDF of a receipt/invoice. Claude reads the supplier, date, amount and suggests a category — then I apply the Malaysian tax rule. You confirm before it saves. <strong>Record-keeping aid, not tax advice</strong> — your agent reviews before filing.</p>
+              <div class="tax-scan-controls">
+                <label class="file-upload-field tax-scan-file">Receipt image / PDF
+                  <input id="taxScanInput" type="file" accept="image/*,.pdf" />
+                  <span id="taxScanFileName">No file chosen</span>
+                </label>
+                <button class="primary-button" id="taxScanBtn" type="button" disabled>Scan with AI</button>
+                <span class="tax-scan-status" id="taxScanStatus" role="status" aria-live="polite"></span>
+              </div>
+              <div class="tax-scan-result" id="taxScanResult" hidden></div>
+            </section>
+
             <section class="tax-expense-entry dashboard-section">
               <div class="section-heading">
                 <div>
@@ -1322,6 +1343,9 @@
                   <label>Amount
                     <input id="taxExpenseAmount" type="number" min="0" step="0.01" required />
                   </label>
+                  <label>Business-use %
+                    <input id="taxExpenseBizPct" type="number" min="0" max="100" step="1" value="100" />
+                  </label>
                   <label>Paid To / Supplier
                     <input id="taxExpenseVendor" placeholder="Example: TNB, supermarket, contractor" />
                   </label>
@@ -1329,6 +1353,7 @@
                     <textarea id="taxExpenseNotes" rows="2" placeholder="Short description for accountant or tax filing"></textarea>
                   </label>
                 </div>
+                <div class="tax-treatment-hint" id="taxExpenseHint" aria-live="polite"></div>
                 <details class="tax-accounting-drawer">
                   <summary>Accounting details, receipt and tax review</summary>
                   <div class="tax-accounting-grid">
@@ -1358,11 +1383,13 @@
                     </label>
                     <label>Tax Status
                       <select id="taxExpenseDeductible">
+                        <option>Auto (from rule)</option>
                         <option>Deductible</option>
                         <option>Partially deductible</option>
                         <option>Not deductible</option>
                         <option>Ask accountant</option>
                       </select>
+                      <small class="field-help">Leave on Auto to apply the Malaysian tax rule for the category. Override only if your agent advises.</small>
                     </label>
                     <label>Receipt / Reference No.
                       <input id="taxExpenseReceipt" placeholder="Invoice, receipt or transaction no." />
@@ -1458,6 +1485,129 @@
                   <tbody id="taxExpenseRows"></tbody>
                 </table>
               </div>
+            </section>
+          </div>
+
+          <div class="tax-inner-panel" data-tax-inner-panel="assets">
+            <section class="tax-scan-card dashboard-section">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Capital allowance</p>
+                  <h3>Add a capital asset</h3>
+                </div>
+              </div>
+              <p class="tax-scan-help">Durable things that last years — furniture, appliances, computers, a vehicle — are <strong>not</strong> a one-off deduction. They are written off over several years as a <em>capital allowance</em>. Enter it once here and the schedule below carries the relief forward each year for you. Use the scanner in the Expense tab to read a receipt, then send it here.</p>
+              <form class="tax-expense-form" id="taxAssetForm">
+                <input id="taxAssetId" type="hidden" />
+                <div class="tax-expense-grid">
+                  <label>Description <span class="req" aria-hidden="true">*</span>
+                    <input id="taxAssetDesc" required placeholder="Example: MacBook Pro, sofa set, fridge" />
+                  </label>
+                  <label>Cost (RM) <span class="req" aria-hidden="true">*</span>
+                    <input id="taxAssetCost" type="number" min="0" step="0.01" required />
+                  </label>
+                  <label>Asset class
+                    <select id="taxAssetClass">
+                      <option value="furniture-office">Furniture &amp; fittings (20% + 10%)</option>
+                      <option value="plant">Plant / appliances (20% + 14%)</option>
+                      <option value="computer-ict">Computer / ICT (20% + 40%, fast)</option>
+                      <option value="motor">Motor vehicle (20% + 20%, capped)</option>
+                      <option value="small-value">Small value ≤ RM2,000 (100% now)</option>
+                    </select>
+                  </label>
+                  <label>Acquisition date <span class="req" aria-hidden="true">*</span>
+                    <input id="taxAssetDate" type="date" required />
+                  </label>
+                  <label>Business-use %
+                    <input id="taxAssetBizPct" type="number" min="0" max="100" step="1" value="100" />
+                  </label>
+                  <label id="taxAssetConditionField">Vehicle condition
+                    <select id="taxAssetCondition">
+                      <option value="new">New</option>
+                      <option value="used">Used / second-hand</option>
+                    </select>
+                  </label>
+                  <label>Paid To / Supplier
+                    <input id="taxAssetVendor" placeholder="Example: Machines, IKEA, dealer" />
+                  </label>
+                  <label>Business
+                    <select id="taxAssetEntity">
+                      <option>Enterprise</option>
+                      <option>Sdn. Bhd.</option>
+                      <option>Personal / Owner</option>
+                    </select>
+                  </label>
+                  <label>Property
+                    <select id="taxAssetProperty">
+                      <option>Sunrise Villa</option>
+                      <option>Windmill Villa</option>
+                      <option>Shared</option>
+                    </select>
+                  </label>
+                  <label class="wide-field">Notes
+                    <textarea id="taxAssetNotes" rows="2" placeholder="Anything your accountant should know"></textarea>
+                  </label>
+                </div>
+                <div class="tax-treatment-hint" id="taxAssetHint" aria-live="polite"></div>
+                <details class="tax-accounting-drawer">
+                  <summary>Receipt &amp; disposal (sold / scrapped)</summary>
+                  <div class="tax-accounting-grid">
+                    <label>Receipt / Reference No.
+                      <input id="taxAssetReceipt" placeholder="Invoice or receipt no." />
+                    </label>
+                    <label class="file-upload-field">Receipt Attachment
+                      <input id="taxAssetAttachment" type="file" accept="image/*,.pdf" />
+                      <span id="taxAssetAttachmentStatus">No file attached</span>
+                    </label>
+                    <label>Disposal date <small>(if sold/scrapped)</small>
+                      <input id="taxAssetDisposalDate" type="date" />
+                    </label>
+                    <label>Disposal proceeds (RM)
+                      <input id="taxAssetDisposalValue" type="number" min="0" step="0.01" placeholder="0" />
+                    </label>
+                    <label class="checkbox-label tax-review-check">
+                      <input id="taxAssetReviewed" type="checkbox" />
+                      Accountant reviewed
+                    </label>
+                  </div>
+                </details>
+                <div class="tax-expense-actions">
+                  <button class="primary-button" type="submit">Save Asset</button>
+                  <button class="ghost-button" id="clearTaxAsset" type="button">Clear</button>
+                  <button class="ghost-button" id="removeTaxAssetAttachment" type="button">Remove Attachment</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="tax-expense-summary" id="taxAssetSummary"></section>
+
+            <section class="table-panel">
+              <div class="section-heading">
+                <div>
+                  <h3>Capital Asset Register</h3>
+                </div>
+              </div>
+              <div id="taxAssetCards" class="tax-asset-cards"></div>
+            </section>
+          </div>
+
+          <div class="tax-inner-panel" data-tax-inner-panel="claim">
+            <section class="dashboard-section">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Form B tabulation</p>
+                  <h3>Year of Assessment Summary</h3>
+                </div>
+                <div class="heading-actions">
+                  <label class="ya-picker">Year of Assessment
+                    <input id="taxYaInput" type="number" min="2024" max="2035" step="1" />
+                  </label>
+                  <button class="ghost-button compact" id="exportTaxYaExcel" type="button">Export</button>
+                </div>
+              </div>
+              <p class="tax-scan-help">This rolls up your Enterprise / sole-proprietor records for one calendar year the way Form B is built: revenue deductions, capital allowances from the register, and the items that need a decision. <strong>Suggested figures for your agent to confirm — not a filed return.</strong></p>
+              <section class="tax-summary-grid" id="taxYaCards"></section>
+              <div class="tax-ya-detail" id="taxYaDetail"></div>
             </section>
           </div>
         </section>
@@ -1598,6 +1748,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-19"></script>
+    <script src="./app.js?v=20260626-20"></script>
   </body>
 </html>

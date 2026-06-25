@@ -5740,3 +5740,71 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
   .data-health-panel { padding: 6px 0 2px; margin-bottom: 6px; gap: 6px; }
   .data-health-panel .health-pill.secondary { display: none; }
 }
+
+/* ============================================================
+   TAX — AI receipt scanner, treatment hints, capital assets, YA summary
+   ============================================================ */
+.tax-scan-card { display: flex; flex-direction: column; gap: 12px; }
+.tax-scan-help { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0; }
+.tax-scan-help strong { color: var(--ink); }
+.tax-scan-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.tax-scan-file { flex: 1 1 260px; min-width: 220px; }
+.tax-scan-status { font-size: 13px; font-weight: 600; color: var(--muted); }
+.tax-scan-status.loading { color: var(--accent-ink); }
+.tax-scan-status.ok { color: var(--ok); }
+.tax-scan-status.warn { color: var(--pend); }
+.tax-scan-status.bad { color: var(--due); }
+
+.tax-scan-result { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--soft); display: flex; flex-direction: column; gap: 12px; }
+.scan-result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px; }
+.scan-result-grid > div { display: flex; flex-direction: column; gap: 2px; }
+.scan-result-grid span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.scan-result-grid strong { font-size: 14px; color: var(--ink); }
+.scan-conf.tone-ok { color: var(--ok); } .scan-conf.tone-warn { color: var(--pend); } .scan-conf.tone-bad { color: var(--due); }
+.scan-treatment { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.scan-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.scan-disclaimer { font-size: 12px; color: var(--muted); margin: 0; font-style: italic; }
+
+/* Live treatment hint under a form */
+.tax-treatment-hint:empty { display: none; }
+.tax-treatment-hint { margin: 4px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.tax-hint-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tax-hint-badge { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; letter-spacing: .02em; }
+.tax-hint-badge.tone-ok { background: var(--ok-soft); color: var(--ok); }
+.tax-hint-badge.tone-warn { background: var(--pend-soft); color: var(--pend); }
+.tax-hint-badge.tone-bad { background: var(--due-soft); color: var(--due); }
+.tax-hint-badge.tone-info { background: var(--accent-soft); color: var(--accent-ink); }
+.tax-hint-rule { font-size: 13px; color: var(--ink); }
+.tax-hint-src { font-size: 11px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; }
+.tax-hint-amt { font-size: 13px; color: var(--muted); }
+.tax-hint-amt strong { color: var(--ink); }
+.tax-hint-flag { font-size: 12.5px; color: var(--pend); background: var(--pend-soft); border-radius: 8px; padding: 7px 10px; margin: 0; line-height: 1.45; }
+.tax-hint-link { background: none; border: none; color: var(--accent-ink); font-weight: 700; font-size: 13px; cursor: pointer; padding: 0; text-decoration: underline; }
+
+/* Capital asset register */
+.tax-asset-cards { display: flex; flex-direction: column; gap: 14px; }
+.tax-asset-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--card); }
+.tax-asset-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.tax-asset-head > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.tax-asset-head strong { font-size: 15px; color: var(--ink); }
+.tax-asset-meta { font-size: 12px; color: var(--muted); }
+.tax-asset-flag { font-size: 12px; color: var(--due); font-weight: 600; }
+.tax-asset-schedule { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tax-asset-schedule th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.tax-asset-schedule td { padding: 6px 8px; border-bottom: 1px solid var(--line); color: var(--ink); }
+.tax-asset-schedule tr:last-child td { border-bottom: none; }
+.tax-asset-schedule em { font-style: normal; color: var(--accent-ink); font-weight: 600; }
+.tax-row-now { background: var(--accent-soft); }
+
+/* YA summary */
+.ya-picker { display: flex; flex-direction: column; gap: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.ya-picker input { width: 92px; }
+.tax-ya-detail { margin-top: 16px; }
+.tax-ya-detail .table-muted { color: var(--muted); font-size: 12.5px; }
+
+@media (max-width: 640px) {
+  .tax-scan-controls { flex-direction: column; align-items: stretch; }
+  .tax-scan-controls .primary-button { width: 100%; }
+  .tax-asset-head { flex-direction: column; }
+}
+.field-help { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); line-height: 1.4; font-weight: 400; }
