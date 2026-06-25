@@ -3189,6 +3189,15 @@ function loadVillaMessageIntoForm() {
   if (els.checkinTemplateInput) els.checkinTemplateInput.value = templateForVilla(villa, "checkin");
   if (els.guideTemplateInput) els.guideTemplateInput.value = templateForVilla(villa, "guide");
   if (els.reminderTemplateInput) els.reminderTemplateInput.value = templateForVilla(villa, "reminder");
+  // The AI draft is grounded in the PREVIOUS villa's facts — a switch invalidates it.
+  // Clear it so a Sunrise-grounded answer (and phone) can't be sent under the Windmill label.
+  if (els.aiDraft) {
+    const had = els.aiDraft.value || els.aiQuestion?.value;
+    if (els.aiQuestion) els.aiQuestion.value = "";
+    els.aiDraft.value = "";
+    if (els.aiPhone) els.aiPhone.value = "";
+    if (typeof setAiStatus === "function") setAiStatus(had ? "Villa changed — draft cleared." : "", "");
+  }
 }
 
 const bookingColumnOptions = [
@@ -4784,20 +4793,22 @@ function renderToday() {
       ${flag}
     </div>`;
   const relText = (d) => (d === 0 ? "today" : `in ${d}d`);
+  // Pills show the amount only — the group label above already names the type (payout / balance / refund).
   const airbnbRowsHtml = airbnbPayouts
-    .map(({ b, release, relDays, amount }) => attnRow(b, `<span class="today-flag pend">Airbnb payout ${money(amount)}</span>`, `releases ${shortDate(release)} (${relText(relDays)})`))
+    .map(({ b, release, relDays, amount }) => attnRow(b, `<span class="today-flag pend">${money(amount)}</span>`, `releases ${shortDate(release)} (${relText(relDays)})`))
     .join("");
   const arrivalText = (d) => (d > 0 ? `arrives in ${d} day${d === 1 ? "" : "s"}` : d === 0 ? "arrives today" : "in-house — balance overdue");
   const depositText = (paid, amt) => (amt > 0 ? (paid ? `deposit ${money(amt)} ✓ held` : `deposit ${money(amt)} ⚠ not collected`) : "");
   const directRowsHtml = directBalances
     .map(({ b, bal, daysToArrival, depositPaid, depositAmount }) => {
-      const tone = daysToArrival <= 28 ? "due" : "pend"; // within the 4-week payment window = urgent
+      // Red only when payment is genuinely pressing: overdue, or inside the firm 2-week deadline.
+      const tone = daysToArrival < 0 || daysToArrival <= 14 ? "due" : "pend";
       const dep = depositText(depositPaid, depositAmount);
-      return attnRow(b, `<span class="today-flag ${tone}">${money(bal)} balance</span>`, `${arrivalText(daysToArrival)}${dep ? " · " + dep : ""}`);
+      return attnRow(b, `<span class="today-flag ${tone}">${money(bal)}</span>`, `${arrivalText(daysToArrival)}${dep ? " · " + dep : ""}`);
     })
     .join("");
   const refundRowsHtml = depositRefunds
-    .map(({ b }) => attnRow(b, `<span class="today-flag pend">Refund ${money(b.depositAmount)}</span>`, `checked out ${shortDate(departureFor(b))}`))
+    .map(({ b }) => attnRow(b, `<span class="today-flag pend">${money(b.depositAmount)}</span>`, `checked out ${shortDate(departureFor(b))}`))
     .join("");
   const groupLabel = (t) => `<div class="attn-group-label">${t}</div>`;
   const attentionBody = attentionCount
