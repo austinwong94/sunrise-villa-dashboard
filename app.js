@@ -294,6 +294,14 @@ const els = {
   copyGuideMessage: document.querySelector("#copyGuideMessage"),
   copyQuoteMessage: document.querySelector("#copyQuoteMessage"),
   ackInquiry: document.querySelector("#ackInquiry"),
+  aiQuestion: document.querySelector("#aiQuestion"),
+  aiDraft: document.querySelector("#aiDraft"),
+  aiDraftBtn: document.querySelector("#aiDraftBtn"),
+  aiDraftStatus: document.querySelector("#aiDraftStatus"),
+  aiPhone: document.querySelector("#aiPhone"),
+  aiCopyBtn: document.querySelector("#aiCopyBtn"),
+  aiSendBtn: document.querySelector("#aiSendBtn"),
+  aiVillaName: document.querySelector("#aiVillaName"),
   openWhatsappMessage: document.querySelector("#openWhatsappMessage"),
   openGuideMessage: document.querySelector("#openGuideMessage"),
   openReminderMessage: document.querySelector("#openReminderMessage"),
@@ -3002,6 +3010,66 @@ function openInquiryAck() {
   openWhatsappMessage(els.quotePhone?.value || "", inquiryAckText());
 }
 
+// --- AI guest Q&A drafter (grounded in the per-villa Guidebook; draft-only) ---
+// Compiles the active villa's Guidebook + address into a plain-text facts block.
+function gatherVillaFacts(villa) {
+  const g = guidebookFor(villa);
+  const block = messageBlockForVilla(villa) || {};
+  const parts = [];
+  if (block.address) parts.push(`Address: ${block.address}`);
+  if (block.checkinTime) parts.push(`Standard check-in time: ${block.checkinTime}`);
+  if (g.wifiName || g.wifiPassword) parts.push(`WiFi — network: ${g.wifiName || "(not set)"}, password: ${g.wifiPassword || "(not set)"}`);
+  if (g.checkin) parts.push(`Check-in steps: ${g.checkin}`);
+  if (g.checkout) parts.push(`Check-out instructions: ${g.checkout}`);
+  if (g.houseRules) parts.push(`House rules: ${g.houseRules}`);
+  if (g.amenities) parts.push(`Appliances & how-tos: ${g.amenities}`);
+  if (g.localTips) parts.push(`Local recommendations: ${g.localTips}`);
+  if (g.emergency) parts.push(`Emergency / host contact: ${g.emergency}`);
+  return parts.join("\n");
+}
+
+function setAiStatus(text, kind) {
+  if (!els.aiDraftStatus) return;
+  els.aiDraftStatus.textContent = text || "";
+  els.aiDraftStatus.className = `ai-draft-status${kind ? " " + kind : ""}`;
+}
+
+async function draftGuestReply() {
+  const question = els.aiQuestion?.value?.trim();
+  if (!question) {
+    setAiStatus("Type the guest's question first.", "err");
+    els.aiQuestion?.focus();
+    return;
+  }
+  if (!supabaseClient || !cloudUser) {
+    setAiStatus("Log in first — the drafter runs through your secure cloud function.", "err");
+    return;
+  }
+  const villa = activeVillaKey();
+  const facts = gatherVillaFacts(villa);
+  if (!facts) {
+    setAiStatus(`No ${villa} Guidebook facts yet — fill the Guidebook tab so the draft has something to ground on.`, "err");
+    return;
+  }
+  if (els.aiDraftBtn) els.aiDraftBtn.disabled = true;
+  setAiStatus("Drafting…");
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("guest-reply-draft", { body: { question, villa, facts } });
+    if (error) throw new Error(error.message || "request failed");
+    if (data?.error) {
+      const lowBalance = /credit|balance|billing|quota/i.test(data.detail || "");
+      throw new Error(lowBalance ? "Anthropic balance is empty — add funds in the Console, then try again." : data.detail || data.error);
+    }
+    if (els.aiDraft) els.aiDraft.value = data.draft || "";
+    if (els.aiPhone && !els.aiPhone.value && selectedMessageBooking()?.contact) els.aiPhone.value = selectedMessageBooking().contact;
+    setAiStatus("Draft ready — review and edit before sending.", "ok");
+  } catch (e) {
+    setAiStatus(e?.message || "Could not draft a reply.", "err");
+  } finally {
+    if (els.aiDraftBtn) els.aiDraftBtn.disabled = false;
+  }
+}
+
 function openWhatsappForQuote() {
   openWhatsappMessage(els.quotePhone?.value || "", quoteMessageText());
 }
@@ -3095,6 +3163,7 @@ function renderMessageGenerator() {
   if (els.checkinTemplateInput && !els.checkinTemplateInput.value) els.checkinTemplateInput.value = templateForVilla(activeVillaKey(), "checkin");
   if (els.guideTemplateInput && !els.guideTemplateInput.value) els.guideTemplateInput.value = templateForVilla(activeVillaKey(), "guide");
   if (els.reminderTemplateInput && !els.reminderTemplateInput.value) els.reminderTemplateInput.value = templateForVilla(activeVillaKey(), "reminder");
+  if (els.aiVillaName) els.aiVillaName.textContent = activeVillaKey();
   fillMessageFromBooking(false);
 }
 
@@ -5303,6 +5372,20 @@ els.openQuoteMessage?.addEventListener("click", () => {
 });
 
 els.ackInquiry?.addEventListener("click", openInquiryAck);
+
+// AI guest Q&A drafter wiring
+els.aiDraftBtn?.addEventListener("click", draftGuestReply);
+els.aiCopyBtn?.addEventListener("click", () => {
+  if (els.aiDraft?.value) copyMessageWithFeedback(els.aiDraft.value, els.aiCopyBtn, "Copy");
+});
+els.aiSendBtn?.addEventListener("click", () => {
+  const text = els.aiDraft?.value?.trim();
+  if (!text) {
+    setAiStatus("Draft a reply first.", "err");
+    return;
+  }
+  openWhatsappMessage(els.aiPhone?.value || "", text);
+});
 
 els.openGuideMessage?.addEventListener("click", () => {
   renderCheckinMessage();

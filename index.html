@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-15" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-16" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -826,6 +826,28 @@
               </section>
 
               <section class="message-template-stack">
+                <article class="message-template-card ai-draft-card">
+                  <div class="message-template-head">
+                    <div>
+                      <p class="eyebrow">AI assist · grounded in your Guidebook</p>
+                      <h3>Draft a reply to a guest question</h3>
+                    </div>
+                    <button class="primary-button warm" id="aiDraftBtn" type="button">Draft reply</button>
+                  </div>
+                  <p class="ai-draft-hint">Paste the guest's question. The draft uses ONLY your <strong id="aiVillaName">Sunrise</strong> Villa Guidebook facts — if it doesn't know, it offers to check rather than guess. Always review before sending.</p>
+                  <label class="ai-field">Guest's question
+                    <textarea id="aiQuestion" rows="2" placeholder="e.g. Is there parking? What's the WiFi password? Can we check in early?"></textarea>
+                  </label>
+                  <div class="ai-draft-status" id="aiDraftStatus" aria-live="polite"></div>
+                  <label class="ai-field">Draft reply (edit before sending)
+                    <textarea id="aiDraft" rows="5" placeholder="Your AI-drafted reply will appear here…"></textarea>
+                  </label>
+                  <div class="ai-draft-actions">
+                    <input id="aiPhone" type="tel" inputmode="tel" placeholder="Guest WhatsApp 60123456789" />
+                    <button class="ghost-button" id="aiCopyBtn" type="button">Copy</button>
+                    <button class="primary-button warm" id="aiSendBtn" type="button">Send via WhatsApp</button>
+                  </div>
+                </article>
                 <article class="message-template-card quote-card">
                   <div class="message-template-head">
                     <div>
@@ -1573,6 +1595,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-15"></script>
+    <script src="./app.js?v=20260624-16"></script>
   </body>
 </html>
