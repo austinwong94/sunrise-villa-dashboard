@@ -5692,3 +5692,24 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
   .booking-channel-option:active, .month-button:active, #calendarView .booking-chip.clickable:active { transform: none; }
   dialog#bookingDialog[open], .view.active { animation: none; }
 }
+
+/* ---------- Tier-2/3 polish: validation, checkout echo, status-pill collapse ---------- */
+/* Required-field marker + inline validation (reuses the --due red tokens, no framework) */
+.req { color: var(--due); font-weight: 700; }
+.booking-form input:user-invalid,
+.booking-form select:user-invalid,
+.booking-form textarea:user-invalid {
+  border-color: var(--due);
+  box-shadow: 0 0 0 3px var(--due-soft);
+}
+
+/* Booking dialog: computed check-out date echo */
+.checkout-echo { margin: 10px 2px 0; font-size: 12.5px; font-weight: 600; color: var(--muted); min-height: 1em; }
+
+/* Status-pill row: de-emphasize the dev "Version" pill; collapse secondary pills on mobile
+   so the row stops stealing the first screen (keeps the live cloud-sync pill). */
+.data-health-panel .health-pill.version-pill { color: var(--faint); }
+@media (max-width: 760px) {
+  .data-health-panel { padding: 6px 0 2px; margin-bottom: 6px; gap: 6px; }
+  .data-health-panel .health-pill.secondary { display: none; }
+}

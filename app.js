@@ -243,6 +243,7 @@ const els = {
   arrivalInput: document.querySelector("#arrivalInput"),
   nightsInput: document.querySelector("#nightsInput"),
   nightsManualInput: document.querySelector("#nightsManualInput"),
+  checkoutEcho: document.querySelector("#checkoutEcho"),
   revenueInput: document.querySelector("#revenueInput"),
   paidInput: document.querySelector("#paidInput"),
   depositAmountInput: document.querySelector("#depositAmountInput"),
@@ -729,7 +730,7 @@ function saveAppSettings() {
 function normalizeCommitment(commitment = {}) {
   return {
     id: safeRecordId(commitment.id),
-    name: String(commitment.name || "New Commitment"),
+    name: String(commitment.name || "New fixed cost"),
     amount: Number(commitment.amount || 0),
     category: String(commitment.category || "Other"),
     expires: String(commitment.expires || ""),
@@ -1473,6 +1474,15 @@ function syncNightsChoice() {
     button.classList.toggle("active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
+  updateCheckoutEcho();
+}
+
+// Echo the computed check-out date in the booking dialog so off-by-one nights are caught.
+function updateCheckoutEcho() {
+  if (!els.checkoutEcho) return;
+  const arrival = els.arrivalInput?.value;
+  const nights = Number(els.nightsInput?.value || 0);
+  els.checkoutEcho.textContent = arrival && nights ? `Check-out: ${shortDate(isoDate(addDays(dateObj(arrival), nights)))} · ${nights} night${nights === 1 ? "" : "s"}` : "";
 }
 
 function departureFor(booking) {
@@ -1675,9 +1685,11 @@ function renderCalendar() {
       const label = shouldShowStayLabel(booking, dayIso);
       chip.className = `booking-chip stay-segment clickable ${isExcludedBooking(booking) ? "influencer" : booking.channel.toLowerCase()} ${staySegmentClass(booking, dayIso)} ${label ? "" : "label-hidden"}`;
       chip.dataset.bookingId = booking.id;
-      chip.title = `Edit ${booking.guest}'s booking`;
+      // Channel is already carried by the chip's color + dot, so the in-cell text shows only
+      // the guest name (full width = readable). Channel/nights move to the hover title.
+      chip.title = `${booking.guest} · ${isExcludedBooking(booking) ? "Influencer" : booking.channel} · ${booking.nights} night${booking.nights === 1 ? "" : "s"} — click to edit`;
       chip.innerHTML = label
-        ? `<strong>${escapeHtml(booking.guest)}</strong><span>${isExcludedBooking(booking) ? "Influencer" : escapeHtml(booking.channel)} · ${booking.nights} nights</span>`
+        ? `<strong>${escapeHtml(booking.guest)}</strong>`
         : `<span aria-label="${escapeHtml(booking.guest)} ${escapeHtml(booking.channel)} booking">&nbsp;</span>`;
       cell.appendChild(chip);
     });
@@ -4824,6 +4836,8 @@ els.nightsManualInput?.addEventListener("input", () => {
   syncNightsChoice();
 });
 
+els.arrivalInput?.addEventListener("change", updateCheckoutEcho);
+
 els.excludeCalculationsInput?.addEventListener("change", applyExcludedBookingDefaults);
 
 els.form.addEventListener("submit", (event) => {
@@ -5067,7 +5081,6 @@ document.querySelector("#exportSheets").addEventListener("click", () => {
   downloadCsv("sunrise-villa-google-sheets-export.csv", [headers, ...rows]);
 });
 
-document.querySelector("#importJson").addEventListener("change", (event) => restoreJsonFromInput(event, "import file"));
 
 [els.bookingMonthFilter, els.bookingSearch, els.channelFilter, els.paymentFilter, els.depositFilter, els.contactFilter].forEach((control) => {
   control?.addEventListener("input", renderBookingsTable);

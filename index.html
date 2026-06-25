@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260624-14" />
+    <link rel="stylesheet" href="./styles.css?v=20260624-15" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -165,7 +165,7 @@
 
     <form id="cloudLoginForm" class="login-form" autocomplete="on">
       <div class="login-field">
-        <label for="cloudEmail">Email or username</label>
+        <label for="cloudEmail">Email</label>
         <input type="email" id="cloudEmail" name="email" autocomplete="email" placeholder="you@sunrisevilla.my" required />
       </div>
 
@@ -300,12 +300,11 @@
               <summary>Data tools</summary>
               <div class="data-menu-list">
                 <button class="ghost-button" id="exportSheets" type="button">Google Sheets CSV</button>
-                <button class="ghost-button soft-action" id="exportJson" type="button">Backup JSON</button>
+                <button class="ghost-button soft-action" id="exportJson" type="button">Download backup</button>
                 <button class="ghost-button" id="syncCloudNow" type="button">Sync cloud now</button>
                 <button class="ghost-button danger-action hidden" id="cloudLogout" type="button">Sign out</button>
                 <div class="backup-menu-row">
-                  <span>Last JSON export: <strong id="backupStatus">Not yet</strong></span>
-                  <button class="ghost-button compact" id="backupNow" type="button">Export now</button>
+                  <span>Last backup: <strong id="backupStatus">Not yet</strong></span>
                 </div>
                 <details class="recovery-menu-row">
                   <summary>Recovery history</summary>
@@ -317,11 +316,7 @@
                   <small id="recoveryStatus">No recovery point yet.</small>
                 </details>
                 <label class="ghost-button file-button">
-                  Import
-                  <input id="importJson" type="file" accept="application/json" />
-                </label>
-                <label class="ghost-button file-button">
-                  Restore Backup
+                  Restore from backup
                   <input id="restoreBackup" type="file" accept="application/json" />
                 </label>
               </div>
@@ -331,10 +326,10 @@
 
         <section class="data-health-panel" aria-label="Website data health">
           <span class="health-pill" id="dataHealthStatus">Cloud: checking</span>
-          <span class="health-pill" id="dataHealthLastSync">Last synced: -</span>
-          <span class="health-pill" id="dataHealthBackup">JSON export: not yet</span>
-          <span class="health-pill" id="dataHealthRecords">0 bookings</span>
-          <span class="health-pill">Version 2026.05.15</span>
+          <span class="health-pill secondary" id="dataHealthLastSync">Last synced: -</span>
+          <span class="health-pill secondary" id="dataHealthBackup">JSON export: not yet</span>
+          <span class="health-pill secondary" id="dataHealthRecords">0 bookings saved</span>
+          <span class="health-pill secondary version-pill">Version 2026.05.15</span>
         </section>
 
         <section class="view active" id="todayView" aria-labelledby="pageTitle">
@@ -395,7 +390,6 @@
         <section class="view" id="dashboardView" aria-labelledby="pageTitle">
           <section class="dashboard-guide">
             <div>
-              <p class="eyebrow">Performance workspace</p>
               <h3 id="dashboardGuideTitle">Month Overview</h3>
             </div>
             <div class="dashboard-guide-actions">
@@ -434,7 +428,7 @@
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Selected month income</p>
-                <h3 id="monthlyTitle">Monthly Collection Summary</h3>
+                <h3 id="monthlyTitle">Monthly Summary</h3>
               </div>
             </div>
             <div class="overview-card monthly-card">
@@ -468,7 +462,7 @@
                   <small>Accommodation fees minus operating expenses</small>
                 </article>
                 <article class="mini-kpi"><span>Total Expenses</span><strong id="totalExpensesOut">RM 0</strong><small>For selected month</small></article>
-                <article class="mini-kpi"><span>Recurring Commitments</span><strong id="fixedCommitmentsOut">RM 0</strong><small>Loans and fixed monthly costs</small></article>
+                <article class="mini-kpi"><span>Fixed Costs &amp; Loans</span><strong id="fixedCommitmentsOut">RM 0</strong><small>Recurring monthly outgoings</small></article>
               </div>
               <div class="pnl-breakdown-card">
                 <h4>Selected Month Cost Breakdown</h4>
@@ -491,10 +485,9 @@
             <details class="commitments-block">
               <summary>
                 <span>
-                  <span class="eyebrow">Recurring monthly commitments</span>
                   <strong>Manage Fixed Costs & Loans</strong>
                 </span>
-                <button class="ghost-button compact" id="addCommitment" type="button">+ Commitment</button>
+                <button class="ghost-button compact" id="addCommitment" type="button">+ Fixed cost</button>
               </summary>
               <div class="commitment-editor">
                 <div class="commitment-list" id="commitmentList"></div>
@@ -509,7 +502,7 @@
                     <table class="compact-table annual-commitment-table">
                       <thead>
                         <tr>
-                          <th>Commitment</th>
+                          <th>Fixed cost</th>
                           <th>Jan</th>
                           <th>Feb</th>
                           <th>Mar</th>
@@ -554,7 +547,7 @@
                     <tr>
                       <th>Month</th>
                       <th>Accommodation Fees</th>
-                      <th>Recurring Commitments</th>
+                      <th>Fixed Costs &amp; Loans</th>
                       <th>Total Expenses</th>
                       <th>Net Profit</th>
                       <th>Margin</th>
@@ -643,7 +636,6 @@
           <section class="table-panel">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">Editable source</p>
                 <h3 id="bookingTableTitle">Selected Month Bookings</h3>
               </div>
               <button class="primary-button" id="addFromTable" type="button">+ Booking</button>
@@ -1373,7 +1365,6 @@
             <section class="table-panel">
               <div class="section-heading">
                 <div>
-                  <p class="eyebrow">Tabulated records</p>
                   <h3 id="taxExpenseTableTitle">Expense List</h3>
                 </div>
                 <div class="heading-actions">
@@ -1487,7 +1478,7 @@
                     <button class="booking-channel-option" type="button" data-title-choice="Ms" aria-pressed="false">Ms</button>
                   </div>
                 </div>
-                <label>Guest Name
+                <label>Guest Name <span class="req" aria-hidden="true">*</span>
                   <input id="guestInput" required placeholder="Example: Amira Tan" />
                 </label>
               </div>
@@ -1522,7 +1513,7 @@
           <section class="form-section">
             <h4>Stay</h4>
             <div class="form-grid two-col">
-              <label>Date of Arrival
+              <label>Date of Arrival <span class="req" aria-hidden="true">*</span>
                 <input id="arrivalInput" type="date" required />
               </label>
               <div class="form-field">
@@ -1537,15 +1528,16 @@
                 <input class="hidden" id="nightsManualInput" type="number" min="4" step="1" placeholder="Enter nights" />
               </div>
             </div>
+            <p class="checkout-echo" id="checkoutEcho" aria-live="polite"></p>
           </section>
 
           <section class="form-section">
             <h4>Payment</h4>
             <div class="form-grid two-col">
-              <label>Accommodation Fees
+              <label>Accommodation Fees <span class="req" aria-hidden="true">*</span>
                 <input id="revenueInput" type="number" min="0" step="0.01" required />
               </label>
-              <label>Amount Received
+              <label>Amount Received <span class="req" aria-hidden="true">*</span>
                 <input id="paidInput" type="number" min="0" step="0.01" required />
               </label>
               <label>Damage Deposit Amount
@@ -1581,6 +1573,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260624-14"></script>
+    <script src="./app.js?v=20260624-15"></script>
   </body>
 </html>
