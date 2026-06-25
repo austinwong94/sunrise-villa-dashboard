@@ -1497,6 +1497,13 @@ function departureFor(booking) {
   return isoDate(addDays(dateObj(booking.arrival), Number(booking.nights) || 0));
 }
 
+// When Airbnb releases the host payout: about 24h after the guest's check-in.
+// For a 1-night stay that lands on checkout day; for a multi-night stay it's the day
+// after check-in. Both work out to arrival + 1 day.
+function airbnbReleaseDate(booking) {
+  return isoDate(addDays(dateObj(booking.arrival), 1));
+}
+
 function overlapsDate(booking, dayIso) {
   const day = dateObj(dayIso);
   const start = dateObj(booking.arrival);
@@ -4669,15 +4676,32 @@ function renderToday() {
   const departures = bookings.filter((b) => departureFor(b) === todayIso);
   const inhouse = bookings.filter((b) => overlapsDate(b, todayIso));
 
-  const attention = [];
+  const daysFromToday = (iso) => Math.round((dateObj(iso) - today) / 86400000);
+  const airbnbPayouts = [];
+  const directBalances = [];
+  const depositRefunds = [];
   bookings.forEach((b) => {
     if (isExcludedBooking(b)) return;
     const dep = dateObj(departureFor(b));
     const bal = balanceFor(b);
-    if (bal > 0 && dep >= today) attention.push({ b, tone: "due", label: `Balance ${money(bal)} unpaid`, sub: `arrives ${shortDate(b.arrival)}`, sort: dateObj(b.arrival).getTime() });
-    if (b.depositPaid && !b.depositRefunded && Number(b.depositAmount || 0) > 0 && dep < today) attention.push({ b, tone: "pend", label: `Refund ${money(b.depositAmount)} deposit`, sub: `checked out ${shortDate(departureFor(b))}`, sort: dep.getTime() });
+    if (b.channel === "Airbnb") {
+      // Money owed by Airbnb (held until release ~24h after check-in). Show near-term ones.
+      const release = airbnbReleaseDate(b);
+      const relDays = daysFromToday(release);
+      if (relDays >= 0 && relDays <= 30) airbnbPayouts.push({ b, release, relDays, amount: Number(b.revenue || 0) });
+    } else if (bal > 0 && dep >= today) {
+      // Direct: balance still owed (should be settled 2–4 weeks before arrival).
+      directBalances.push({ b, bal, daysToArrival: daysFromToday(b.arrival), depositPaid: b.depositPaid, depositAmount: Number(b.depositAmount || 0) });
+    }
+    // Security deposit to refund after checkout (both channels).
+    if (b.depositPaid && !b.depositRefunded && Number(b.depositAmount || 0) > 0 && dep < today) {
+      depositRefunds.push({ b, dep });
+    }
   });
-  attention.sort((a, b) => a.sort - b.sort);
+  airbnbPayouts.sort((a, b) => a.release.localeCompare(b.release));
+  directBalances.sort((a, b) => a.b.arrival.localeCompare(b.b.arrival));
+  depositRefunds.sort((a, b) => a.dep - b.dep);
+  const attentionCount = airbnbPayouts.length + directBalances.length + depositRefunds.length;
 
   const guestRow = (b, meta) => `
     <div class="today-row">
@@ -4752,6 +4776,38 @@ function renderToday() {
       <div class="today-card-body">${vacRows || emptyMsg("Fully booked for the next 6 weeks. 🎉")}</div>
     </section>`;
 
+  // --- Needs your attention: split by money type (Airbnb payouts / Direct balances / refunds) ---
+  const attnRow = (b, flag, sub) => `
+    <div class="today-row">
+      <span class="today-avatar">${prefixFor(b.guest)}</span>
+      <div class="today-row-main"><strong>${escapeHtml(b.guest)} ${returningBadgeHtml(b, bookings)}${blocklistBadgeHtml(b)}</strong><span>${b.villa === "Windmill" ? "Windmill" : "Sunrise"} · ${sub}</span></div>
+      ${flag}
+    </div>`;
+  const relText = (d) => (d === 0 ? "today" : `in ${d}d`);
+  const airbnbRowsHtml = airbnbPayouts
+    .map(({ b, release, relDays, amount }) => attnRow(b, `<span class="today-flag pend">Airbnb payout ${money(amount)}</span>`, `releases ${shortDate(release)} (${relText(relDays)})`))
+    .join("");
+  const arrivalText = (d) => (d > 0 ? `arrives in ${d} day${d === 1 ? "" : "s"}` : d === 0 ? "arrives today" : "in-house — balance overdue");
+  const depositText = (paid, amt) => (amt > 0 ? (paid ? `deposit ${money(amt)} ✓ held` : `deposit ${money(amt)} ⚠ not collected`) : "");
+  const directRowsHtml = directBalances
+    .map(({ b, bal, daysToArrival, depositPaid, depositAmount }) => {
+      const tone = daysToArrival <= 28 ? "due" : "pend"; // within the 4-week payment window = urgent
+      const dep = depositText(depositPaid, depositAmount);
+      return attnRow(b, `<span class="today-flag ${tone}">${money(bal)} balance</span>`, `${arrivalText(daysToArrival)}${dep ? " · " + dep : ""}`);
+    })
+    .join("");
+  const refundRowsHtml = depositRefunds
+    .map(({ b }) => attnRow(b, `<span class="today-flag pend">Refund ${money(b.depositAmount)}</span>`, `checked out ${shortDate(departureFor(b))}`))
+    .join("");
+  const groupLabel = (t) => `<div class="attn-group-label">${t}</div>`;
+  const attentionBody = attentionCount
+    ? [
+        airbnbRowsHtml ? groupLabel("Airbnb — payout pending") + airbnbRowsHtml : "",
+        directRowsHtml ? groupLabel("Direct — balance due") + directRowsHtml : "",
+        refundRowsHtml ? groupLabel("Deposit refunds due") + refundRowsHtml : "",
+      ].join("")
+    : emptyMsg("All caught up — nothing needs action.");
+
   host.innerHTML = `
     <div class="today-headline">
       <p class="eyebrow">Daily operations</p>
@@ -4767,21 +4823,8 @@ function renderToday() {
       ${vacancyCard}
     </div>
     <section class="today-card today-attention">
-      <div class="today-card-head"><h3>Needs your attention</h3><span class="count-pill">${attention.length}</span></div>
-      <div class="today-card-body">
-        ${attention.length
-          ? attention
-              .map(
-                (a) => `
-          <div class="today-row">
-            <span class="today-avatar">${prefixFor(a.b.guest)}</span>
-            <div class="today-row-main"><strong>${escapeHtml(a.b.guest)}</strong><span>${a.b.villa === "Windmill" ? "Windmill" : "Sunrise"} · ${a.sub}</span></div>
-            <span class="today-flag ${a.tone}">${a.label}</span>
-          </div>`,
-              )
-              .join("")
-          : emptyMsg("All caught up — nothing needs action.")}
-      </div>
+      <div class="today-card-head"><h3>Needs your attention</h3><span class="count-pill">${attentionCount}</span></div>
+      <div class="today-card-body">${attentionBody}</div>
     </section>`;
 }
 
