@@ -627,6 +627,12 @@ const els = {
   taxScanBtn: document.querySelector("#taxScanBtn"),
   taxScanStatus: document.querySelector("#taxScanStatus"),
   taxScanResult: document.querySelector("#taxScanResult"),
+  // Batch receipt intake
+  taxBatchInput: document.querySelector("#taxBatchInput"),
+  taxBatchFileName: document.querySelector("#taxBatchFileName"),
+  taxBatchScanBtn: document.querySelector("#taxBatchScanBtn"),
+  taxBatchStatus: document.querySelector("#taxBatchStatus"),
+  taxBatchResult: document.querySelector("#taxBatchResult"),
   // Capital assets
   taxAssetForm: document.querySelector("#taxAssetForm"),
   taxAssetId: document.querySelector("#taxAssetId"),
@@ -5973,6 +5979,227 @@ function applyScanToAsset() {
 }
 
 // =============================================================================
+// BATCH RECEIPT INTAKE — scan many receipts, match each to its tax YEAR, classify
+// against that year's rules, FLAG DUPLICATES (within the batch and vs existing
+// records), organise into annual tabs, then import what he confirms.
+// =============================================================================
+let batchItems = [];
+let batchActiveYa = null;
+
+function setBatchStatus(message, tone = "") {
+  if (!els.taxBatchStatus) return;
+  els.taxBatchStatus.textContent = message || "";
+  els.taxBatchStatus.className = `tax-scan-status${tone ? ` ${tone}` : ""}`;
+}
+
+// Downscale a captured image so storing many receipts doesn't bloat the cloud blob.
+function downscaleImage(dataUrl, maxDim = 1280, quality = 0.7) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+// Duplicate key — same vendor + date + amount (rounded).
+function dupKey(vendor, date, amount) {
+  return `${String(vendor || "").toLowerCase().trim()}|${String(date || "")}|${Math.round(Number(amount || 0) * 100)}`;
+}
+function existingRecordKeys() {
+  const keys = new Map();
+  (taxPlan.expenses || []).forEach((e) => keys.set(dupKey(e.vendor, e.date, e.amount), `${e.category} ${money(e.amount)}`));
+  (taxPlan.assets || []).forEach((a) => keys.set(dupKey(a.vendor, a.acquisitionDate, a.cost), `${a.description} ${money(a.cost)}`));
+  return keys;
+}
+
+function classifyBatchItem(item) {
+  const category = TAX_RULES[item.fields.suggestedCategory] ? item.fields.suggestedCategory : "Other";
+  const rule = taxRuleFor(category);
+  const isCapital = rule.treatment === "capital" || item.fields.isLikelyCapitalAsset;
+  item.category = category;
+  item.isCapital = isCapital;
+  item.treatment = isCapital ? "capital" : rule.treatment;
+  item.ya = yearOf(item.fields.date) || "Unknown";
+}
+
+function dedupBatch() {
+  const existing = existingRecordKeys();
+  const seen = new Map();
+  batchItems.forEach((item) => {
+    if (item.error) return;
+    const k = dupKey(item.fields.vendor, item.fields.date, item.fields.amount);
+    item.dup = { inBatch: false, existing: existing.has(k), of: "" };
+    if (seen.has(k)) {
+      item.dup.inBatch = true;
+      item.dup.of = seen.get(k);
+    } else {
+      seen.set(k, `${item.fields.vendor || "?"} ${money(item.fields.amount)}`);
+    }
+    // Default: don't auto-select a duplicate.
+    item.selected = !item.dup.inBatch && !item.dup.existing;
+  });
+}
+
+async function scanBatch() {
+  const files = Array.from(els.taxBatchInput?.files || []);
+  if (!files.length) { setBatchStatus("Choose receipt images first.", "warn"); return; }
+  if (!supabaseClient) { setBatchStatus("Sign in with cloud sync to use the scanner.", "warn"); return; }
+  const images = files.filter((f) => f.type !== "application/pdf");
+  const skipped = files.length - images.length;
+  if (!images.length) { setBatchStatus("Those are PDFs — upload photos/screenshots instead.", "warn"); return; }
+  if (images.length > 40) { setBatchStatus(`Too many at once (${images.length}). Please do up to 40 per batch.`, "warn"); return; }
+
+  if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = true;
+  batchItems = [];
+  for (let i = 0; i < images.length; i += 1) {
+    const file = images[i];
+    setBatchStatus(`Scanning ${i + 1} of ${images.length}…`, "loading");
+    const mediaType = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) ? file.type : "image/jpeg";
+    const item = { id: safeRecordId(""), fileName: file.name, mediaType, fields: {}, error: "", selected: false };
+    try {
+      const imageBase64 = await fileToBase64(file);
+      item.dataUrl = `data:${mediaType};base64,${imageBase64}`;
+      const { data, error } = await supabaseClient.functions.invoke("receipt-scan", { body: { imageBase64, mediaType } });
+      if (error) throw new Error(error.message || "scan failed");
+      if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "unreadable");
+      item.fields = data.data;
+      classifyBatchItem(item);
+    } catch (err) {
+      item.error = String(err.message || err);
+    }
+    batchItems.push(item);
+  }
+  dedupBatch();
+  const years = [...new Set(batchItems.filter((b) => !b.error).map((b) => b.ya))];
+  batchActiveYa = years.sort((a, b) => String(b).localeCompare(String(a)))[0] || null;
+  const ok = batchItems.filter((b) => !b.error).length;
+  const dups = batchItems.filter((b) => b.dup && (b.dup.inBatch || b.dup.existing)).length;
+  setBatchStatus(`Scanned ${ok}/${images.length}${skipped ? ` (${skipped} PDF skipped)` : ""}${dups ? ` · ${dups} duplicate(s) flagged` : ""}. Review and import below.`, dups ? "warn" : "ok");
+  if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = false;
+  renderBatch();
+}
+
+function batchYears() {
+  const ys = [...new Set(batchItems.filter((b) => !b.error).map((b) => b.ya))];
+  return ys.sort((a, b) => (a === "Unknown" ? 1 : b === "Unknown" ? -1 : String(b).localeCompare(String(a))));
+}
+
+function renderBatch() {
+  if (!els.taxBatchResult) return;
+  const ok = batchItems.filter((b) => !b.error);
+  const errors = batchItems.filter((b) => b.error);
+  if (!ok.length && !errors.length) { els.taxBatchResult.hidden = true; return; }
+  els.taxBatchResult.hidden = false;
+  const years = batchYears();
+  if (!years.includes(batchActiveYa)) batchActiveYa = years[0] || null;
+  const treatLabel = { capital: "Capital asset", deduct: "Claimable", partial: "Claimable (restricted)", no: "Not claimable", ask: "Needs review" };
+  const treatTone = { capital: "info", deduct: "ok", partial: "warn", no: "bad", ask: "warn" };
+
+  const tabs = years.map((y) => {
+    const n = ok.filter((b) => b.ya === y).length;
+    const sel = ok.filter((b) => b.ya === y && b.selected).length;
+    return `<button type="button" class="batch-tab ${y === batchActiveYa ? "active" : ""}" data-batch-ya="${escapeHtml(String(y))}">YA ${escapeHtml(String(y))} <span>${sel}/${n}</span></button>`;
+  }).join("");
+
+  const rows = ok.filter((b) => b.ya === batchActiveYa).map((b) => {
+    const dupBadge = b.dup?.existing ? `<span class="batch-dup tone-bad">Duplicate of existing</span>`
+      : b.dup?.inBatch ? `<span class="batch-dup tone-warn">Duplicate in batch</span>` : "";
+    const conf = String(b.fields.confidence || "").toLowerCase();
+    const confTone = conf === "high" ? "ok" : conf === "low" ? "bad" : "warn";
+    const catOpts = taxExpenseCategories.map((c) => `<option ${c === b.category ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
+    return `
+      <tr class="${b.selected ? "" : "batch-row-off"}">
+        <td><input type="checkbox" data-batch-sel="${b.id}" ${b.selected ? "checked" : ""} /></td>
+        <td><input type="date" class="batch-date" data-batch-date="${b.id}" value="${escapeHtml(b.fields.date || "")}" /></td>
+        <td>${escapeHtml(b.fields.vendor || "—")}<br><span class="table-muted">${escapeHtml((b.fields.description || "").slice(0, 40))}</span></td>
+        <td><input type="number" step="0.01" class="batch-amt" data-batch-amt="${b.id}" value="${Number(b.fields.amount || 0)}" /></td>
+        <td><select class="batch-cat" data-batch-cat="${b.id}">${catOpts}</select></td>
+        <td><span class="batch-treat tone-${treatTone[b.treatment] || "info"}">${treatLabel[b.treatment] || "—"}</span><br><span class="scan-conf tone-${confTone}">${escapeHtml(b.fields.confidence || "")}</span></td>
+        <td>${dupBadge}</td>
+      </tr>`;
+  }).join("");
+
+  const selCount = ok.filter((b) => b.selected).length;
+  els.taxBatchResult.innerHTML = `
+    <div class="batch-tabs">${tabs}</div>
+    <div class="table-scroll">
+      <table class="compact-table batch-table">
+        <thead><tr><th>Add</th><th>Date</th><th>Supplier</th><th>Amount</th><th>Category</th><th>Treatment</th><th>Duplicate</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7" class="empty-state">Nothing for this year.</td></tr>`}</tbody>
+      </table>
+    </div>
+    ${errors.length ? `<p class="tax-ai-note bad">${errors.length} file(s) couldn't be read and were skipped${errors[0]?.error ? ` (e.g. ${escapeHtml(errors[0].error)})` : ""}.</p>` : ""}
+    <div class="scan-actions">
+      <button type="button" class="primary-button" id="batchImportBtn">Import ${selCount} selected</button>
+      <button type="button" class="ghost-button" id="batchSelectAll">Select all (non-duplicate)</button>
+      <button type="button" class="ghost-button" id="batchClear">Clear</button>
+    </div>
+    <p class="scan-disclaimer">Each row is matched to its year by date and classified against that year's rules. Capital items import to the asset register; the rest to expenses. Duplicates are unticked by default. Always check amounts and dates before importing — then run the AI review.</p>
+  `;
+  // wire row controls
+  els.taxBatchResult.querySelectorAll("[data-batch-ya]").forEach((b) => b.addEventListener("click", () => { batchActiveYa = b.dataset.batchYa === "Unknown" ? "Unknown" : Number(b.dataset.batchYa); renderBatch(); }));
+  els.taxBatchResult.querySelectorAll("[data-batch-sel]").forEach((c) => c.addEventListener("change", () => { const it = batchItems.find((x) => x.id === c.dataset.batchSel); if (it) { it.selected = c.checked; renderBatch(); } }));
+  els.taxBatchResult.querySelectorAll("[data-batch-cat]").forEach((s) => s.addEventListener("change", () => { const it = batchItems.find((x) => x.id === s.dataset.batchCat); if (it) { it.fields.suggestedCategory = s.value; classifyBatchItem(it); renderBatch(); } }));
+  els.taxBatchResult.querySelectorAll("[data-batch-date]").forEach((d) => d.addEventListener("change", () => { const it = batchItems.find((x) => x.id === d.dataset.batchDate); if (it) { it.fields.date = d.value; it.ya = yearOf(d.value) || "Unknown"; dedupBatch(); renderBatch(); } }));
+  els.taxBatchResult.querySelectorAll("[data-batch-amt]").forEach((a) => a.addEventListener("change", () => { const it = batchItems.find((x) => x.id === a.dataset.batchAmt); if (it) { it.fields.amount = Number(a.value || 0); dedupBatch(); renderBatch(); } }));
+  document.querySelector("#batchImportBtn")?.addEventListener("click", importBatch);
+  document.querySelector("#batchSelectAll")?.addEventListener("click", () => { batchItems.forEach((b) => { if (!b.error && !(b.dup?.inBatch || b.dup?.existing)) b.selected = true; }); renderBatch(); });
+  document.querySelector("#batchClear")?.addEventListener("click", () => { batchItems = []; batchActiveYa = null; els.taxBatchResult.hidden = true; if (els.taxBatchInput) els.taxBatchInput.value = ""; if (els.taxBatchFileName) els.taxBatchFileName.textContent = "No files chosen"; if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = true; setBatchStatus(""); });
+}
+
+async function importBatch() {
+  const chosen = batchItems.filter((b) => !b.error && b.selected);
+  if (!chosen.length) { setBatchStatus("Nothing selected to import.", "warn"); return; }
+  const invalid = chosen.filter((b) => !yearOf(b.fields.date) || !(Number(b.fields.amount) > 0));
+  if (invalid.length) { setBatchStatus(`${invalid.length} selected item(s) need a valid date and amount first.`, "warn"); return; }
+  createRecoverySnapshot("Before batch receipt import");
+  let addedExp = 0;
+  let addedAsset = 0;
+  for (const b of chosen) {
+    const small = await downscaleImage(b.dataUrl);
+    const attachment = { name: b.fileName, type: "image/jpeg", dataUrl: small, attachedAt: new Date().toISOString() };
+    if (b.isCapital) {
+      const asset = normalizeTaxAsset({
+        description: b.fields.description || b.fields.vendor || b.category,
+        vendor: b.fields.vendor || "", cost: Number(b.fields.amount || 0),
+        acquisitionDate: b.fields.date, assetClass: suggestAssetClass(b.category, Number(b.fields.amount || 0)),
+        attachment, receipt: "Batch scan",
+      });
+      taxPlan = { ...taxPlan, assets: [asset, ...(taxPlan.assets || [])] };
+      addedAsset += 1;
+    } else {
+      const expense = normalizeTaxExpense({
+        date: b.fields.date, category: b.category, amount: Number(b.fields.amount || 0),
+        vendor: b.fields.vendor || "", notes: b.fields.description || "", attachment, receipt: "Batch scan",
+        property: appSettings?.activeVilla === "Windmill" ? "Windmill Villa" : "Sunrise Villa",
+      });
+      taxPlan = { ...taxPlan, expenses: [expense, ...(taxPlan.expenses || [])] };
+      addedExp += 1;
+    }
+  }
+  saveTaxPlan();
+  // drop imported items from the batch
+  batchItems = batchItems.filter((b) => !chosen.includes(b));
+  setBatchStatus(`Imported ${addedExp} expense(s) and ${addedAsset} asset(s). Run the AI review when ready.`, "ok");
+  renderBatch();
+  renderTaxExpenses();
+  renderTaxAssets();
+}
+
+// =============================================================================
 // YEAR-OF-ASSESSMENT SUMMARY — Form B tabulation for the Enterprise source.
 // =============================================================================
 // Confidence badge for a sourced fact-base value.
@@ -7417,6 +7644,15 @@ els.taxScanInput?.addEventListener("change", (event) => {
   setScanStatus("");
 });
 els.taxScanBtn?.addEventListener("click", scanReceipt);
+
+// Batch receipt intake
+els.taxBatchInput?.addEventListener("change", (event) => {
+  const files = Array.from(event.target.files || []);
+  if (els.taxBatchFileName) els.taxBatchFileName.textContent = files.length ? `${files.length} file(s) chosen` : "No files chosen";
+  if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = !files.length;
+  setBatchStatus("");
+});
+els.taxBatchScanBtn?.addEventListener("click", scanBatch);
 
 // ---------------- Capital assets ----------------
 els.taxAssetForm?.addEventListener("submit", saveTaxAsset);

@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260626-22" />
+    <link rel="stylesheet" href="./styles.css?v=20260626-23" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1309,6 +1309,25 @@
               <div class="tax-scan-result" id="taxScanResult" hidden></div>
             </section>
 
+            <section class="tax-scan-card dashboard-section" id="taxBatchCard">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Batch intake</p>
+                  <h3>Submit many receipts at once</h3>
+                </div>
+              </div>
+              <p class="tax-scan-help">Drop in all your receipts/invoices together. I scan each, <strong>match it to its tax year</strong> by date, classify it (claimable / not claimable / capital), and <strong>flag duplicates</strong>. Review the annual tabs, then import what you confirm. Photos or screenshots (not PDF). Each scan uses your API credit.</p>
+              <div class="tax-scan-controls">
+                <label class="file-upload-field tax-scan-file">Receipt images
+                  <input id="taxBatchInput" type="file" accept="image/*" multiple />
+                  <span id="taxBatchFileName">No files chosen</span>
+                </label>
+                <button class="primary-button" id="taxBatchScanBtn" type="button" disabled>Scan all</button>
+                <span class="tax-scan-status" id="taxBatchStatus" role="status" aria-live="polite"></span>
+              </div>
+              <div class="tax-batch-result" id="taxBatchResult" hidden></div>
+            </section>
+
             <section class="tax-expense-entry dashboard-section">
               <div class="section-heading">
                 <div>
@@ -1773,6 +1792,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260626-22"></script>
+    <script src="./app.js?v=20260626-23"></script>
   </body>
 </html>
