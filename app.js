@@ -663,6 +663,12 @@ const els = {
   taxYaCards: document.querySelector("#taxYaCards"),
   taxYaDetail: document.querySelector("#taxYaDetail"),
   taxYearRules: document.querySelector("#taxYearRules"),
+  taxDocInput: document.querySelector("#taxDocInput"),
+  taxDocFileName: document.querySelector("#taxDocFileName"),
+  taxDocText: document.querySelector("#taxDocText"),
+  taxDocAnalyzeBtn: document.querySelector("#taxDocAnalyzeBtn"),
+  taxDocStatus: document.querySelector("#taxDocStatus"),
+  taxDocResult: document.querySelector("#taxDocResult"),
   exportTaxYaExcel: document.querySelector("#exportTaxYaExcel"),
   // AI tax review
   runTaxReviewBtn: document.querySelector("#runTaxReviewBtn"),
@@ -6250,6 +6256,123 @@ function renderTaxYearRules(ya) {
   `;
 }
 
+// ---- LHDN document analyzer: extract a year's rules from his document ----
+let pendingDocData = null;
+
+function setDocStatus(message, tone = "") {
+  if (!els.taxDocStatus) return;
+  els.taxDocStatus.textContent = message || "";
+  els.taxDocStatus.className = `tax-scan-status${tone ? ` ${tone}` : ""}`;
+}
+
+function soleProThis(taxpayerType) {
+  const t = String(taxpayerType || "").toLowerCase();
+  return t.includes("individual") || t.includes("sole") || t.includes("all") || t === "";
+}
+
+async function analyzeTaxDoc() {
+  if (!supabaseClient) { setDocStatus("Sign in with cloud sync to analyze documents.", "warn"); return; }
+  const file = els.taxDocInput?.files?.[0];
+  const text = els.taxDocText?.value?.trim() || "";
+  if (!file && !text) { setDocStatus("Upload a document image or paste its text first.", "warn"); return; }
+  if (file && file.type === "application/pdf") { setDocStatus("PDFs can't be read directly — paste the text or upload a screenshot.", "warn"); return; }
+  setDocStatus("Reading the document…", "loading");
+  if (els.taxDocAnalyzeBtn) els.taxDocAnalyzeBtn.disabled = true;
+  try {
+    const body = {};
+    if (file) {
+      const mediaType = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) ? file.type : "image/jpeg";
+      body.imageBase64 = await fileToBase64(file);
+      body.mediaType = mediaType;
+    }
+    if (text) body.text = text;
+    const { data, error } = await supabaseClient.functions.invoke("tax-doc-analyze", { body });
+    if (error) throw new Error(error.message || "analyze failed");
+    if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not read the document.");
+    pendingDocData = data.data;
+    renderDocResult(data.data);
+    setDocStatus("Done — review and save to the year(s) below.", "ok");
+  } catch (err) {
+    console.error("tax-doc-analyze", err);
+    setDocStatus(`Analysis failed: ${err.message || err}.`, "bad");
+  } finally {
+    if (els.taxDocAnalyzeBtn) els.taxDocAnalyzeBtn.disabled = false;
+  }
+}
+
+function renderDocResult(d) {
+  if (!els.taxDocResult) return;
+  const rules = Array.isArray(d.rules) ? d.rules : [];
+  const yas = Array.isArray(d.appliesToYAs) && d.appliesToYAs.length ? d.appliesToYAs : [];
+  els.taxDocResult.hidden = false;
+  if (!rules.length) {
+    els.taxDocResult.innerHTML = `<p class="tax-ai-note">No extractable year-specific rule found in this document (${escapeHtml(d.docType || "unknown")}). Try a clearer page or paste the relevant text.</p>`;
+    return;
+  }
+  const rows = rules.map((r) => {
+    const ruleYas = (Array.isArray(r.appliesToYAs) && r.appliesToYAs.length ? r.appliesToYAs : yas).join(", ") || "—";
+    const conf = String(r.confidence || "").toLowerCase();
+    const confTone = conf === "high" ? "ok" : conf === "low" ? "bad" : "warn";
+    const gate = soleProThis(r.appliesToTaxpayerType) ? "" : `<span class="batch-dup tone-warn">may not apply to sole-prop: ${escapeHtml(r.appliesToTaxpayerType || "")}</span>`;
+    return `
+      <tr>
+        <td>${escapeHtml(r.ruleType || "rule")}${r.assetClassOrCategory ? `<br><span class="table-muted">${escapeHtml(r.assetClassOrCategory)}</span>` : ""}</td>
+        <td><strong>${escapeHtml(r.extractedValue || "—")}</strong>${r.expiryOrSunset && r.expiryOrSunset !== "none stated" ? `<br><span class="table-muted">ends: ${escapeHtml(r.expiryOrSunset)}</span>` : ""}</td>
+        <td>${escapeHtml(ruleYas)}</td>
+        <td><span class="scan-conf tone-${confTone}">${escapeHtml(r.confidence || "")}</span>${r.mustConfirm ? " · confirm" : ""}<br><span class="table-muted">${escapeHtml(r.sourceRefInDoc || "")}</span>${gate}</td>
+      </tr>`;
+  }).join("");
+  const defaultYa = Number(els.taxYaInput?.value || taxPlan.year || currentYear());
+  const yaOptions = yas.length ? yas : [defaultYa];
+  els.taxDocResult.innerHTML = `
+    <div class="tax-doc-head"><strong>${escapeHtml(d.docIdentifier || d.docType || "Document")}</strong>${yas.length ? `<span class="tyr-src">applies to YA ${escapeHtml(yas.join(", "))}</span>` : ""}</div>
+    <div class="table-scroll"><table class="compact-table"><thead><tr><th>Rule</th><th>Value (as written)</th><th>YA(s)</th><th>Confidence · source</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="scan-actions">
+      <label class="ya-picker">Save to YA
+        <select id="taxDocTargetYa">${yaOptions.map((y) => `<option value="${y}">${y}</option>`).join("")}</select>
+      </label>
+      <button type="button" class="primary-button" id="taxDocSaveBtn">Save ${rules.length} rule(s) to this year</button>
+      <button type="button" class="ghost-button" id="taxDocDismiss">Dismiss</button>
+    </div>
+    <p class="scan-disclaimer">Stored as YOUR document override for the chosen year only — it will show under that year's rules. Rules tagged “may not apply to sole-prop” are for other taxpayer types; don't save those unless they truly apply to you.</p>
+  `;
+  document.querySelector("#taxDocSaveBtn")?.addEventListener("click", () => {
+    const ya = Number(document.querySelector("#taxDocTargetYa")?.value || defaultYa);
+    saveDocToProfile(d, ya);
+  });
+  document.querySelector("#taxDocDismiss")?.addEventListener("click", () => { els.taxDocResult.hidden = true; pendingDocData = null; });
+}
+
+function saveDocToProfile(d, ya) {
+  const rules = Array.isArray(d.rules) ? d.rules : [];
+  const entries = rules.map((r) => ({
+    ruleType: r.ruleType, assetClassOrCategory: r.assetClassOrCategory || null,
+    extractedValue: r.extractedValue || "", appliesToTaxpayerType: r.appliesToTaxpayerType || "",
+    expiryOrSunset: r.expiryOrSunset || "", sourceRefInDoc: r.sourceRefInDoc || "",
+    docIdentifier: d.docIdentifier || d.docType || "document", confidence: r.confidence || "low",
+    addedAt: new Date().toISOString(),
+  }));
+  const yp = { ...(taxPlan.yearProfiles || {}) };
+  const existing = yp[ya] && Array.isArray(yp[ya].entries) ? yp[ya].entries : [];
+  yp[ya] = { entries: [...entries, ...existing] };
+  const docRecord = {
+    id: safeRecordId(""), docIdentifier: d.docIdentifier || d.docType || "document",
+    docType: d.docType || "other", appliesToYAs: d.appliesToYAs || [ya], ruleCount: rules.length,
+    addedAt: new Date().toISOString(),
+  };
+  taxPlan = { ...taxPlan, yearProfiles: yp, lhdnDocs: [docRecord, ...(taxPlan.lhdnDocs || [])] };
+  saveTaxPlan();
+  setDocStatus(`Saved ${rules.length} rule(s) to YA ${ya}.`, "ok");
+  if (els.taxDocResult) els.taxDocResult.hidden = true;
+  if (els.taxDocInput) els.taxDocInput.value = "";
+  if (els.taxDocText) els.taxDocText.value = "";
+  if (els.taxDocFileName) els.taxDocFileName.textContent = "No file chosen";
+  pendingDocData = null;
+  if (els.taxYaInput) els.taxYaInput.value = ya;
+  renderTaxYearRules(ya);
+  if (els.taxYearRulesBox && "open" in els.taxYearRulesBox) els.taxYearRulesBox.open = true;
+}
+
 function renderTaxYa() {
   if (!els.taxYaCards) return;
   if (els.taxClassifyAffirm) els.taxClassifyAffirm.checked = !!taxPlan.review?.classificationAffirmed;
@@ -7699,6 +7822,14 @@ els.taxAssetCards?.addEventListener("click", (event) => {
 els.taxYaInput?.addEventListener("input", renderTaxYa);
 els.taxYaInput?.addEventListener("change", renderTaxYa);
 els.exportTaxYaExcel?.addEventListener("click", exportTaxYaExcel);
+
+// LHDN document analyzer
+els.taxDocInput?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (els.taxDocFileName) els.taxDocFileName.textContent = file ? file.name : "No file chosen";
+  setDocStatus("");
+});
+els.taxDocAnalyzeBtn?.addEventListener("click", analyzeTaxDoc);
 
 // ---------------- AI tax review ----------------
 els.runTaxReviewBtn?.addEventListener("click", runTaxReview);

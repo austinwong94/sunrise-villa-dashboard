@@ -5923,3 +5923,12 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .batch-dup { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
 .batch-dup.tone-bad { background: var(--due-soft); color: var(--due); }
 .batch-dup.tone-warn { background: var(--pend-soft); color: var(--pend); }
+
+/* ============================================================
+   TAX — LHDN document analyzer
+   ============================================================ */
+.tax-doc-analyzer { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.tax-doc-analyzer h4 { margin: 0 0 4px; font-size: 14px; color: var(--ink); }
+.tax-doc-analyzer textarea { width: 100%; margin: 8px 0; padding: 8px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; font-family: inherit; }
+.tax-doc-result { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--soft); display: flex; flex-direction: column; gap: 10px; }
+.tax-doc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }

@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260626-23" />
+    <link rel="stylesheet" href="./styles.css?v=20260626-24" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1630,6 +1630,20 @@
               <details class="tax-year-rules" id="taxYearRulesBox">
                 <summary>📅 LHDN rules that apply to this year (YA-specific)</summary>
                 <div id="taxYearRules"></div>
+                <div class="tax-doc-analyzer">
+                  <h4>Teach a year its rules from your LHDN document</h4>
+                  <p class="tyr-note">Upload a photo of — or paste the text from — an LHDN Public Ruling, Budget rate card, gazette or SST notice. I extract the rules and the year(s) they apply to; you confirm; they're stored for that year only and override the baseline. Image or pasted text (screenshot a PDF).</p>
+                  <label class="file-upload-field tax-scan-file">Document image
+                    <input id="taxDocInput" type="file" accept="image/*" />
+                    <span id="taxDocFileName">No file chosen</span>
+                  </label>
+                  <textarea id="taxDocText" rows="3" placeholder="…or paste the document text here"></textarea>
+                  <div class="tax-scan-controls">
+                    <button class="primary-button" id="taxDocAnalyzeBtn" type="button">Analyze document</button>
+                    <span class="tax-scan-status" id="taxDocStatus" role="status" aria-live="polite"></span>
+                  </div>
+                  <div class="tax-doc-result" id="taxDocResult" hidden></div>
+                </div>
               </details>
             </section>
 
@@ -1792,6 +1806,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260626-23"></script>
+    <script src="./app.js?v=20260626-24"></script>
   </body>
 </html>
