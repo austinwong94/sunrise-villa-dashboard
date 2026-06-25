@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260626-20" />
+    <link rel="stylesheet" href="./styles.css?v=20260626-21" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1297,7 +1297,7 @@
                   <h3>Scan a receipt or invoice</h3>
                 </div>
               </div>
-              <p class="tax-scan-help">Upload a photo or PDF of a receipt/invoice. Claude reads the supplier, date, amount and suggests a category — then I apply the Malaysian tax rule. You confirm before it saves. <strong>Record-keeping aid, not tax advice</strong> — your agent reviews before filing.</p>
+              <p class="tax-scan-help">Upload a photo or PDF of a receipt/invoice. Claude reads the supplier, date, amount and suggests a category — then I apply the Malaysian tax rule. You confirm before it saves. <strong>Record-keeping aid, not tax advice</strong> — run the AI review (Year Summary tab) before you file.</p>
               <div class="tax-scan-controls">
                 <label class="file-upload-field tax-scan-file">Receipt image / PDF
                   <input id="taxScanInput" type="file" accept="image/*,.pdf" />
@@ -1389,7 +1389,7 @@
                         <option>Not deductible</option>
                         <option>Ask accountant</option>
                       </select>
-                      <small class="field-help">Leave on Auto to apply the Malaysian tax rule for the category. Override only if your agent advises.</small>
+                      <small class="field-help">Leave on Auto to apply the Malaysian tax rule for the category. Override only if you're sure of the treatment.</small>
                     </label>
                     <label>Receipt / Reference No.
                       <input id="taxExpenseReceipt" placeholder="Invoice, receipt or transaction no." />
@@ -1605,9 +1605,30 @@
                   <button class="ghost-button compact" id="exportTaxYaExcel" type="button">Export</button>
                 </div>
               </div>
-              <p class="tax-scan-help">This rolls up your Enterprise / sole-proprietor records for one calendar year the way Form B is built: revenue deductions, capital allowances from the register, and the items that need a decision. <strong>Suggested figures for your agent to confirm — not a filed return.</strong></p>
+              <p class="tax-scan-help">This rolls up your Enterprise / sole-proprietor records for one calendar year the way Form B is built: revenue deductions, capital allowances from the register, and the items that need a decision. <strong>A review aid, not a filed return.</strong></p>
               <section class="tax-summary-grid" id="taxYaCards"></section>
               <div class="tax-ya-detail" id="taxYaDetail"></div>
+            </section>
+
+            <section class="dashboard-section tax-review-section">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">AI tax review</p>
+                  <h3>Review this year before you file</h3>
+                </div>
+                <div class="heading-actions">
+                  <button class="primary-button" id="runTaxReviewBtn" type="button">Run review</button>
+                </div>
+              </div>
+              <p class="tax-scan-help" id="taxReviewIntro">Runs ~25 built-in Malaysian-tax checks instantly, then an AI judgement pass (sign-in + API) for the things rules can't see — repair-vs-renovation, who-was-entertained, dedicated-vs-shared utilities, vehicle use, non-resident-OTA withholding. Every finding cites the rule. <strong>It flags questions; it does not approve your return.</strong></p>
+
+              <label class="tax-classify-affirm" for="taxClassifyAffirm">
+                <input id="taxClassifyAffirm" type="checkbox" />
+                <span>I confirm this villa operates as an <strong>active short-term-rental business</strong> (frequent short lets, actively managed/cleaned/listed), taxed as Form B business income — not passive long-term rental. <small>This is your own factual confirmation. If it's really passive letting, the deductions and capital allowances here do not apply — the tool can't decide this for you.</small></span>
+              </label>
+
+              <div class="tax-review-status" id="taxReviewStatus" role="status" aria-live="polite"></div>
+              <div class="tax-review-result" id="taxReviewResult" hidden></div>
             </section>
           </div>
         </section>
@@ -1748,6 +1769,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260626-20"></script>
+    <script src="./app.js?v=20260626-21"></script>
   </body>
 </html>

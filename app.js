@@ -138,8 +138,9 @@ const taxExpenseCategories = [
 // =============================================================================
 // MALAYSIAN TAX ENGINE (deterministic — sourced from LHDN Public Rulings + ITA
 // 1967; see tax/MALAYSIAN-TAX-RULES.md). The AI scanner only extracts + suggests
-// a category; THIS table decides the treatment. A licensed agent reviews before
-// filing, so we suggest treatments and FLAG grey areas rather than guessing.
+// a category; THIS table decides the treatment. The built-in AI review pass
+// (Year Summary tab) checks the compiled year before filing, so we suggest
+// treatments and FLAG grey areas rather than guessing.
 // =============================================================================
 
 // Capital-allowance rate classes (Schedule 3). ia = initial allowance (once, in
@@ -179,7 +180,7 @@ const TAX_RULES = {
   "Furniture & Fittings": { treatment: "capital", capitalClass: "furniture-office", rule: "Durable asset → capital allowance (or 100% if ≤ RM2,000 each).", source: "Sch 3; PR 3/2021" },
   "Appliances/Electronics": { treatment: "capital", capitalClass: "plant", rule: "Plant → capital allowance (or 100% if ≤ RM2,000 each).", source: "Sch 3; PR 12/2014" },
   "Computer/ICT": { treatment: "capital", capitalClass: "computer-ict", rule: "ICT → accelerated CA 20% + 40% (expires after YA 2027).", source: "ICT ACA Rules 2024" },
-  "Smart Lock/Security": { treatment: "capital", capitalClass: "plant", rule: "Durable security equipment → capital allowance (or 100% if ≤ RM2,000).", source: "Sch 3; PR 3/2021", flag: "Capital-vs-revenue is grey for cheap units — confirm with your agent." },
+  "Smart Lock/Security": { treatment: "capital", capitalClass: "plant", rule: "Durable security equipment → capital allowance (or 100% if ≤ RM2,000).", source: "Sch 3; PR 3/2021", flag: "Capital-vs-revenue is grey for cheap units — confirm before you claim it." },
   "Improvement/Renovation": { treatment: "no", rule: "Capital improvement; ordinary accommodation building gets NO capital allowance.", source: "PR 6/2019; s39", flag: "No relief at all. Confirm repair-vs-improvement — a genuine repair would instead be deductible." },
   "Entertainment": { treatment: "partial", pct: 50, rule: "Entertainment restricted to 50% — s39(1)(l).", source: "PR 4/2015", flag: "50% for existing customers · 100% for staff or logo gifts · 0% for potential customers. Adjust if not the default 50%." },
   "Vehicle/Transport": { treatment: "ask", rule: "Apportion running costs to business use; commuting is private; a vehicle purchase is a capital asset.", source: "PR 5/2014", flag: "Set the business-use %. To capitalise a vehicle purchase, add it under Capital Assets as a Motor vehicle." },
@@ -545,6 +546,11 @@ const els = {
   taxYaCards: document.querySelector("#taxYaCards"),
   taxYaDetail: document.querySelector("#taxYaDetail"),
   exportTaxYaExcel: document.querySelector("#exportTaxYaExcel"),
+  // AI tax review
+  runTaxReviewBtn: document.querySelector("#runTaxReviewBtn"),
+  taxClassifyAffirm: document.querySelector("#taxClassifyAffirm"),
+  taxReviewStatus: document.querySelector("#taxReviewStatus"),
+  taxReviewResult: document.querySelector("#taxReviewResult"),
 };
 
 let pendingTaxAssetAttachment = null;
@@ -608,6 +614,7 @@ function defaultTaxPlan() {
     personalReliefs: 9000,
     expenses: [],
     assets: [], // capital assets (capital-allowance schedule, multi-year)
+    review: { classificationAffirmed: false, affirmedAt: "" }, // AI tax-review gate state
     notes: {
       books: false,
       salary: false,
@@ -845,6 +852,426 @@ function assetResidualAfter(asset, ya) {
   return ca.residual;
 }
 
+// =============================================================================
+// AI TAX-REVIEW AGENT — DETERMINISTIC LAYER. Designed + red-teamed from the
+// verified rules (workflow tax-review-agent-design). The HARD RULE: all
+// arithmetic, thresholds, dates, matching and the VERDICT are computed HERE in
+// code — never by the LLM. The LLM (separate function) only adds semantic
+// judgement over these pre-computed records and can never upgrade the verdict.
+// This is a review aid, NOT a tax sign-off, and no professional checks it.
+// =============================================================================
+
+// Category groups (new + legacy labels) used by the completeness checks.
+const TAX_CAT_GROUPS = {
+  cleaning: ["Housekeeping/Cleaning", "Housekeeping", "Laundry"],
+  utilities: ["Utilities", "Electricity & Water", "Gas"],
+  internet: ["Internet/WiFi"],
+  consumables: ["Consumables/Supplies", "Supplies", "Groceries"],
+};
+
+// Enrich one YA's records with engine-derived fields (so the review — and the
+// LLM — never recompute). Assets exclude the Sdn. Bhd. entity (separate return).
+function taxReviewRecords(ya) {
+  const expenses = (taxPlan.expenses || [])
+    .filter((e) => yearOf(e.date) === ya)
+    .map((e) => ({
+      ...e,
+      pureRule: taxRuleFor(e.category).treatment,
+      ruleTreatment: expenseBucket(e),
+      deductibleAmount: expenseDeductibleAmount(e),
+      hasReceipt: !!(e.receipt || e.attachment?.dataUrl),
+    }));
+  const assets = (taxPlan.assets || [])
+    .filter((a) => a.entity !== "Sdn. Bhd.")
+    .map((a) => {
+      const ca = assetCaForYA(a, ya);
+      return {
+        ...a,
+        qualifyingExpenditure: assetQE(a),
+        thisYaAllowance: ca.claimed,
+        thisYaGross: ca.gross,
+        balancing: ca.balancing,
+        residual: assetResidualAfter(a, ya),
+        hasReceipt: !!(a.receipt || a.attachment?.dataUrl),
+      };
+    });
+  return { expenses, assets };
+}
+
+function refExpense(e) {
+  return `${shortDate(e.date)} · ${e.category} · ${e.vendor || "no vendor"} · ${money(e.amount)}`;
+}
+function refAsset(a) {
+  return `${a.description || "asset"} · ${money(a.cost)} · acquired ${shortDate(a.acquisitionDate)}`;
+}
+
+// The deterministic review. Returns findings (both ledgers), the code-set
+// verdict, and the checks that could not run for missing inputs.
+function buildTaxReview(ya) {
+  const { expenses, assets } = taxReviewRecords(ya);
+  const summary = taxYaSummary(ya);
+  // Gross accommodation turnover for this YA (real figure from bookings — NOT
+  // revenueDeductible). Used only for SST / e-invoice / completeness.
+  let grossTurnover = 0;
+  try {
+    grossTurnover = Number(revenueForPeriod(ya, taxPlan.sdnStart || `${ya}-06`, "before")) || 0;
+  } catch {
+    grossTurnover = 0;
+  }
+  const findings = [];
+  const F = (o) => findings.push({ triggerType: "engine-deterministic", refs: [], rmAtStake: "", ledger: "over_claim_audit_risk", area: "deductibility", ...o });
+
+  // 1. User override more generous than the rule (HIGH).
+  const overGen = expenses.filter(
+    (e) => ["Deductible", "Partially deductible"].includes(e.deductible) && ["no", "capital", "ask"].includes(e.pureRule),
+  );
+  if (overGen.length) {
+    F({ checkId: "override-more-generous-than-rule", severity: "high", area: "deductibility",
+      title: "An override claims more than the rule allows",
+      detail: `${overGen.length} expense(s) are forced to a deductible status the Malaysian rule does not permit for that category — this injects a non-allowable amount into your deductions.`,
+      recommendation: "Open each line and revert Tax Status to 'Auto (from rule)' unless you can document why the rule is wrong. This is the first thing a desk audit catches.",
+      source: "s33 / s39 ITA 1967", refs: overGen.map(refExpense) });
+  }
+  // Inverse: marked not-deductible but rule says deduct (LOW, missed relief).
+  const underClaimed = expenses.filter((e) => e.deductible === "Not deductible" && e.pureRule === "deduct");
+  if (underClaimed.length) {
+    F({ checkId: "missed-deduction-override", severity: "low", ledger: "missed_relief_overpayment",
+      title: "Deductible cost marked 'Not deductible'", area: "deductibility",
+      detail: `${underClaimed.length} item(s) the rule treats as deductible are forced to 'Not deductible' — you may be overpaying.`,
+      recommendation: "Revert to 'Auto (from rule)' unless there is a reason to disclaim the deduction.",
+      source: "s33(1) ITA 1967", refs: underClaimed.map(refExpense) });
+  }
+
+  // 2. Loan principal deducted (HIGH).
+  const loanPrincipal = expenses.filter((e) => e.category === "Loan Principal" && e.deductibleAmount > 0);
+  if (loanPrincipal.length) {
+    F({ checkId: "loan-principal-deducted", severity: "high",
+      title: "Loan principal is being deducted", area: "deductibility",
+      detail: "Only loan INTEREST is deductible; the capital repayment is not.",
+      recommendation: "Claim only interest from your amortisation statement; move principal to 'Not deductible'.",
+      source: "s33(1)(a) / s39 ITA 1967", refs: loanPrincipal.map(refExpense) });
+  }
+
+  // 3. Improvement / renovation given relief (HIGH).
+  const renoRe = /renovat|extension|rebuild|structural|flooring|tiling|repaint|rewire|plaster|build/i;
+  const improvExp = expenses.filter((e) => e.category === "Improvement/Renovation" && (e.deductibleAmount > 0 || e.ruleTreatment === "capital"));
+  const improvAsset = assets.filter((a) => renoRe.test(a.description || "") && a.qualifyingExpenditure > 0);
+  if (improvExp.length || improvAsset.length) {
+    F({ checkId: "improvement-renovation-claimed", severity: "high", area: "capital-allowance",
+      title: "Renovation / improvement claimed (it earns no relief)",
+      detail: "An ordinary accommodation building gets NO capital allowance, and improvements are not deductible.",
+      recommendation: "Remove the deduction/allowance. KEEP the invoice in a separate RPGT base-cost ledger for when you sell — it is not lost, just not an income-tax item now.",
+      source: "Schedule 3 ITA 1967; s33/s39", refs: [...improvExp.map(refExpense), ...improvAsset.map(refAsset)] });
+  }
+
+  // 4. Private / personal-entity leakage into Form B (HIGH).
+  const leak = expenses.filter(
+    (e) => (e.entity === "Personal / Owner" || e.category === "Private/Domestic") && (e.deductibleAmount > 0 || ["deduct", "partial", "capital"].includes(e.ruleTreatment)),
+  );
+  if (leak.length) {
+    F({ checkId: "private-or-wrong-entity-leakage", severity: "high",
+      title: "Private / owner-entity cost is in the business computation", area: "deductibility",
+      detail: "Private or owner-personal records must not reduce Form B business income.",
+      recommendation: "Exclude personal/private records, or re-tag genuinely mixed items with an honest business-use %.",
+      source: "s39(1)(a) ITA 1967", refs: leak.map(refExpense) });
+  }
+
+  // 5. Capital-treated expense not in the asset register (HIGH, missed relief + wrong line).
+  const capFlagged = expenses.filter((e) => e.ruleTreatment === "capital");
+  if (summary.capitalFlagged > 0 && capFlagged.length) {
+    F({ checkId: "capital-flagged-not-in-register", severity: "high", area: "capital-allowance",
+      ledger: "missed_relief_overpayment", rmAtStake: money(summary.capitalFlagged),
+      title: "Capital items sitting in expenses — allowance not claimed",
+      detail: `${capFlagged.length} capital item(s) (${money(summary.capitalFlagged)}) are in the expense list, so they earn neither a deduction nor a capital allowance — you overpay this year and every future year until registered.`,
+      recommendation: "Add each as a Capital Asset (class, cost, date, business-use %) so the engine computes the allowance. Use the '→ Record as a capital asset' link on the expense.",
+      source: "Schedule 3 ITA 1967; PR 5/2014", refs: capFlagged.map(refExpense) });
+  }
+
+  // 6. Smart lock / security forced to revenue (MEDIUM).
+  const secExp = expenses.filter((e) => e.category === "Smart Lock/Security" && e.ruleTreatment === "deduct");
+  if (secExp.length) {
+    F({ checkId: "smartlock-cctv-expensed", severity: "medium", area: "capital-allowance",
+      title: "Security hardware deducted instead of capitalised",
+      detail: "Smart locks / CCTV are capital — claim a capital allowance, not a one-off deduction.",
+      recommendation: "Move to the asset register (plant or ICT).",
+      source: "Schedule 3 ITA 1967", refs: secExp.map(refExpense) });
+  }
+
+  // 7. Motor QE cap independent recompute (MEDIUM) + 8. high business-% (HIGH).
+  assets.filter((a) => a.assetClass === "motor").forEach((a) => {
+    const expectedCap = a.condition === "new" && Number(a.cost) <= 150000 ? 100000 : 50000;
+    if (a.qualifyingExpenditure > expectedCap + 1) {
+      F({ checkId: "motor-qe-cap-recompute", severity: "medium", area: "capital-allowance",
+        title: "Motor qualifying cost exceeds the statutory cap",
+        detail: `Qualifying expenditure ${money(a.qualifyingExpenditure)} is above the ${money(expectedCap)} cap — the allowance is overstated.`,
+        recommendation: "Capital allowance on a car is capped at RM100k (new & ≤RM150k) else RM50k.",
+        source: "Schedule 3 ITA 1967", refs: [refAsset(a)] });
+    }
+  });
+  const motorHigh = assets.filter((a) => a.assetClass === "motor" && a.businessUsePct >= 90);
+  const vehHigh = expenses.filter((e) => e.category === "Vehicle/Transport" && e.businessUsePct >= 90);
+  if (motorHigh.length || vehHigh.length) {
+    F({ checkId: "motor-or-vehicle-high-business-pct", severity: "high", area: "apportionment",
+      title: "Vehicle claimed at ≥90% business use",
+      detail: "For a single villa, a car is rarely almost-entirely business. This is a common audit adjustment.",
+      recommendation: "Set one mileage-log-based business-use % (usually well under 50% for one property) for both the car and its running costs; keep the log 7 years.",
+      source: "Sch 3 Para 73; PR 5/2014; s39", refs: [...motorHigh.map(refAsset), ...vehHigh.map(refExpense)] });
+  }
+
+  // 9. Small-value asset not elected (MEDIUM, missed relief).
+  const sva = assets.filter((a) => Number(a.cost) <= 2000 && a.assetClass !== "small-value" && !a.disposed);
+  if (sva.length) {
+    F({ checkId: "small-value-asset-not-elected", severity: "medium", area: "capital-allowance",
+      ledger: "missed_relief_overpayment",
+      title: "Asset ≤ RM2,000 not written off 100% this year",
+      detail: `${sva.length} asset(s) under RM2,000 are being dribbled over years instead of a full first-year write-off.`,
+      recommendation: "Set their class to 'Small value (≤RM2,000)' to claim 100% now.",
+      source: "PR 3/2021", refs: sva.map(refAsset) });
+  }
+
+  // 10. Personal-capable asset at 100% (MEDIUM).
+  const personalRe = /tv|laptop|macbook|phone|tablet|ipad|car|camera/i;
+  const asset100 = assets.filter((a) => a.businessUsePct === 100 && (["motor", "computer-ict"].includes(a.assetClass) || personalRe.test(a.description || "")));
+  if (asset100.length) {
+    F({ checkId: "asset-100pct-on-personal-capable", severity: "medium", area: "apportionment",
+      title: "Personal-capable asset at 100% business use",
+      detail: "A device that can be used privately (laptop, phone, car, TV) at 100% business invites challenge.",
+      recommendation: "Set an honest business-use %. A villa-only device supports 100%; a personal one usually does not.",
+      source: "Sch 3 Para 73; PR 5/2014", refs: asset100.map(refAsset) });
+  }
+
+  // 11. Rule is 'partial' but business-% is 100 (MEDIUM).
+  const partial100 = expenses.filter((e) => e.ruleTreatment === "partial" && e.businessUsePct === 100 && e.category !== "Entertainment");
+  if (partial100.length) {
+    F({ checkId: "partial-treatment-but-100pct", severity: "medium", area: "apportionment",
+      title: "Apportioned category left at 100%",
+      detail: "These categories are meant to be split for business use, but sit at 100%.",
+      recommendation: "Set a genuine business-use % below 100 unless wholly business.",
+      source: "s39; Sch 3 Para 73", refs: partial100.map(refExpense) });
+  }
+
+  // 12. Inherently mixed category at 100% (MEDIUM).
+  const mixedCats = ["Internet/WiFi", "Utilities", "Electricity & Water", "Gas", "Vehicle/Transport"];
+  const mixed100 = expenses.filter((e) => mixedCats.includes(e.category) && e.businessUsePct === 100);
+  if (mixed100.length) {
+    F({ checkId: "mixed-category-100pct-candidates", severity: "medium", area: "apportionment",
+      title: "Utility / internet / vehicle at 100% business",
+      detail: "Confirm each account is dedicated to the villa (own meter / SIM / line). If shared with home, apportion.",
+      recommendation: "Apportion shared supplies to a realistic business % and note the basis.",
+      source: "s39 ITA 1967", refs: mixed100.map(refExpense) });
+  }
+
+  // 13. Undocumented material apportionment (MEDIUM).
+  const undoc = expenses.filter((e) => e.ruleTreatment === "partial" && e.businessUsePct >= 70 && e.deductibleAmount >= 200 && !String(e.notes || "").trim());
+  if (undoc.length) {
+    F({ checkId: "undocumented-material-apportionment", severity: "medium", area: "apportionment",
+      title: "Material partial claim with no basis in notes",
+      detail: "A high business-% on a material amount with empty notes is the weakest point if LHDN asks for the working.",
+      recommendation: "Record how you derived the % in notes (e.g. 'guest nights 320/365').",
+      source: "s33; Sch 3 Para 73", refs: undoc.map(refExpense) });
+  }
+
+  // 14. Entertainment ratio not tiered (MEDIUM).
+  const entOff = expenses.filter((e) => {
+    if (e.category !== "Entertainment" || !(e.amount > 0)) return false;
+    const r = e.deductibleAmount / e.amount;
+    return ![0, 0.5, 1].some((t) => Math.abs(r - t) < 0.01);
+  });
+  if (entOff.length) {
+    F({ checkId: "entertainment-ratio-not-tiered", severity: "medium", area: "deductibility",
+      title: "Entertainment not at 0% / 50% / 100%",
+      detail: "Entertainment is restricted to fixed tiers by recipient.",
+      recommendation: "Existing customer 50% · staff or logo gift 100% · potential customer 0%.",
+      source: "s39(1)(l); PR 4/2015", refs: entOff.map(refExpense) });
+  }
+
+  // 15. Material missing receipt (HIGH) + 16. asset missing receipt (LOW).
+  const noRcpt = expenses.filter((e) => !e.hasReceipt && ["deduct", "partial", "capital"].includes(e.ruleTreatment) && e.deductibleAmount >= 200);
+  const noRcptCap = expenses.filter((e) => !e.hasReceipt && e.ruleTreatment === "capital" && Number(e.amount) >= 200);
+  const noRcptAll = Array.from(new Set([...noRcpt, ...noRcptCap]));
+  if (noRcptAll.length) {
+    F({ checkId: "material-missing-receipt", severity: "high", area: "documentation", ledger: "documentation",
+      title: `${noRcptAll.length} material claim(s) with no receipt reference`,
+      detail: "Records must be kept 7 years (s82A). A reference only means a document exists — it does not prove the amount or that it is genuine.",
+      recommendation: "Attach/reference a receipt for each, largest first. Drop any claim you cannot evidence.",
+      source: "s82A ITA 1967", refs: noRcptAll.map(refExpense) });
+  }
+  const assetNoRcpt = assets.filter((a) => !a.hasReceipt && a.qualifyingExpenditure > 0);
+  if (assetNoRcpt.length) {
+    F({ checkId: "asset-missing-receipt", severity: "low", area: "documentation", ledger: "documentation",
+      title: "Asset with no receipt — allowance unsupported",
+      detail: "Without proof of cost the allowance can be disallowed on audit even when the treatment is right.",
+      recommendation: "Attach each asset's invoice.",
+      source: "s82A ITA 1967", refs: assetNoRcpt.map(refAsset) });
+  }
+
+  // 17. Disposal: balancing + no AA in disposal year (HIGH if a charge).
+  assets.filter((a) => a.disposed).forEach((a) => {
+    const dispYa = yearOf(a.disposed.date);
+    if (dispYa !== ya) return;
+    if (Math.abs(a.thisYaGross) > 1) {
+      F({ checkId: "disposal-balancing-and-no-aa", severity: "high", area: "capital-allowance",
+        title: "Annual allowance claimed in a disposal year",
+        detail: "No annual allowance is due in the year an asset is disposed.",
+        recommendation: "Only a balancing allowance or charge applies in the disposal year.",
+        source: "PR 7/2017", refs: [refAsset(a)] });
+    }
+    if (a.balancing < -1) {
+      F({ checkId: "disposal-balancing-charge", severity: "high", area: "capital-allowance",
+        title: "Balancing charge — taxable income on disposal",
+        detail: `Selling above the residual created a balancing charge of ${money(Math.abs(a.balancing))}, which is added back to income.`,
+        recommendation: "Declare the balancing charge. A sale to a connected party at undervalue needs market-value substitution — confirm with an agent.",
+        source: "PR 7/2017", refs: [refAsset(a)], rmAtStake: money(Math.abs(a.balancing)) });
+    }
+  });
+
+  // 18. YA summary tie-out (HIGH if drift).
+  const reRevenue = expenses.filter((e) => ["deduct", "partial"].includes(e.ruleTreatment)).reduce((s, e) => s + e.deductibleAmount, 0);
+  const reCA = assets.reduce((s, a) => s + a.thisYaAllowance, 0);
+  if (Math.abs(reRevenue - summary.revenueDeductible) > 1 || Math.abs(reCA - summary.capitalAllowance) > 1) {
+    F({ checkId: "ya-summary-tie-out", severity: "high", area: "audit-completeness",
+      title: "Totals do not reconcile to line items",
+      detail: "An independent re-sum of the records does not match the summary — a calculation bug would flow onto Form B.",
+      recommendation: "Do not file until this reconciles. Report it so it can be fixed.",
+      source: "Internal reconciliation", refs: [`revenue ${money(reRevenue)} vs ${money(summary.revenueDeductible)}`, `CA ${money(reCA)} vs ${money(summary.capitalAllowance)}`] });
+  }
+
+  // 19. Duplicate lines (MEDIUM).
+  const dupMap = {};
+  expenses.forEach((e) => {
+    const k = `${(e.vendor || "").toLowerCase()}|${e.date}|${Number(e.amount)}`;
+    (dupMap[k] = dupMap[k] || []).push(e);
+  });
+  const dups = Object.values(dupMap).filter((g) => g.length > 1 && Number(g[0].amount) > 0);
+  if (dups.length) {
+    F({ checkId: "duplicate-line-detection", severity: "medium", area: "audit-completeness",
+      title: "Possible duplicate expense entries",
+      detail: `${dups.length} group(s) share an identical vendor, date and amount — confirm, don't assume.`,
+      recommendation: "Check whether a line was entered twice and delete the duplicate.",
+      source: "s82A ITA 1967", refs: dups.map((g) => `${refExpense(g[0])} ×${g.length}`) });
+  }
+
+  // 20. Needs-review / unresolved (MEDIUM).
+  const needReview = expenses.filter((e) => e.ruleTreatment === "ask" || e.deductible === "Ask accountant" || (!e.reviewed && Number(e.amount) >= 200));
+  if (needReview.length || summary.needsReview > 0) {
+    F({ checkId: "needs-review-unresolved", severity: "medium", area: "audit-completeness",
+      title: "Open grey-area / unreviewed items",
+      detail: `${needReview.length} item(s) still need a decision or review before filing.`,
+      recommendation: "Decide each treatment, note the reasoning, and tick 'reviewed'. Don't file with open 'Ask accountant' items inside the numbers.",
+      source: "s33/s39; s82A", refs: needReview.slice(0, 12).map(refExpense) });
+  }
+
+  // 21. Missing operating categories vs revenue (HIGH).
+  if (grossTurnover > 0 || summary.revenueDeductible > 0) {
+    const present = (group) => expenses.some((e) => TAX_CAT_GROUPS[group].includes(e.category) && e.ruleTreatment !== "no");
+    const absent = ["cleaning", "utilities", "internet"].filter((g) => !present(g));
+    if (absent.length) {
+      F({ checkId: "missing-operating-categories", severity: absent.length >= 3 ? "high" : "medium",
+        area: "audit-completeness", ledger: "missed_relief_overpayment",
+        title: "Revenue earned but expected running costs are missing",
+        detail: `No ${absent.join(", ")} expense recorded all year. Income with no costs reads as incomplete books — and you may be missing deductions.`,
+        recommendation: "Add any unlogged cleaning / utilities / internet costs (with receipts) to cut your tax, or note why a cost was bundled.",
+        source: "s33(1) ITA 1967", refs: absent });
+    }
+  }
+
+  // 22. SST / e-invoice thresholds (MEDIUM) — only if gross turnover known.
+  if (grossTurnover > 0) {
+    if (grossTurnover >= 500000) {
+      F({ checkId: "sst-threshold", severity: "medium", area: "documentation", ledger: "compliance_separate_regime",
+        title: "Accommodation turnover at/over the RM500k SST line",
+        detail: `Gross accommodation turnover ${money(grossTurnover)} is at/over RM500k.`,
+        recommendation: "Register for service tax — a separate regime with its own penalties. Confirm the current threshold with LHDN.",
+        source: "SST registration threshold (confirm current)", refs: [`turnover ${money(grossTurnover)}`] });
+    } else if (grossTurnover >= 450000) {
+      F({ checkId: "sst-threshold-near", severity: "low", area: "documentation", ledger: "compliance_separate_regime",
+        title: "Turnover within 10% of the RM500k SST line",
+        detail: `Gross turnover ${money(grossTurnover)} is approaching RM500k.`,
+        recommendation: "Watch the SST registration threshold.",
+        source: "SST threshold (confirm current)", refs: [`turnover ${money(grossTurnover)}`] });
+    }
+    if (grossTurnover >= 1000000) {
+      F({ checkId: "einvoice-threshold", severity: "medium", area: "documentation", ledger: "compliance_separate_regime",
+        title: "Turnover at/over RM1m — e-invoice exemption may not apply",
+        detail: `Gross turnover ${money(grossTurnover)} may exceed the e-invoice exemption.`,
+        recommendation: "Confirm the current e-invoice phase threshold with LHDN.",
+        source: "E-invoice phase thresholds (confirm current)", refs: [`turnover ${money(grossTurnover)}`] });
+    }
+  }
+
+  // 23. ICT accelerated expiry (INFO).
+  const ict = assets.filter((a) => a.assetClass === "computer-ict" && (yearOf(a.acquisitionDate) === ya || a.residual > 0));
+  if (ict.length) {
+    F({ checkId: "ict-ya2027-planning", severity: "info", area: "capital-allowance", ledger: "missed_relief_overpayment",
+      title: "ICT accelerated 40% rate expires after YA2027",
+      detail: "The fast 20%+40% write-off for computers/ICT is time-limited.",
+      recommendation: "Bring planned ICT/computer purchases to on/before YA2027. The successor rate is not confirmed — verify before relying on it.",
+      source: "ICT Rules 2024", refs: ict.map(refAsset) });
+  }
+
+  // Professional-fee cap (MEDIUM) — deterministic on the obvious categories.
+  const profFee = expenses
+    .filter((e) => ["Professional Fees", "Accounting & Tax"].includes(e.category) && e.deductibleAmount > 0)
+    .reduce((s, e) => s + e.deductibleAmount, 0);
+  if (profFee > 15000) {
+    F({ checkId: "professional-fees-15k-cap", severity: "medium", area: "deductibility",
+      title: "Secretarial + tax fees over the RM15,000/YA cap",
+      detail: `Combined ${money(profFee)} exceeds the RM15,000 cap (recurring legal is separate and uncapped).`,
+      recommendation: `Cap the deduction at RM15,000; add back ${money(profFee - 15000)}.`,
+      source: "P.U.(A) 162/2022", refs: [`combined ${money(profFee)}`] });
+  }
+
+  // Checks that could not run for missing inputs (mandatory, never silently green).
+  const checksNotEvaluated = [
+    { checkId: "business-vs-passive", missingInput: "active-operation evidence (nights let, bookings, listing)", consequence: "Cannot confirm the villa is Form B business income vs passive letting — if wrong, every deduction and allowance is void." },
+    { checkId: "pre-commencement", missingInput: "business commencement date", consequence: "Cannot flag pre-opening costs or initial repairs." },
+    { checkId: "own-use-apportionment", missingInput: "owner/family use nights + blocked-date calendar", consequence: "Cannot carve the private share out of utilities/cleaning." },
+    { checkId: "carry-forward", missingInput: "prior-year unabsorbed CA / losses (with origin YA)", consequence: "Cannot check carry-forward utilisation." },
+  ];
+  if (grossTurnover <= 0) {
+    checksNotEvaluated.push({ checkId: "sst-einvoice-revenue", missingInput: "gross accommodation turnover for this YA", consequence: "SST, e-invoice and revenue-completeness checks could not run." });
+  }
+
+  // ---- DETERMINISTIC VERDICT (code-set; the LLM may never upgrade it) ----
+  const classificationAffirmed = !!taxPlan.review?.classificationAffirmed;
+  const hasHigh = findings.some((f) => f.severity === "high");
+  const hasOpenQuestions = findings.some((f) => ["medium", "low"].includes(f.severity)) || summary.needsReview > 0;
+  let verdict;
+  let verdictReason;
+  if (!classificationAffirmed) {
+    verdict = "not_ready_professional_check_required";
+    verdictReason = "Business-vs-passive classification has not been affirmed — confirm it below.";
+  } else if (hasHigh) {
+    verdict = "not_ready_professional_check_required";
+    verdictReason = `${findings.filter((f) => f.severity === "high").length} high-severity issue(s) are open.`;
+  } else if (hasOpenQuestions) {
+    verdict = "open_questions_block_review";
+    verdictReason = "No high-severity over-claim found, but open questions must be resolved before filing.";
+  } else {
+    verdict = "no_blocking_issues_in_entered_records";
+    verdictReason = "No blocking issues in the records you entered. Not clearance to file.";
+  }
+
+  // Order: high → medium → low → info, then by ledger.
+  const sev = { high: 0, medium: 1, low: 2, info: 3 };
+  findings.sort((a, b) => sev[a.severity] - sev[b.severity]);
+
+  return { ya, grossTurnover, summary, findings, checksNotEvaluated, verdict, verdictReason, classificationAffirmed };
+}
+
+const TAX_VERDICT_LABEL = {
+  not_ready_professional_check_required: "Not ready — issues to resolve",
+  open_questions_block_review: "Open questions to resolve",
+  no_blocking_issues_in_entered_records: "No blocking issues in your records",
+};
+const TAX_VERDICT_TONE = {
+  not_ready_professional_check_required: "bad",
+  open_questions_block_review: "warn",
+  no_blocking_issues_in_entered_records: "ok",
+};
+const TAX_REVIEW_DISCLAIMER =
+  "This is a review aid, not a tax sign-off — and no professional has checked it. It only reviews the records you entered: it can't see income or costs you didn't log, can't tell whether a receipt is genuine, and can't confirm your villa qualifies as business (Form B) income rather than passive rental — which, if wrong, undoes every deduction here. A clean review means “nothing looks wrong in what you typed,” not “your return is correct or ready to file.” Treat flags as questions to resolve before you submit Form B.";
+
 function loadTaxPlan() {
   const fallback = defaultTaxPlan();
   const stored = localStorage.getItem(TAX_PLAN_KEY);
@@ -856,6 +1283,7 @@ function loadTaxPlan() {
       ...parsed,
       expenses: Array.isArray(parsed.expenses) ? parsed.expenses.map(normalizeTaxExpense) : fallback.expenses,
       assets: Array.isArray(parsed.assets) ? parsed.assets.map(normalizeTaxAsset) : fallback.assets,
+      review: { ...fallback.review, ...(parsed.review || {}) },
       notes: { ...fallback.notes, ...(parsed.notes || {}) },
     };
   } catch {
@@ -3066,6 +3494,7 @@ function restoreAppData(data) {
           ...data.taxPlan,
           expenses: Array.isArray(data.taxPlan.expenses) ? data.taxPlan.expenses.map(normalizeTaxExpense) : [],
           assets: Array.isArray(data.taxPlan.assets) ? data.taxPlan.assets.map(normalizeTaxAsset) : [],
+          review: { ...defaultTaxPlan().review, ...(data.taxPlan.review || {}) },
           notes: { ...defaultTaxPlan().notes, ...(data.taxPlan.notes || {}) },
         }
       : taxPlan;
@@ -5357,7 +5786,7 @@ function renderScanResult(fields) {
         : `<button type="button" class="primary-button" id="scanToExpense">Use for expense</button><button type="button" class="ghost-button" id="scanToAsset">Use as capital asset instead</button>`}
       <button type="button" class="ghost-button" id="scanDismiss">Dismiss</button>
     </div>
-    <p class="scan-disclaimer">Always check the figures against the receipt before saving. This is a record-keeping aid, not tax advice — your agent reviews before filing.</p>
+    <p class="scan-disclaimer">Always check the figures against the receipt before saving. This is a record-keeping aid, not tax advice — run the AI review (Year Summary tab) before you file.</p>
   `;
   document.querySelector("#scanToExpense")?.addEventListener("click", () => applyScanToExpense());
   document.querySelector("#scanToAsset")?.addEventListener("click", () => applyScanToAsset());
@@ -5416,6 +5845,7 @@ function applyScanToAsset() {
 // =============================================================================
 function renderTaxYa() {
   if (!els.taxYaCards) return;
+  if (els.taxClassifyAffirm) els.taxClassifyAffirm.checked = !!taxPlan.review?.classificationAffirmed;
   if (els.taxYaInput && !els.taxYaInput.value) els.taxYaInput.value = taxPlan.year || currentYear();
   const ya = Number(els.taxYaInput?.value || taxPlan.year || currentYear());
   const s = taxYaSummary(ya);
@@ -5433,7 +5863,7 @@ function renderTaxYa() {
     s.balancingCharge > 0 ? ["Balancing charge (adds back)", -s.balancingCharge, "Clawed-back allowance on assets sold above residual value."] : null,
     s.capitalFlagged > 0 ? ["Tagged capital — not yet in register", s.capitalFlagged, "Expenses marked capital. Add them under Capital Assets so they get an allowance."] : null,
     s.notDeductible > 0 ? ["Not deductible", s.notDeductible, "Private, capital repayment, renovations, pre-commencement, etc."] : null,
-    s.needsReview > 0 ? ["Needs review", s.needsReview, "Judgement calls (vehicle, legal, groceries…) — confirm with your agent."] : null,
+    s.needsReview > 0 ? ["Needs review", s.needsReview, "Judgement calls (vehicle, legal, groceries…) — the AI review below flags these."] : null,
   ].filter(Boolean);
   els.taxYaDetail.innerHTML = `
     <div class="table-scroll">
@@ -5458,7 +5888,7 @@ function renderTaxYa() {
         </tbody>
       </table>
     </div>
-    <p class="scan-disclaimer">YA ${ya} · Enterprise / sole-proprietor source (Form B). Suggested figures for your agent to confirm — capital allowances and losses not used this year carry forward automatically in the asset schedules above.</p>
+    <p class="scan-disclaimer">YA ${ya} · Enterprise / sole-proprietor source (Form B). Suggested figures — run the AI review before filing. Capital allowances and losses not used this year carry forward automatically in the asset schedules above.</p>
   `;
 }
 
@@ -5496,6 +5926,155 @@ function exportTaxYaExcel() {
   link.href = URL.createObjectURL(blob);
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+// =============================================================================
+// TAX REVIEW — controller: run the deterministic engine instantly, then enrich
+// with the AI judgement layer when signed in. The deterministic verdict + the
+// deterministic findings always render; the AI only ADDS findings/questions.
+// =============================================================================
+let lastTaxReview = null;
+
+function setTaxReviewStatus(message, tone = "") {
+  if (!els.taxReviewStatus) return;
+  els.taxReviewStatus.textContent = message || "";
+  els.taxReviewStatus.className = `tax-review-status${tone ? ` ${tone}` : ""}`;
+}
+
+function reviewYa() {
+  return Number(els.taxYaInput?.value || taxPlan.year || currentYear());
+}
+
+async function runTaxReview() {
+  const ya = reviewYa();
+  // Persist the classification affirmation (his own factual confirmation).
+  if (els.taxClassifyAffirm) {
+    const affirmed = els.taxClassifyAffirm.checked;
+    const prev = taxPlan.review || {};
+    taxPlan = { ...taxPlan, review: { classificationAffirmed: affirmed, affirmedAt: affirmed ? prev.affirmedAt || new Date().toISOString() : "" } };
+    saveTaxPlan();
+  }
+  const review = buildTaxReview(ya); // deterministic — instant, offline
+  lastTaxReview = review;
+  renderTaxReview(review, { aiState: "pending" });
+
+  // AI judgement layer (optional — needs sign-in + funded API).
+  if (!supabaseClient) {
+    renderTaxReview(review, { aiState: "offline" });
+    return;
+  }
+  setTaxReviewStatus("Running the AI judgement pass…", "loading");
+  if (els.runTaxReviewBtn) els.runTaxReviewBtn.disabled = true;
+  try {
+    const payload = {
+      ya,
+      grossTurnover: review.grossTurnover,
+      summary: review.summary,
+      expenses: taxReviewRecords(ya).expenses.map((e) => ({
+        date: e.date, category: e.category, amount: e.amount, businessUsePct: e.businessUsePct,
+        deductible: e.deductible, vendor: e.vendor, notes: e.notes, entity: e.entity,
+        hasReceipt: e.hasReceipt, ruleTreatment: e.ruleTreatment, deductibleAmount: e.deductibleAmount,
+      })),
+      assets: taxReviewRecords(ya).assets.map((a) => ({
+        description: a.description, vendor: a.vendor, cost: a.cost, assetClass: a.assetClass,
+        businessUsePct: a.businessUsePct, condition: a.condition, acquisitionDate: a.acquisitionDate,
+        disposed: a.disposed, hasReceipt: a.hasReceipt, qualifyingExpenditure: a.qualifyingExpenditure,
+        thisYaAllowance: a.thisYaAllowance, residual: a.residual,
+      })),
+      deterministicFindings: review.findings.map((f) => ({ checkId: f.checkId, severity: f.severity, title: f.title, refs: f.refs })),
+      checksNotEvaluated: review.checksNotEvaluated,
+    };
+    const { data, error } = await supabaseClient.functions.invoke("tax-review", { body: payload });
+    if (error) throw new Error(error.message || "review failed");
+    if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not complete the AI review.");
+    renderTaxReview(review, { aiState: "done", ai: data.data });
+    setTaxReviewStatus("AI review complete.", "ok");
+  } catch (err) {
+    console.error("tax-review", err);
+    renderTaxReview(review, { aiState: "error", aiError: String(err.message || err) });
+    setTaxReviewStatus(`AI pass failed: ${err.message || err}. The built-in checks above still apply.`, "bad");
+  } finally {
+    if (els.runTaxReviewBtn) els.runTaxReviewBtn.disabled = false;
+  }
+}
+
+function findingCard(f, source) {
+  const tone = { high: "bad", medium: "warn", low: "info", info: "info" }[f.severity] || "info";
+  const ledgerLabel = {
+    over_claim_audit_risk: "Over-claim / audit risk",
+    missed_relief_overpayment: "Missed relief — you may overpay",
+    compliance_separate_regime: "Separate compliance regime",
+    documentation: "Documentation",
+  }[f.ledger] || "";
+  const refs = (f.refs && f.refs.length)
+    ? `<ul class="tax-finding-refs">${f.refs.slice(0, 12).map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>`
+    : (f.recordRef ? `<ul class="tax-finding-refs"><li>${escapeHtml(f.recordRef)}</li></ul>` : "");
+  const rm = f.rmAtStake ? `<span class="tax-finding-rm">${escapeHtml(String(f.rmAtStake))}</span>` : "";
+  const fact = f.factNeededToDecide ? `<p class="tax-finding-fact"><strong>To decide:</strong> ${escapeHtml(f.factNeededToDecide)}</p>` : "";
+  const q = f.isQuestion ? `<span class="tax-finding-q">Question</span>` : "";
+  return `
+    <article class="tax-finding tone-${tone}">
+      <div class="tax-finding-head">
+        <span class="tax-finding-sev tone-${tone}">${escapeHtml((f.severity || "").toUpperCase())}</span>
+        <strong>${escapeHtml(f.title || f.finding || "Finding")}</strong>
+        ${q}${rm}
+        <span class="tax-finding-tag">${escapeHtml(source)}${ledgerLabel ? ` · ${escapeHtml(ledgerLabel)}` : ""}</span>
+      </div>
+      ${f.detail || f.finding ? `<p class="tax-finding-detail">${escapeHtml(f.detail || f.finding)}</p>` : ""}
+      ${fact}
+      ${f.recommendation ? `<p class="tax-finding-rec">→ ${escapeHtml(f.recommendation)}</p>` : ""}
+      ${refs}
+      ${f.source ? `<span class="tax-finding-src">${escapeHtml(f.source)}</span>` : ""}
+    </article>`;
+}
+
+function renderTaxReview(review, opts = {}) {
+  if (!els.taxReviewResult) return;
+  els.taxReviewResult.hidden = false;
+  const { verdict, verdictReason, findings, checksNotEvaluated, summary, ya } = review;
+  const tone = TAX_VERDICT_TONE[verdict];
+  const aiFindings = opts.ai?.findings || [];
+  const detFindings = findings.filter((f) => f.checkId !== "ict-ya2027-planning"); // keep info planning separate
+  const overClaim = [...detFindings, ...aiFindings].filter((f) => f.ledger !== "missed_relief_overpayment");
+  const missed = [...detFindings, ...aiFindings].filter((f) => f.ledger === "missed_relief_overpayment");
+  const highCount = [...detFindings, ...aiFindings].filter((f) => f.severity === "high").length;
+
+  let aiBlock = "";
+  if (opts.aiState === "pending") aiBlock = `<p class="tax-ai-note loading">Running the AI judgement pass…</p>`;
+  else if (opts.aiState === "offline") aiBlock = `<p class="tax-ai-note">Sign in with cloud sync to add the AI judgement pass (repair-vs-renovation, entertainment, vehicle use, OTA withholding). The built-in checks below already ran.</p>`;
+  else if (opts.aiState === "error") aiBlock = `<p class="tax-ai-note bad">AI pass unavailable (${escapeHtml(opts.aiError || "")}). The built-in checks below still apply.</p>`;
+
+  const gate = opts.ai?.businessClassificationGate;
+  const prompts = opts.ai?.completenessPrompts || [];
+  const standing = opts.ai?.standingProfessionalChecks || [];
+
+  els.taxReviewResult.innerHTML = `
+    <div class="tax-verdict tone-${tone}">
+      <div class="tax-verdict-head">
+        <span class="tax-verdict-badge tone-${tone}">${escapeHtml(TAX_VERDICT_LABEL[verdict])}</span>
+        <span class="tax-verdict-ya">YA ${ya}</span>
+      </div>
+      <p class="tax-verdict-reason">${escapeHtml(verdictReason)}</p>
+      <p class="tax-verdict-counts">${highCount} high-severity · ${overClaim.length + missed.length} finding(s) total · relief ${money(summary.totalRelief)}</p>
+    </div>
+    ${aiBlock}
+    ${gate ? `<div class="tax-gate"><strong>Business vs passive (the one it can't decide):</strong> ${escapeHtml(gate.statement || "")} ${gate.evidenceSeen ? `<span class="tax-gate-ev">${escapeHtml(gate.evidenceSeen)}</span>` : ""}</div>` : ""}
+
+    ${overClaim.length ? `<h4 class="tax-ledger-h">⚠ Over-claim / audit risk</h4>${overClaim.map((f) => findingCard(f, f.triggerType === "engine-deterministic" ? "Rule check" : "AI judgement")).join("")}` : `<p class="tax-ledger-empty">No over-claim issues found in the entered records.</p>`}
+
+    ${missed.length ? `<h4 class="tax-ledger-h">↑ Missed relief — you may be overpaying</h4>${missed.map((f) => findingCard(f, f.triggerType === "engine-deterministic" ? "Rule check" : "AI judgement")).join("")}` : ""}
+
+    ${prompts.length ? `<h4 class="tax-ledger-h">Revenue & completeness (confirm yourself)</h4><ul class="tax-prompts">${prompts.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : ""}
+
+    <details class="tax-not-evaluated">
+      <summary>Checks that could not run (${checksNotEvaluated.length}) — not a pass</summary>
+      <ul>${checksNotEvaluated.map((c) => `<li><strong>${escapeHtml(c.checkId)}:</strong> needs ${escapeHtml(c.missingInput)} — ${escapeHtml(c.consequence)}</li>`).join("")}</ul>
+    </details>
+
+    ${standing.length ? `<details class="tax-standing"><summary>Always get a professional check on these</summary><ul>${standing.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ul></details>` : ""}
+
+    <p class="scan-disclaimer">${escapeHtml(TAX_REVIEW_DISCLAIMER)}</p>
+  `;
 }
 
 function renderMonthButtons() {
@@ -6703,6 +7282,21 @@ els.taxAssetCards?.addEventListener("click", (event) => {
 els.taxYaInput?.addEventListener("input", renderTaxYa);
 els.taxYaInput?.addEventListener("change", renderTaxYa);
 els.exportTaxYaExcel?.addEventListener("click", exportTaxYaExcel);
+
+// ---------------- AI tax review ----------------
+els.runTaxReviewBtn?.addEventListener("click", runTaxReview);
+els.taxClassifyAffirm?.addEventListener("change", () => {
+  // Persist immediately; if a review is already on screen, re-run the verdict gate.
+  const affirmed = els.taxClassifyAffirm.checked;
+  const prev = taxPlan.review || {};
+  taxPlan = { ...taxPlan, review: { classificationAffirmed: affirmed, affirmedAt: affirmed ? prev.affirmedAt || new Date().toISOString() : "" } };
+  saveTaxPlan();
+  if (lastTaxReview && els.taxReviewResult && !els.taxReviewResult.hidden) {
+    const fresh = buildTaxReview(reviewYa());
+    lastTaxReview = fresh;
+    renderTaxReview(fresh, { aiState: supabaseClient ? "done" : "offline" });
+  }
+});
 
 // ---------------- Theme picker (8 accents, persisted in appSettings.accent -> cloud) ----------------
 const SV_THEMES = [
