@@ -5932,3 +5932,10 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .tax-doc-analyzer textarea { width: 100%; margin: 8px 0; padding: 8px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; font-family: inherit; }
 .tax-doc-result { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--soft); display: flex; flex-direction: column; gap: 10px; }
 .tax-doc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+
+/* ============================================================
+   TAX — past earnings importer
+   ============================================================ */
+.earn-doc-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.earn-doc-row:last-child { border-bottom: none; }
+.earn-doc-row strong { color: var(--ink); }

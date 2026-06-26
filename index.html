@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260626-24" />
+    <link rel="stylesheet" href="./styles.css?v=20260626-25" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1611,6 +1611,42 @@
           </div>
 
           <div class="tax-inner-panel" data-tax-inner-panel="claim">
+            <section class="tax-scan-card dashboard-section" id="taxEarningsCard">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Past earnings</p>
+                  <h3>Import earnings from a CSV</h3>
+                </div>
+              </div>
+              <p class="tax-scan-help">Export your earnings spreadsheet as <strong>CSV</strong> (in Excel: File → Save As → CSV) and upload it. I read your columns, match each row to its tax year, and tabulate the gross income per year — which feeds each year's summary below. You confirm before it saves. You can also attach the documents you used for past tax calcs.</p>
+              <div class="tax-scan-controls">
+                <label class="file-upload-field tax-scan-file">Earnings CSV
+                  <input id="taxEarningsInput" type="file" accept=".csv,text/csv" />
+                  <span id="taxEarningsFileName">No file chosen</span>
+                </label>
+                <button class="primary-button" id="taxEarningsBtn" type="button" disabled>Read CSV</button>
+                <span class="tax-scan-status" id="taxEarningsStatus" role="status" aria-live="polite"></span>
+              </div>
+              <div class="tax-batch-result" id="taxEarningsResult" hidden></div>
+              <details class="tax-accounting-drawer">
+                <summary>Attach supporting documents (past tax-calc files) for a year</summary>
+                <div class="tax-accounting-grid">
+                  <label>For year
+                    <input id="taxEarnDocYa" type="number" min="2018" max="2035" step="1" />
+                  </label>
+                  <label class="file-upload-field">Document (image/PDF)
+                    <input id="taxEarnDocInput" type="file" accept="image/*,.pdf" />
+                    <span id="taxEarnDocStatus">No file attached</span>
+                  </label>
+                  <label>Label
+                    <input id="taxEarnDocLabel" placeholder="e.g. YA2024 tax computation, Airbnb annual statement" />
+                  </label>
+                  <button class="ghost-button" id="taxEarnDocSaveBtn" type="button">Save document to year</button>
+                </div>
+                <div id="taxEarnDocList" class="tyr-note"></div>
+              </details>
+            </section>
+
             <section class="dashboard-section">
               <div class="section-heading">
                 <div>
@@ -1806,6 +1842,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260626-24"></script>
+    <script src="./app.js?v=20260626-25"></script>
   </body>
 </html>

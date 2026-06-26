@@ -670,6 +670,18 @@ const els = {
   taxDocStatus: document.querySelector("#taxDocStatus"),
   taxDocResult: document.querySelector("#taxDocResult"),
   exportTaxYaExcel: document.querySelector("#exportTaxYaExcel"),
+  // Earnings importer
+  taxEarningsInput: document.querySelector("#taxEarningsInput"),
+  taxEarningsFileName: document.querySelector("#taxEarningsFileName"),
+  taxEarningsBtn: document.querySelector("#taxEarningsBtn"),
+  taxEarningsStatus: document.querySelector("#taxEarningsStatus"),
+  taxEarningsResult: document.querySelector("#taxEarningsResult"),
+  taxEarnDocYa: document.querySelector("#taxEarnDocYa"),
+  taxEarnDocInput: document.querySelector("#taxEarnDocInput"),
+  taxEarnDocStatus: document.querySelector("#taxEarnDocStatus"),
+  taxEarnDocLabel: document.querySelector("#taxEarnDocLabel"),
+  taxEarnDocSaveBtn: document.querySelector("#taxEarnDocSaveBtn"),
+  taxEarnDocList: document.querySelector("#taxEarnDocList"),
   // AI tax review
   runTaxReviewBtn: document.querySelector("#runTaxReviewBtn"),
   taxClassifyAffirm: document.querySelector("#taxClassifyAffirm"),
@@ -741,6 +753,8 @@ function defaultTaxPlan() {
     review: { classificationAffirmed: false, affirmedAt: "" }, // AI tax-review gate state
     yearProfiles: {}, // per-YA rule overrides extracted from his uploaded LHDN documents
     lhdnDocs: [], // analyzed LHDN documents (per-year rule sources)
+    earnings: [], // imported past earnings rows (per-year gross income)
+    earningsDocs: [], // supporting documents used for past-year tax calcs (per year)
     notes: {
       books: false,
       salary: false,
@@ -1039,10 +1053,17 @@ function buildTaxReview(ya) {
   // Gross accommodation turnover for this YA (real figure from bookings — NOT
   // revenueDeductible). Used only for SST / e-invoice / completeness.
   let grossTurnover = 0;
-  try {
-    grossTurnover = Number(revenueForPeriod(ya, taxPlan.sdnStart || `${ya}-06`, "before")) || 0;
-  } catch {
-    grossTurnover = 0;
+  // Prefer his imported past-earnings figure for the year (authoritative); fall
+  // back to the bookings-derived revenue when no earnings were imported.
+  const imported = importedEarningsFor(ya);
+  if (imported > 0) {
+    grossTurnover = imported;
+  } else {
+    try {
+      grossTurnover = Number(revenueForPeriod(ya, taxPlan.sdnStart || `${ya}-06`, "before")) || 0;
+    } catch {
+      grossTurnover = 0;
+    }
   }
   const findings = [];
   const F = (o) => findings.push({ triggerType: "engine-deterministic", refs: [], rmAtStake: "", ledger: "over_claim_audit_risk", area: "deductibility", ...o });
@@ -1426,6 +1447,8 @@ function loadTaxPlan() {
       review: { ...fallback.review, ...(parsed.review || {}) },
       yearProfiles: parsed.yearProfiles && typeof parsed.yearProfiles === "object" ? parsed.yearProfiles : fallback.yearProfiles,
       lhdnDocs: Array.isArray(parsed.lhdnDocs) ? parsed.lhdnDocs : fallback.lhdnDocs,
+      earnings: Array.isArray(parsed.earnings) ? parsed.earnings : fallback.earnings,
+      earningsDocs: Array.isArray(parsed.earningsDocs) ? parsed.earningsDocs : fallback.earningsDocs,
       notes: { ...fallback.notes, ...(parsed.notes || {}) },
     };
   } catch {
@@ -3639,6 +3662,8 @@ function restoreAppData(data) {
           review: { ...defaultTaxPlan().review, ...(data.taxPlan.review || {}) },
           yearProfiles: data.taxPlan.yearProfiles && typeof data.taxPlan.yearProfiles === "object" ? data.taxPlan.yearProfiles : {},
           lhdnDocs: Array.isArray(data.taxPlan.lhdnDocs) ? data.taxPlan.lhdnDocs : [],
+          earnings: Array.isArray(data.taxPlan.earnings) ? data.taxPlan.earnings : [],
+          earningsDocs: Array.isArray(data.taxPlan.earningsDocs) ? data.taxPlan.earningsDocs : [],
           notes: { ...defaultTaxPlan().notes, ...(data.taxPlan.notes || {}) },
         }
       : taxPlan;
@@ -6206,6 +6231,179 @@ async function importBatch() {
 }
 
 // =============================================================================
+// PAST EARNINGS IMPORT — read a CSV of past earnings, normalize via AI, tabulate
+// per year, confirm, store. Feeds each year's gross turnover for the tax review.
+// =============================================================================
+let earningsStaging = [];
+let earningsActiveYa = null;
+
+function setEarningsStatus(message, tone = "") {
+  if (!els.taxEarningsStatus) return;
+  els.taxEarningsStatus.textContent = message || "";
+  els.taxEarningsStatus.className = `tax-scan-status${tone ? ` ${tone}` : ""}`;
+}
+
+// Sum of imported earnings for a YA (his authoritative past figure).
+function importedEarningsFor(ya) {
+  return (taxPlan.earnings || []).filter((e) => Number(e.ya) === Number(ya)).reduce((s, e) => s + Number(e.gross || 0), 0);
+}
+
+function readFileText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsText(file);
+  });
+}
+
+async function importEarningsCsv() {
+  const file = els.taxEarningsInput?.files?.[0];
+  if (!file) { setEarningsStatus("Choose a CSV file first.", "warn"); return; }
+  if (!supabaseClient) { setEarningsStatus("Sign in with cloud sync to read the CSV.", "warn"); return; }
+  setEarningsStatus("Reading your earnings…", "loading");
+  if (els.taxEarningsBtn) els.taxEarningsBtn.disabled = true;
+  try {
+    const csvText = await readFileText(file);
+    if (!csvText.trim()) throw new Error("the file is empty");
+    const { data, error } = await supabaseClient.functions.invoke("earnings-import", { body: { csvText } });
+    if (error) throw new Error(error.message || "import failed");
+    if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not read the CSV.");
+    const rows = Array.isArray(data.data.rows) ? data.data.rows : [];
+    earningsStaging = rows.map((r) => ({
+      id: safeRecordId(""), ya: Number(r.ya) || "Unknown", period: String(r.period || ""),
+      gross: Number(r.gross || 0), channel: String(r.channel || ""), note: String(r.note || ""),
+      confidence: String(r.confidence || ""), fileName: file.name, selected: Number(r.gross || 0) > 0,
+    }));
+    earningsActiveYa = earningsStagingYears()[0] || null;
+    renderEarnings(data.data.note || "");
+    const yrs = earningsStagingYears().length;
+    setEarningsStatus(`Read ${rows.length} row(s) across ${yrs} year(s). Review and import below.`, "ok");
+  } catch (err) {
+    console.error("earnings-import", err);
+    setEarningsStatus(`Couldn't read it: ${err.message || err}.`, "bad");
+  } finally {
+    if (els.taxEarningsBtn) els.taxEarningsBtn.disabled = false;
+  }
+}
+
+function earningsStagingYears() {
+  const ys = [...new Set(earningsStaging.map((r) => r.ya))];
+  return ys.sort((a, b) => (a === "Unknown" ? 1 : b === "Unknown" ? -1 : Number(b) - Number(a)));
+}
+
+function renderEarnings(note = "") {
+  if (!els.taxEarningsResult) return;
+  if (!earningsStaging.length) { els.taxEarningsResult.hidden = true; return; }
+  els.taxEarningsResult.hidden = false;
+  const years = earningsStagingYears();
+  if (!years.includes(earningsActiveYa)) earningsActiveYa = years[0] || null;
+  const tabs = years.map((y) => {
+    const rowsY = earningsStaging.filter((r) => r.ya === y);
+    const total = rowsY.filter((r) => r.selected).reduce((s, r) => s + Number(r.gross || 0), 0);
+    return `<button type="button" class="batch-tab ${y === earningsActiveYa ? "active" : ""}" data-earn-ya="${escapeHtml(String(y))}">YA ${escapeHtml(String(y))} <span>${money(total)}</span></button>`;
+  }).join("");
+  const rows = earningsStaging.filter((r) => r.ya === earningsActiveYa).map((r) => {
+    const conf = String(r.confidence || "").toLowerCase();
+    const confTone = conf === "high" ? "ok" : conf === "low" ? "bad" : "warn";
+    return `
+      <tr class="${r.selected ? "" : "batch-row-off"}">
+        <td><input type="checkbox" data-earn-sel="${r.id}" ${r.selected ? "checked" : ""} /></td>
+        <td>${escapeHtml(r.period || "—")}</td>
+        <td><input type="number" step="0.01" class="batch-amt" data-earn-gross="${r.id}" value="${Number(r.gross || 0)}" /></td>
+        <td>${escapeHtml(r.channel || "—")}</td>
+        <td>${escapeHtml((r.note || "").slice(0, 50))}${r.confidence ? `<br><span class="scan-conf tone-${confTone}">${escapeHtml(r.confidence)}</span>` : ""}</td>
+      </tr>`;
+  }).join("");
+  const selTotal = earningsStaging.filter((r) => r.selected).reduce((s, r) => s + Number(r.gross || 0), 0);
+  const existing = importedEarningsFor(earningsActiveYa);
+  els.taxEarningsResult.innerHTML = `
+    ${note ? `<p class="tax-ai-note">${escapeHtml(note)}</p>` : ""}
+    <div class="batch-tabs">${tabs}</div>
+    ${existing > 0 ? `<p class="tyr-note">You already have ${money(existing)} of imported earnings stored for YA ${earningsActiveYa} — importing again adds to it (clear old ones first if re-importing).</p>` : ""}
+    <div class="table-scroll">
+      <table class="compact-table batch-table">
+        <thead><tr><th>Add</th><th>Period</th><th>Gross (RM)</th><th>Channel</th><th>Note · confidence</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="5" class="empty-state">Nothing for this year.</td></tr>`}</tbody>
+      </table>
+    </div>
+    <div class="scan-actions">
+      <button type="button" class="primary-button" id="earnImportBtn">Import ${money(selTotal)} (${earningsStaging.filter((r) => r.selected).length} rows)</button>
+      <button type="button" class="ghost-button" id="earnClear">Clear</button>
+    </div>
+    <p class="scan-disclaimer">Each row is matched to its tax year by date. Imported gross income feeds that year's summary and the SST / e-invoice threshold checks. Check the amounts against your records before importing.</p>
+  `;
+  els.taxEarningsResult.querySelectorAll("[data-earn-ya]").forEach((b) => b.addEventListener("click", () => { earningsActiveYa = b.dataset.earnYa === "Unknown" ? "Unknown" : Number(b.dataset.earnYa); renderEarnings(note); }));
+  els.taxEarningsResult.querySelectorAll("[data-earn-sel]").forEach((c) => c.addEventListener("change", () => { const it = earningsStaging.find((x) => x.id === c.dataset.earnSel); if (it) { it.selected = c.checked; renderEarnings(note); } }));
+  els.taxEarningsResult.querySelectorAll("[data-earn-gross]").forEach((a) => a.addEventListener("change", () => { const it = earningsStaging.find((x) => x.id === a.dataset.earnGross); if (it) { it.gross = Number(a.value || 0); renderEarnings(note); } }));
+  document.querySelector("#earnImportBtn")?.addEventListener("click", importEarnings);
+  document.querySelector("#earnClear")?.addEventListener("click", () => { earningsStaging = []; earningsActiveYa = null; els.taxEarningsResult.hidden = true; if (els.taxEarningsInput) els.taxEarningsInput.value = ""; if (els.taxEarningsFileName) els.taxEarningsFileName.textContent = "No file chosen"; if (els.taxEarningsBtn) els.taxEarningsBtn.disabled = true; setEarningsStatus(""); });
+}
+
+function importEarnings() {
+  const chosen = earningsStaging.filter((r) => r.selected && Number(r.gross) > 0 && r.ya !== "Unknown");
+  if (!chosen.length) { setEarningsStatus("Select rows with a valid year and amount to import.", "warn"); return; }
+  createRecoverySnapshot("Before earnings import");
+  const records = chosen.map((r) => ({
+    id: safeRecordId(""), ya: Number(r.ya), period: r.period, gross: Number(r.gross || 0),
+    channel: r.channel, note: r.note, source: r.fileName, createdAt: new Date().toISOString(),
+  }));
+  taxPlan = { ...taxPlan, earnings: [...records, ...(taxPlan.earnings || [])] };
+  saveTaxPlan();
+  earningsStaging = earningsStaging.filter((r) => !chosen.includes(r));
+  const byYa = {};
+  records.forEach((r) => { byYa[r.ya] = (byYa[r.ya] || 0) + r.gross; });
+  setEarningsStatus(`Imported ${records.length} row(s): ${Object.entries(byYa).map(([y, v]) => `YA ${y} ${money(v)}`).join(", ")}.`, "ok");
+  renderEarnings();
+  renderTaxYa();
+}
+
+// Save a supporting document (past tax-calc file) against a year.
+async function saveEarningsDoc() {
+  const ya = Number(els.taxEarnDocYa?.value || 0);
+  const file = els.taxEarnDocInput?.files?.[0];
+  if (!ya) { if (els.taxEarnDocStatus) els.taxEarnDocStatus.textContent = "Enter the year first."; return; }
+  if (!file) { if (els.taxEarnDocStatus) els.taxEarnDocStatus.textContent = "Choose a file first."; return; }
+  if (file.size > 3_000_000) { if (els.taxEarnDocStatus) els.taxEarnDocStatus.textContent = "File too large (max 3 MB)."; return; }
+  let dataUrl = "";
+  try {
+    const isImage = file.type.startsWith("image/");
+    const raw = await fileToTaxAttachment(file);
+    dataUrl = isImage ? await downscaleImage(raw.dataUrl) : raw.dataUrl;
+  } catch { /* keep reference even if read fails */ }
+  const doc = {
+    id: safeRecordId(""), ya, label: els.taxEarnDocLabel?.value?.trim() || file.name,
+    name: file.name, type: file.type, dataUrl, addedAt: new Date().toISOString(),
+  };
+  taxPlan = { ...taxPlan, earningsDocs: [doc, ...(taxPlan.earningsDocs || [])] };
+  saveTaxPlan();
+  if (els.taxEarnDocInput) els.taxEarnDocInput.value = "";
+  if (els.taxEarnDocLabel) els.taxEarnDocLabel.value = "";
+  if (els.taxEarnDocStatus) els.taxEarnDocStatus.textContent = `Saved to YA ${ya}.`;
+  renderEarningsDocs();
+}
+
+function renderEarningsDocs() {
+  if (!els.taxEarnDocList) return;
+  const docs = taxPlan.earningsDocs || [];
+  if (!docs.length) { els.taxEarnDocList.innerHTML = "No supporting documents stored yet."; return; }
+  els.taxEarnDocList.innerHTML = docs
+    .slice()
+    .sort((a, b) => Number(b.ya) - Number(a.ya))
+    .map((d) => {
+      const href = safeDataUrl(d.dataUrl, ["data:image/", "data:application/pdf"]);
+      const link = href ? `<a class="small-action" href="${escapeHtml(href)}" download="${escapeHtml(d.name || "doc")}">View</a>` : "";
+      return `<div class="earn-doc-row"><strong>YA ${escapeHtml(String(d.ya))}</strong> · ${escapeHtml(d.label || d.name)} ${link} <button class="small-action danger-action" type="button" data-del-earndoc="${d.id}">Delete</button></div>`;
+    })
+    .join("");
+  els.taxEarnDocList.querySelectorAll("[data-del-earndoc]").forEach((b) => b.addEventListener("click", () => {
+    taxPlan = { ...taxPlan, earningsDocs: (taxPlan.earningsDocs || []).filter((x) => x.id !== b.dataset.delEarndoc) };
+    saveTaxPlan();
+    renderEarningsDocs();
+  }));
+}
+
+// =============================================================================
 // YEAR-OF-ASSESSMENT SUMMARY — Form B tabulation for the Enterprise source.
 // =============================================================================
 // Confidence badge for a sourced fact-base value.
@@ -6379,7 +6577,9 @@ function renderTaxYa() {
   if (els.taxYaInput && !els.taxYaInput.value) els.taxYaInput.value = taxPlan.year || currentYear();
   const ya = Number(els.taxYaInput?.value || taxPlan.year || currentYear());
   const s = taxYaSummary(ya);
+  const gross = importedEarningsFor(ya);
   els.taxYaCards.innerHTML = `
+    ${gross > 0 ? `<article class="tax-card"><span>Gross earnings (imported)</span><strong>${money(gross)}</strong><small>From your earnings CSV</small></article>` : ""}
     <article class="tax-card"><span>Revenue deductions</span><strong>${money(s.revenueDeductible)}</strong><small>${s.expenseCount} expense record${s.expenseCount === 1 ? "" : "s"}</small></article>
     <article class="tax-card"><span>Capital allowances</span><strong>${money(s.capitalAllowance)}</strong><small>${s.assetCount} asset${s.assetCount === 1 ? "" : "s"} in register</small></article>
     <article class="tax-card"><span>Total relief (YA ${ya})</span><strong>${money(s.totalRelief)}</strong><small>Deductions + allowances</small></article>
@@ -6421,6 +6621,7 @@ function renderTaxYa() {
     <p class="scan-disclaimer">YA ${ya} · Enterprise / sole-proprietor source (Form B). Suggested figures — run the AI review before filing. Capital allowances and losses not used this year carry forward automatically in the asset schedules above.</p>
   `;
   renderTaxYearRules(ya);
+  renderEarningsDocs();
 }
 
 function exportTaxYaExcel() {
@@ -7830,6 +8031,20 @@ els.taxDocInput?.addEventListener("change", (event) => {
   setDocStatus("");
 });
 els.taxDocAnalyzeBtn?.addEventListener("click", analyzeTaxDoc);
+
+// ---------------- Past earnings importer ----------------
+els.taxEarningsInput?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (els.taxEarningsFileName) els.taxEarningsFileName.textContent = file ? file.name : "No file chosen";
+  if (els.taxEarningsBtn) els.taxEarningsBtn.disabled = !file;
+  setEarningsStatus("");
+});
+els.taxEarningsBtn?.addEventListener("click", importEarningsCsv);
+els.taxEarnDocInput?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (els.taxEarnDocStatus) els.taxEarnDocStatus.textContent = file ? `Ready: ${file.name}` : "No file attached";
+});
+els.taxEarnDocSaveBtn?.addEventListener("click", saveEarningsDoc);
 
 // ---------------- AI tax review ----------------
 els.runTaxReviewBtn?.addEventListener("click", runTaxReview);
