@@ -682,6 +682,9 @@ const els = {
   taxEarnDocLabel: document.querySelector("#taxEarnDocLabel"),
   taxEarnDocSaveBtn: document.querySelector("#taxEarnDocSaveBtn"),
   taxEarnDocList: document.querySelector("#taxEarnDocList"),
+  taxEarningsStored: document.querySelector("#taxEarningsStored"),
+  taxExpenseSaveStatus: document.querySelector("#taxExpenseSaveStatus"),
+  taxAssetSaveStatus: document.querySelector("#taxAssetSaveStatus"),
   // AI tax review
   runTaxReviewBtn: document.querySelector("#runTaxReviewBtn"),
   taxClassifyAffirm: document.querySelector("#taxClassifyAffirm"),
@@ -734,8 +737,46 @@ function normalizeBooking(booking) {
   };
 }
 
+// Quota-safe localStorage writer. Browsers cap localStorage (~5MB/origin) and
+// throw QuotaExceededError on overflow — without this guard a failed write
+// would silently lose the just-saved data AND abort before scheduleCloudSave.
+// On failure we warn visibly; the cloud save still runs (it reads the
+// in-memory state, so the data reaches the cloud even when local is full).
+let svStorageFullWarned = false;
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    if (svStorageFullWarned) hideStorageFullBanner();
+    return true;
+  } catch (err) {
+    console.error("localStorage quota exceeded writing", key, err);
+    showStorageFullBanner();
+    return false;
+  }
+}
+
+function showStorageFullBanner() {
+  svStorageFullWarned = true;
+  let banner = document.querySelector("#storageFullBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "storageFullBanner";
+    banner.className = "storage-full-banner";
+    banner.setAttribute("role", "alert");
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = `⚠ <strong>Browser storage is full.</strong> Your latest change is saved to the cloud only — it will NOT survive on this device offline. Free space by deleting old receipt attachments or recovery points.`;
+  banner.hidden = false;
+}
+
+function hideStorageFullBanner() {
+  svStorageFullWarned = false;
+  const banner = document.querySelector("#storageFullBanner");
+  if (banner) banner.hidden = true;
+}
+
 function saveBookings() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
+  safeSetItem(STORAGE_KEY, JSON.stringify(bookings));
   scheduleCloudSave();
 }
 
@@ -1457,7 +1498,7 @@ function loadTaxPlan() {
 }
 
 function saveTaxPlan() {
-  localStorage.setItem(TAX_PLAN_KEY, JSON.stringify(taxPlan));
+  safeSetItem(TAX_PLAN_KEY, JSON.stringify(taxPlan));
   scheduleCloudSave();
 }
 
@@ -1514,7 +1555,7 @@ function normalizePayment(payment) {
 }
 
 function saveDocuments() {
-  localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(documents));
+  safeSetItem(DOCUMENTS_KEY, JSON.stringify(documents));
   scheduleCloudSave();
 }
 
@@ -1576,7 +1617,7 @@ function expenseTotalFor(monthValue) {
 }
 
 function saveProfitData() {
-  localStorage.setItem(PROFIT_KEY, JSON.stringify(profitData));
+  safeSetItem(PROFIT_KEY, JSON.stringify(profitData));
   scheduleCloudSave();
 }
 
@@ -1674,7 +1715,7 @@ function loadAppSettings() {
 }
 
 function saveAppSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
+  safeSetItem(SETTINGS_KEY, JSON.stringify(appSettings));
   scheduleCloudSave();
 }
 
@@ -3071,6 +3112,27 @@ function recoveryCounts(data = allAppData()) {
     bookings: Array.isArray(data.bookings) ? data.bookings.length : 0,
     documents: Array.isArray(data.documents) ? data.documents.length : 0,
     expenses: Array.isArray(data.taxPlan?.expenses) ? data.taxPlan.expenses.length : 0,
+    assets: Array.isArray(data.taxPlan?.assets) ? data.taxPlan.assets.length : 0,
+    earnings: Array.isArray(data.taxPlan?.earnings) ? data.taxPlan.earnings.length : 0,
+    earningsDocs: Array.isArray(data.taxPlan?.earningsDocs) ? data.taxPlan.earningsDocs.length : 0,
+    lhdnDocs: Array.isArray(data.taxPlan?.lhdnDocs) ? data.taxPlan.lhdnDocs.length : 0,
+  };
+}
+
+// Recovery snapshots keep RECORDS, not pictures: up to 8 full copies compete
+// for the same ~5MB quota, so attachment images are stripped from snapshot
+// copies (name/date kept — a restore keeps every record minus its photo).
+function stripAttachmentImages(data) {
+  const stripAtt = (att) => (att && typeof att === "object" ? { ...att, dataUrl: "" } : att);
+  const tp = data.taxPlan || {};
+  return {
+    ...data,
+    taxPlan: {
+      ...tp,
+      expenses: Array.isArray(tp.expenses) ? tp.expenses.map((e) => (e.attachment ? { ...e, attachment: stripAtt(e.attachment) } : e)) : tp.expenses,
+      assets: Array.isArray(tp.assets) ? tp.assets.map((a) => (a.attachment ? { ...a, attachment: stripAtt(a.attachment) } : a)) : tp.assets,
+      earningsDocs: Array.isArray(tp.earningsDocs) ? tp.earningsDocs.map((d) => ({ ...d, dataUrl: "" })) : tp.earningsDocs,
+    },
   };
 }
 
@@ -3082,10 +3144,9 @@ function hasMeaningfulAppData(data = allAppData()) {
 function incomingDataLooksSmaller(incomingData, currentData = allAppData()) {
   const incoming = recoveryCounts(incomingData);
   const current = recoveryCounts(currentData);
-  return (
-    (current.bookings > 0 && incoming.bookings < current.bookings) ||
-    (current.documents > 0 && incoming.documents < current.documents) ||
-    (current.expenses > 0 && incoming.expenses < current.expenses)
+  // Any collection shrinking (incl. the tax module's) pauses the cloud load.
+  return ["bookings", "documents", "expenses", "assets", "earnings", "earningsDocs", "lhdnDocs"].some(
+    (key) => current[key] > 0 && incoming[key] < current[key],
   );
 }
 
@@ -3111,6 +3172,7 @@ function writeRecoverySnapshots(snapshots) {
   return false;
 }
 
+let recoverySnapshotFailed = false;
 function createRecoverySnapshot(reason, data = allAppData()) {
   if (!hasMeaningfulAppData(data)) return false;
   const snapshot = {
@@ -3119,10 +3181,11 @@ function createRecoverySnapshot(reason, data = allAppData()) {
     reason,
     appVersion: APP_VERSION,
     counts: recoveryCounts(data),
-    data,
+    data: stripAttachmentImages(data),
   };
   const snapshots = [snapshot, ...loadRecoverySnapshots().filter((item) => item?.id !== snapshot.id)];
   const saved = writeRecoverySnapshots(snapshots);
+  recoverySnapshotFailed = !saved; // surfaced in the Recovery panel — never silent
   renderRecoverySnapshots();
   return saved;
 }
@@ -3141,9 +3204,11 @@ function renderRecoverySnapshots() {
     ? snapshots.map((snapshot) => `<option value="${snapshot.id}">${escapeHtml(recoverySnapshotLabel(snapshot))}</option>`).join("")
     : `<option value="">No recovery point saved</option>`;
   if (els.recoveryStatus) {
-    els.recoveryStatus.textContent = snapshots.length
-      ? `${snapshots.length} recovery point${snapshots.length === 1 ? "" : "s"} saved in this browser.`
-      : "No recovery point yet.";
+    els.recoveryStatus.textContent = recoverySnapshotFailed
+      ? "⚠ Storage full — the latest recovery point could NOT be saved. Free space (delete old receipt attachments) to restore this safety net."
+      : snapshots.length
+        ? `${snapshots.length} recovery point${snapshots.length === 1 ? "" : "s"} saved in this browser.`
+        : "No recovery point yet.";
   }
 }
 
@@ -3277,7 +3342,7 @@ async function saveCloudSnapshot(force = false) {
   cloudRecordId = data?.id || cloudRecordId;
   cloudKnownUpdatedAt = data?.updated_at || stamp;
   appSettings = { ...appSettings, lastCloudSyncAt: stamp };
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
+  safeSetItem(SETTINGS_KEY, JSON.stringify(appSettings));
   setCloudStatus("connected", "Cloud storage connected", `Saved to Supabase at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`);
   return true;
 }
@@ -3317,7 +3382,7 @@ async function loadCloudSnapshot() {
     restoreAppData(data.data);
     isRestoringCloudData = false;
     appSettings = { ...appSettings, lastCloudSyncAt: data.updated_at || new Date().toISOString() };
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
+    safeSetItem(SETTINGS_KEY, JSON.stringify(appSettings));
     setCloudStatus("connected", "Cloud storage connected", "Loaded your latest Supabase data.");
     return;
   }
@@ -3657,13 +3722,15 @@ function restoreAppData(data) {
       ? {
           ...defaultTaxPlan(),
           ...data.taxPlan,
-          expenses: Array.isArray(data.taxPlan.expenses) ? data.taxPlan.expenses.map(normalizeTaxExpense) : [],
-          assets: Array.isArray(data.taxPlan.assets) ? data.taxPlan.assets.map(normalizeTaxAsset) : [],
-          review: { ...defaultTaxPlan().review, ...(data.taxPlan.review || {}) },
-          yearProfiles: data.taxPlan.yearProfiles && typeof data.taxPlan.yearProfiles === "object" ? data.taxPlan.yearProfiles : {},
-          lhdnDocs: Array.isArray(data.taxPlan.lhdnDocs) ? data.taxPlan.lhdnDocs : [],
-          earnings: Array.isArray(data.taxPlan.earnings) ? data.taxPlan.earnings : [],
-          earningsDocs: Array.isArray(data.taxPlan.earningsDocs) ? data.taxPlan.earningsDocs : [],
+          expenses: Array.isArray(data.taxPlan.expenses) ? data.taxPlan.expenses.map(normalizeTaxExpense) : taxPlan.expenses || [],
+          // Fall back to the CURRENT in-memory collections (not empty arrays) so a
+          // stale/older cloud copy can never wipe the tax module's data.
+          assets: Array.isArray(data.taxPlan.assets) ? data.taxPlan.assets.map(normalizeTaxAsset) : taxPlan.assets || [],
+          review: { ...defaultTaxPlan().review, ...(taxPlan.review || {}), ...(data.taxPlan.review || {}) },
+          yearProfiles: data.taxPlan.yearProfiles && typeof data.taxPlan.yearProfiles === "object" ? data.taxPlan.yearProfiles : taxPlan.yearProfiles || {},
+          lhdnDocs: Array.isArray(data.taxPlan.lhdnDocs) ? data.taxPlan.lhdnDocs : taxPlan.lhdnDocs || [],
+          earnings: Array.isArray(data.taxPlan.earnings) ? data.taxPlan.earnings : taxPlan.earnings || [],
+          earningsDocs: Array.isArray(data.taxPlan.earningsDocs) ? data.taxPlan.earningsDocs : taxPlan.earningsDocs || [],
           notes: { ...defaultTaxPlan().notes, ...(data.taxPlan.notes || {}) },
         }
       : taxPlan;
@@ -5480,6 +5547,15 @@ function fillTaxExpenseForm(id) {
   renderTaxExpenseHint();
 }
 
+let taxSaveStatusTimer = null;
+function showSaveStatus(el, message) {
+  if (!el) return;
+  el.textContent = message;
+  el.className = "tax-scan-status ok";
+  clearTimeout(taxSaveStatusTimer);
+  taxSaveStatusTimer = setTimeout(() => { el.textContent = ""; }, 8000);
+}
+
 function saveTaxExpense(event) {
   event.preventDefault();
   if (!els.taxExpenseForm.reportValidity()) return;
@@ -5492,7 +5568,15 @@ function saveTaxExpense(event) {
   };
   saveTaxPlan();
   clearTaxExpenseForm();
+  // Make the just-saved record VISIBLE: if it belongs to a different year than
+  // the filter shows, jump the filter — otherwise it silently "disappears" and
+  // the natural (wrong) reaction is to enter it again.
+  const savedYear = yearOf(expense.date);
+  if (els.taxExpenseYearFilter && savedYear && Number(els.taxExpenseYearFilter.value) !== savedYear) {
+    els.taxExpenseYearFilter.value = savedYear;
+  }
   renderTaxExpenses();
+  showSaveStatus(els.taxExpenseSaveStatus, `✓ Saved: ${expense.vendor || expense.category} ${money(expense.amount)} — ${shortDate(expense.date)} (YA ${savedYear})`);
 }
 
 function deleteTaxExpense(id) {
@@ -5736,6 +5820,7 @@ function saveTaxAsset(event) {
   saveTaxPlan();
   clearTaxAssetForm();
   renderTaxAssets();
+  showSaveStatus(els.taxAssetSaveStatus, `✓ Saved: ${asset.description || "asset"} ${money(asset.cost)} — acquired ${shortDate(asset.acquisitionDate)}`);
 }
 
 function deleteTaxAsset(id) {
@@ -5869,6 +5954,37 @@ function renderTaxAssets() {
 // =============================================================================
 let pendingScanData = null;
 
+// Translate an Edge Function failure into a plain instruction. supabase-js
+// throws FunctionsHttpError with `context` = the Response, whose JSON body our
+// functions fill with {error, detail, status} — read it instead of showing
+// "Edge Function returned a non-2xx status code".
+async function edgeErrorMessage(error, data) {
+  let body = data && !data.ok ? data : null;
+  try {
+    if (!body && error?.context && typeof error.context.json === "function") body = await error.context.json();
+  } catch { /* body unavailable — fall through to generic mapping */ }
+  const code = String(body?.error || "");
+  const detail = String(body?.detail || "");
+  const status = Number(body?.status || error?.context?.status || 0);
+  if (code === "anthropic_error" && (/credit|billing|balance/i.test(detail) || status === 400)) {
+    return "AI credit exhausted — top up at console.anthropic.com, then retry.";
+  }
+  if (code === "anthropic_error" && status === 429) return "AI rate limit hit — wait a minute and retry.";
+  if (code === "anthropic_error") return `AI service error${detail ? `: ${detail}` : ""} — retry in a moment.`;
+  if (code === "not_configured") return "The AI key is not set up on the server — tell Claude to redeploy the function secret.";
+  if (code === "parse_failed") return "The AI reply couldn't be read — try again (or a clearer photo).";
+  if (code === "network") return "The server couldn't reach the AI service — check again in a minute.";
+  if (status === 401 || /jwt|unauthorized/i.test(String(error?.message || ""))) return "Session expired — sign in again, then retry.";
+  if (detail) return detail;
+  return String(error?.message || error || "request failed");
+}
+function splitDataUrl(dataUrl) {
+  const comma = String(dataUrl || "").indexOf(",");
+  const header = comma >= 0 ? dataUrl.slice(0, comma) : "";
+  const m = header.match(/^data:([^;]+)/);
+  return { mediaType: (m && m[1]) || "image/jpeg", base64: comma >= 0 ? dataUrl.slice(comma + 1) : String(dataUrl || "") };
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -5906,13 +6022,16 @@ async function scanReceipt() {
   setScanStatus("Reading the receipt…", "loading");
   if (els.taxScanBtn) els.taxScanBtn.disabled = true;
   try {
-    const imageBase64 = await fileToBase64(file);
-    // Keep the image itself so it can be saved as the record's attachment.
-    pendingScanData = { attachment: { name: file.name, type: file.type, dataUrl: `data:${mediaType};base64,${imageBase64}`, attachedAt: new Date().toISOString() } };
+    const rawDataUrl = `data:${mediaType};base64,${await fileToBase64(file)}`;
+    // 1568px is the vision model's native cap — sending more is wasted bytes.
+    const api = splitDataUrl(await downscaleImage(rawDataUrl, 1568, 0.8));
+    // Store the attachment DOWNSCALED (a full-res photo inside the single JSON
+    // blob is the #1 storage-quota risk — same treatment as the batch path).
+    pendingScanData = { attachment: { name: file.name, type: "image/jpeg", dataUrl: await downscaleImage(rawDataUrl), attachedAt: new Date().toISOString() } };
     const { data, error } = await supabaseClient.functions.invoke("receipt-scan", {
-      body: { imageBase64, mediaType },
+      body: { imageBase64: api.base64, mediaType: api.mediaType },
     });
-    if (error) throw new Error(error.message || "scan failed");
+    if (error) throw new Error(await edgeErrorMessage(error, data));
     if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not read the receipt.");
     pendingScanData.fields = data.data;
     renderScanResult(data.data);
@@ -6094,33 +6213,72 @@ async function scanBatch() {
   if (images.length > 40) { setBatchStatus(`Too many at once (${images.length}). Please do up to 40 per batch.`, "warn"); return; }
 
   if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = true;
+  batchCancelRequested = false;
+  showBatchCancel(true);
   batchItems = [];
+  // Picker DEFAULT follows the villa toggle, but the choice itself is always
+  // visible + explicit at import time.
+  batchProperty = appSettings?.activeVilla === "Windmill" ? "Windmill Villa" : "Sunrise Villa";
+  let consecutiveFailures = 0;
+  let aborted = "";
   for (let i = 0; i < images.length; i += 1) {
+    if (batchCancelRequested) { aborted = `Cancelled — ${images.length - i} file(s) not scanned.`; break; }
     const file = images[i];
     setBatchStatus(`Scanning ${i + 1} of ${images.length}…`, "loading");
     const mediaType = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) ? file.type : "image/jpeg";
     const item = { id: safeRecordId(""), fileName: file.name, mediaType, fields: {}, error: "", selected: false };
     try {
-      const imageBase64 = await fileToBase64(file);
-      item.dataUrl = `data:${mediaType};base64,${imageBase64}`;
-      const { data, error } = await supabaseClient.functions.invoke("receipt-scan", { body: { imageBase64, mediaType } });
-      if (error) throw new Error(error.message || "scan failed");
+      const rawDataUrl = `data:${mediaType};base64,${await fileToBase64(file)}`;
+      // Downscale to the vision model's 1568px cap before sending — faster,
+      // cheaper, and item.dataUrl stays small for review + eventual storage.
+      item.dataUrl = await downscaleImage(rawDataUrl, 1568, 0.8);
+      const api = splitDataUrl(item.dataUrl);
+      const { data, error } = await supabaseClient.functions.invoke("receipt-scan", { body: { imageBase64: api.base64, mediaType: api.mediaType } });
+      if (error) throw new Error(await edgeErrorMessage(error, data));
       if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "unreadable");
       item.fields = data.data;
       classifyBatchItem(item);
+      consecutiveFailures = 0;
     } catch (err) {
       item.error = String(err.message || err);
+      consecutiveFailures += 1;
+      // Don't keep burning paid calls into a dead key/session/credit.
+      if (consecutiveFailures >= 3) {
+        batchItems.push(item);
+        aborted = `Stopped after 3 failures in a row — ${item.error} ${images.length - i - 1} file(s) not scanned.`;
+        break;
+      }
     }
     batchItems.push(item);
   }
+  showBatchCancel(false);
   dedupBatch();
   const years = [...new Set(batchItems.filter((b) => !b.error).map((b) => b.ya))];
   batchActiveYa = years.sort((a, b) => String(b).localeCompare(String(a)))[0] || null;
   const ok = batchItems.filter((b) => !b.error).length;
   const dups = batchItems.filter((b) => b.dup && (b.dup.inBatch || b.dup.existing)).length;
-  setBatchStatus(`Scanned ${ok}/${images.length}${skipped ? ` (${skipped} PDF skipped)` : ""}${dups ? ` · ${dups} duplicate(s) flagged` : ""}. Review and import below.`, dups ? "warn" : "ok");
+  const summary = `Scanned ${ok}/${images.length}${skipped ? ` (${skipped} PDF skipped)` : ""}${dups ? ` · ${dups} duplicate(s) flagged` : ""}.`;
+  setBatchStatus(aborted ? `${aborted} ${summary}` : `${summary} Review and import below.`, aborted ? "bad" : dups ? "warn" : "ok");
   if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = false;
   renderBatch();
+}
+
+let batchCancelRequested = false;
+function showBatchCancel(visible) {
+  let btn = document.querySelector("#taxBatchCancelBtn");
+  if (!btn && visible) {
+    btn = document.createElement("button");
+    btn.id = "taxBatchCancelBtn";
+    btn.type = "button";
+    btn.className = "ghost-button";
+    btn.textContent = "Cancel scanning";
+    btn.addEventListener("click", () => { batchCancelRequested = true; btn.disabled = true; btn.textContent = "Cancelling…"; });
+    els.taxBatchScanBtn?.after(btn);
+  }
+  if (btn) {
+    btn.hidden = !visible;
+    if (visible) { btn.disabled = false; btn.textContent = "Cancel scanning"; }
+  }
 }
 
 function batchYears() {
@@ -6174,6 +6332,11 @@ function renderBatch() {
     </div>
     ${errors.length ? `<p class="tax-ai-note bad">${errors.length} file(s) couldn't be read and were skipped${errors[0]?.error ? ` (e.g. ${escapeHtml(errors[0].error)})` : ""}.</p>` : ""}
     <div class="scan-actions">
+      <label class="ya-picker batch-property-pick">Import these receipts to
+        <select id="batchPropertySelect">
+          ${["Sunrise Villa", "Windmill Villa", "Shared"].map((p) => `<option ${p === batchProperty ? "selected" : ""}>${p}</option>`).join("")}
+        </select>
+      </label>
       <button type="button" class="primary-button" id="batchImportBtn">Import ${selCount} selected</button>
       <button type="button" class="ghost-button" id="batchSelectAll">Select all (non-duplicate)</button>
       <button type="button" class="ghost-button" id="batchClear">Clear</button>
@@ -6186,48 +6349,64 @@ function renderBatch() {
   els.taxBatchResult.querySelectorAll("[data-batch-cat]").forEach((s) => s.addEventListener("change", () => { const it = batchItems.find((x) => x.id === s.dataset.batchCat); if (it) { it.fields.suggestedCategory = s.value; classifyBatchItem(it); renderBatch(); } }));
   els.taxBatchResult.querySelectorAll("[data-batch-date]").forEach((d) => d.addEventListener("change", () => { const it = batchItems.find((x) => x.id === d.dataset.batchDate); if (it) { it.fields.date = d.value; it.ya = yearOf(d.value) || "Unknown"; dedupBatch(); renderBatch(); } }));
   els.taxBatchResult.querySelectorAll("[data-batch-amt]").forEach((a) => a.addEventListener("change", () => { const it = batchItems.find((x) => x.id === a.dataset.batchAmt); if (it) { it.fields.amount = Number(a.value || 0); dedupBatch(); renderBatch(); } }));
+  document.querySelector("#batchPropertySelect")?.addEventListener("change", (e) => { batchProperty = e.target.value; });
   document.querySelector("#batchImportBtn")?.addEventListener("click", importBatch);
   document.querySelector("#batchSelectAll")?.addEventListener("click", () => { batchItems.forEach((b) => { if (!b.error && !(b.dup?.inBatch || b.dup?.existing)) b.selected = true; }); renderBatch(); });
   document.querySelector("#batchClear")?.addEventListener("click", () => { batchItems = []; batchActiveYa = null; els.taxBatchResult.hidden = true; if (els.taxBatchInput) els.taxBatchInput.value = ""; if (els.taxBatchFileName) els.taxBatchFileName.textContent = "No files chosen"; if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = true; setBatchStatus(""); });
 }
 
+// The villa the batch imports into — set by the VISIBLE picker, never silently
+// inherited from the global villa toggle (Windmill cross-contamination guard).
+// Default follows the toggle only as the picker's starting value.
+let batchProperty = "Sunrise Villa";
+let batchImportRunning = false;
+
 async function importBatch() {
+  if (batchImportRunning) return; // double-tap guard
   const chosen = batchItems.filter((b) => !b.error && b.selected);
   if (!chosen.length) { setBatchStatus("Nothing selected to import.", "warn"); return; }
   const invalid = chosen.filter((b) => !yearOf(b.fields.date) || !(Number(b.fields.amount) > 0));
   if (invalid.length) { setBatchStatus(`${invalid.length} selected item(s) need a valid date and amount first.`, "warn"); return; }
-  createRecoverySnapshot("Before batch receipt import");
-  let addedExp = 0;
-  let addedAsset = 0;
-  for (const b of chosen) {
-    const small = await downscaleImage(b.dataUrl);
-    const attachment = { name: b.fileName, type: "image/jpeg", dataUrl: small, attachedAt: new Date().toISOString() };
-    if (b.isCapital) {
-      const asset = normalizeTaxAsset({
-        description: b.fields.description || b.fields.vendor || b.category,
-        vendor: b.fields.vendor || "", cost: Number(b.fields.amount || 0),
-        acquisitionDate: b.fields.date, assetClass: suggestAssetClass(b.category, Number(b.fields.amount || 0)),
-        attachment, receipt: "Batch scan",
-      });
-      taxPlan = { ...taxPlan, assets: [asset, ...(taxPlan.assets || [])] };
-      addedAsset += 1;
-    } else {
-      const expense = normalizeTaxExpense({
-        date: b.fields.date, category: b.category, amount: Number(b.fields.amount || 0),
-        vendor: b.fields.vendor || "", notes: b.fields.description || "", attachment, receipt: "Batch scan",
-        property: appSettings?.activeVilla === "Windmill" ? "Windmill Villa" : "Sunrise Villa",
-      });
-      taxPlan = { ...taxPlan, expenses: [expense, ...(taxPlan.expenses || [])] };
-      addedExp += 1;
+  const property = document.querySelector("#batchPropertySelect")?.value || batchProperty;
+  batchImportRunning = true;
+  const importBtn = document.querySelector("#batchImportBtn");
+  if (importBtn) { importBtn.disabled = true; importBtn.textContent = "Importing…"; }
+  try {
+    createRecoverySnapshot("Before batch receipt import");
+    let addedExp = 0;
+    let addedAsset = 0;
+    for (const b of chosen) {
+      const small = await downscaleImage(b.dataUrl);
+      const attachment = { name: b.fileName, type: "image/jpeg", dataUrl: small, attachedAt: new Date().toISOString() };
+      if (b.isCapital) {
+        const asset = normalizeTaxAsset({
+          description: b.fields.description || b.fields.vendor || b.category,
+          vendor: b.fields.vendor || "", cost: Number(b.fields.amount || 0),
+          acquisitionDate: b.fields.date, assetClass: suggestAssetClass(b.category, Number(b.fields.amount || 0)),
+          attachment, receipt: "Batch scan", property,
+        });
+        taxPlan = { ...taxPlan, assets: [asset, ...(taxPlan.assets || [])] };
+        addedAsset += 1;
+      } else {
+        const expense = normalizeTaxExpense({
+          date: b.fields.date, category: b.category, amount: Number(b.fields.amount || 0),
+          vendor: b.fields.vendor || "", notes: b.fields.description || "", attachment, receipt: "Batch scan",
+          property,
+        });
+        taxPlan = { ...taxPlan, expenses: [expense, ...(taxPlan.expenses || [])] };
+        addedExp += 1;
+      }
     }
+    saveTaxPlan();
+    // drop imported items from the batch
+    batchItems = batchItems.filter((b) => !chosen.includes(b));
+    setBatchStatus(`Imported ${addedExp} expense(s) and ${addedAsset} asset(s) to ${property}. Run the AI review when ready.`, "ok");
+    renderBatch();
+    renderTaxExpenses();
+    renderTaxAssets();
+  } finally {
+    batchImportRunning = false;
   }
-  saveTaxPlan();
-  // drop imported items from the batch
-  batchItems = batchItems.filter((b) => !chosen.includes(b));
-  setBatchStatus(`Imported ${addedExp} expense(s) and ${addedAsset} asset(s). Run the AI review when ready.`, "ok");
-  renderBatch();
-  renderTaxExpenses();
-  renderTaxAssets();
 }
 
 // =============================================================================
@@ -6267,7 +6446,7 @@ async function importEarningsCsv() {
     const csvText = await readFileText(file);
     if (!csvText.trim()) throw new Error("the file is empty");
     const { data, error } = await supabaseClient.functions.invoke("earnings-import", { body: { csvText } });
-    if (error) throw new Error(error.message || "import failed");
+    if (error) throw new Error(await edgeErrorMessage(error, data));
     if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not read the CSV.");
     const rows = Array.isArray(data.data.rows) ? data.data.rows : [];
     earningsStaging = rows.map((r) => ({
@@ -6343,6 +6522,19 @@ function renderEarnings(note = "") {
 function importEarnings() {
   const chosen = earningsStaging.filter((r) => r.selected && Number(r.gross) > 0 && r.ya !== "Unknown");
   if (!chosen.length) { setEarningsStatus("Select rows with a valid year and amount to import.", "warn"); return; }
+  // Re-import guard: warn when a chosen row matches an ALREADY-stored one
+  // (same year + period + amount, or the same source file for that year) —
+  // a double-import silently doubles the year's gross turnover.
+  const existing = taxPlan.earnings || [];
+  const dupRows = chosen.filter((r) =>
+    existing.some((e) => Number(e.ya) === Number(r.ya) && (String(e.period) === String(r.period) && Number(e.gross) === Number(r.gross) || (e.source && e.source === r.fileName))),
+  );
+  if (dupRows.length) {
+    const proceed = window.confirm(
+      `${dupRows.length} of the selected rows look ALREADY IMPORTED (same year/period/amount or same file). Importing again ADDS to the stored totals and inflates that year's gross income.\n\nImport anyway?`,
+    );
+    if (!proceed) { setEarningsStatus("Import cancelled — delete the old rows below first if you're re-importing.", "warn"); return; }
+  }
   createRecoverySnapshot("Before earnings import");
   const records = chosen.map((r) => ({
     id: safeRecordId(""), ya: Number(r.ya), period: r.period, gross: Number(r.gross || 0),
@@ -6356,6 +6548,49 @@ function importEarnings() {
   setEarningsStatus(`Imported ${records.length} row(s): ${Object.entries(byYa).map(([y, v]) => `YA ${y} ${money(v)}`).join(", ")}.`, "ok");
   renderEarnings();
   renderTaxYa();
+  renderStoredEarnings();
+}
+
+// Stored (already-imported) earnings — visible + deletable per row, because
+// these figures ARE the year's gross turnover: an invisible double-import
+// would silently inflate income. The UI used to say "clear old ones first"
+// with no way to do it; this is that way.
+function renderStoredEarnings() {
+  if (!els.taxEarningsStored) return;
+  const rows = (taxPlan.earnings || []).slice().sort((a, b) => Number(b.ya) - Number(a.ya) || String(b.period).localeCompare(String(a.period)));
+  if (!rows.length) { els.taxEarningsStored.innerHTML = ""; return; }
+  const byYa = {};
+  rows.forEach((r) => { byYa[r.ya] = (byYa[r.ya] || 0) + Number(r.gross || 0); });
+  els.taxEarningsStored.innerHTML = `
+    <details class="tax-accounting-drawer">
+      <summary>Imported earnings on record (${rows.length} rows · ${Object.entries(byYa).sort((a, b) => Number(b[0]) - Number(a[0])).map(([y, v]) => `YA ${y} ${money(v)}`).join(" · ")})</summary>
+      <div class="table-scroll">
+        <table class="compact-table batch-table">
+          <thead><tr><th>YA</th><th>Period</th><th>Gross</th><th>Channel</th><th>Source file</th><th></th></tr></thead>
+          <tbody>
+            ${rows.map((r) => `
+              <tr>
+                <td>${escapeHtml(String(r.ya))}</td>
+                <td>${escapeHtml(r.period || "—")}</td>
+                <td><strong>${money(r.gross)}</strong></td>
+                <td>${escapeHtml(r.channel || "—")}</td>
+                <td class="table-muted">${escapeHtml(r.source || "—")}</td>
+                <td><button class="small-action danger-action" type="button" data-del-earning="${escapeHtml(r.id)}">Delete</button></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </details>`;
+  els.taxEarningsStored.querySelectorAll("[data-del-earning]").forEach((b) => b.addEventListener("click", () => {
+    const row = (taxPlan.earnings || []).find((x) => x.id === b.dataset.delEarning);
+    if (!row) return;
+    if (!window.confirm(`Delete imported earning ${row.period} ${money(row.gross)} (YA ${row.ya})?`)) return;
+    createRecoverySnapshot("Before imported earning deleted");
+    taxPlan = { ...taxPlan, earnings: (taxPlan.earnings || []).filter((x) => x.id !== b.dataset.delEarning) };
+    saveTaxPlan();
+    renderStoredEarnings();
+    renderTaxYa();
+  }));
 }
 
 // Save a supporting document (past tax-calc file) against a year.
@@ -6485,7 +6720,7 @@ async function analyzeTaxDoc() {
     }
     if (text) body.text = text;
     const { data, error } = await supabaseClient.functions.invoke("tax-doc-analyze", { body });
-    if (error) throw new Error(error.message || "analyze failed");
+    if (error) throw new Error(await edgeErrorMessage(error, data));
     if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not read the document.");
     pendingDocData = data.data;
     renderDocResult(data.data);
@@ -6622,6 +6857,7 @@ function renderTaxYa() {
   `;
   renderTaxYearRules(ya);
   renderEarningsDocs();
+  renderStoredEarnings();
 }
 
 function exportTaxYaExcel() {
@@ -6717,7 +6953,7 @@ async function runTaxReview() {
       checksNotEvaluated: review.checksNotEvaluated,
     };
     const { data, error } = await supabaseClient.functions.invoke("tax-review", { body: payload });
-    if (error) throw new Error(error.message || "review failed");
+    if (error) throw new Error(await edgeErrorMessage(error, data));
     if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not complete the AI review.");
     renderTaxReview(review, { aiState: "done", ai: data.data });
     setTaxReviewStatus("AI review complete.", "ok");

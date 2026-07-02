@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260626-25" />
+    <link rel="stylesheet" href="./styles.css?v=20260626-26" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1427,6 +1427,7 @@
                   <button class="primary-button" type="submit">Save Expense</button>
                   <button class="ghost-button" id="clearTaxExpense" type="button">Clear</button>
                   <button class="ghost-button" id="removeTaxExpenseAttachment" type="button">Remove Attachment</button>
+                  <span class="tax-scan-status" id="taxExpenseSaveStatus" role="status" aria-live="polite"></span>
                 </div>
               </form>
             </section>
@@ -1446,7 +1447,7 @@
               <div class="booking-toolbar tax-expense-toolbar">
                 <label>
                   <span>Year</span>
-                  <input id="taxExpenseYearFilter" type="number" min="2024" max="2035" step="1" />
+                  <input id="taxExpenseYearFilter" type="number" min="2018" max="2035" step="1" />
                 </label>
                 <label>
                   <span>Month</span>
@@ -1594,6 +1595,7 @@
                   <button class="primary-button" type="submit">Save Asset</button>
                   <button class="ghost-button" id="clearTaxAsset" type="button">Clear</button>
                   <button class="ghost-button" id="removeTaxAssetAttachment" type="button">Remove Attachment</button>
+                  <span class="tax-scan-status" id="taxAssetSaveStatus" role="status" aria-live="polite"></span>
                 </div>
               </form>
             </section>
@@ -1628,6 +1630,7 @@
                 <span class="tax-scan-status" id="taxEarningsStatus" role="status" aria-live="polite"></span>
               </div>
               <div class="tax-batch-result" id="taxEarningsResult" hidden></div>
+              <div id="taxEarningsStored"></div>
               <details class="tax-accounting-drawer">
                 <summary>Attach supporting documents (past tax-calc files) for a year</summary>
                 <div class="tax-accounting-grid">
@@ -1655,7 +1658,7 @@
                 </div>
                 <div class="heading-actions">
                   <label class="ya-picker">Year of Assessment
-                    <input id="taxYaInput" type="number" min="2024" max="2035" step="1" />
+                    <input id="taxYaInput" type="number" min="2018" max="2035" step="1" />
                   </label>
                   <button class="ghost-button compact" id="exportTaxYaExcel" type="button">Export</button>
                 </div>
@@ -1842,6 +1845,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260626-25"></script>
+    <script src="./app.js?v=20260626-26"></script>
   </body>
 </html>
