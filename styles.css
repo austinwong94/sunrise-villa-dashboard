@@ -40,6 +40,7 @@
   /* Status */
   --due: #B9544C;
   --due-soft: #F7EBE9;
+  --due-ink: #A34840; /* darkened red for SMALL badge text — 5.06:1 on due-soft (base --due was 4.06:1, below AA) */
   --pend: #836528; /* darkened from #B0863A to meet AA on white + its soft bg for the 11px badge/pill text */
   --pend-soft: #F5EEE2;
 
@@ -5662,6 +5663,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .small-action, .ghost-button, .primary-button, .nav-button, .villa-tab,
   .booking-channel-option, .month-button { min-height: 44px; }
   .guest-toggle, .refund-toggle { min-height: 44px; } /* checkbox labels were ~19px taps */
+  /* The 4-tab tax strip was the app's first strip too wide for a 375px screen:
+     let it fill + wrap instead of forcing horizontal page scroll. */
+  .message-flow-tabs, .tax-inner-tabs { width: 100%; flex-wrap: wrap; }
+  .message-flow-tab, .tax-inner-tab, .batch-tab { min-height: 44px; flex: 1 1 auto; }
   #guestsView .guest-card-edit input[type="text"] { min-height: 40px; }
   #guestsView .guests-list { grid-template-columns: 1fr; }
   /* Section headings wrap so the action button drops to its own row instead of crushing the title */
@@ -5772,7 +5777,7 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .tax-hint-badge { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; letter-spacing: .02em; }
 .tax-hint-badge.tone-ok { background: var(--ok-soft); color: var(--ok); }
 .tax-hint-badge.tone-warn { background: var(--pend-soft); color: var(--pend); }
-.tax-hint-badge.tone-bad { background: var(--due-soft); color: var(--due); }
+.tax-hint-badge.tone-bad { background: var(--due-soft); color: var(--due-ink); }
 .tax-hint-badge.tone-info { background: var(--accent-soft); color: var(--accent-ink); }
 .tax-hint-rule { font-size: 13px; color: var(--ink); }
 .tax-hint-src { font-size: 11px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; }
@@ -5851,7 +5856,7 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .tax-finding-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tax-finding-head strong { font-size: 13.5px; color: var(--ink); }
 .tax-finding-sev { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 6px; letter-spacing: .03em; }
-.tax-finding-sev.tone-bad { background: var(--due-soft); color: var(--due); }
+.tax-finding-sev.tone-bad { background: var(--due-soft); color: var(--due-ink); }
 .tax-finding-sev.tone-warn { background: var(--pend-soft); color: var(--pend); }
 .tax-finding-sev.tone-info { background: var(--accent-soft); color: var(--accent-ink); }
 .tax-finding-q { font-size: 10px; font-weight: 700; color: var(--accent-ink); background: var(--accent-soft); padding: 2px 7px; border-radius: 6px; }
@@ -5891,7 +5896,7 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .tax-conf { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px; letter-spacing: .02em; }
 .tax-conf.tone-ok { background: var(--ok-soft); color: var(--ok); }
 .tax-conf.tone-warn { background: var(--pend-soft); color: var(--pend); }
-.tax-conf.tone-bad { background: var(--due-soft); color: var(--due); }
+.tax-conf.tone-bad { background: var(--due-soft); color: var(--due-ink); }
 .tax-conf.tone-info { background: var(--accent-soft); color: var(--accent-ink); }
 @media (max-width: 640px) {
   .tyr-table, .tyr-table tbody, .tyr-table tr, .tyr-table td { display: block; width: 100%; }
@@ -5918,10 +5923,10 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .batch-treat { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px; }
 .batch-treat.tone-ok { background: var(--ok-soft); color: var(--ok); }
 .batch-treat.tone-warn { background: var(--pend-soft); color: var(--pend); }
-.batch-treat.tone-bad { background: var(--due-soft); color: var(--due); }
+.batch-treat.tone-bad { background: var(--due-soft); color: var(--due-ink); }
 .batch-treat.tone-info { background: var(--accent-soft); color: var(--accent-ink); }
 .batch-dup { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
-.batch-dup.tone-bad { background: var(--due-soft); color: var(--due); }
+.batch-dup.tone-bad { background: var(--due-soft); color: var(--due-ink); }
 .batch-dup.tone-warn { background: var(--pend-soft); color: var(--pend); }
 
 /* ============================================================
@@ -5946,3 +5951,17 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .storage-full-banner { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 3000; max-width: min(560px, calc(100vw - 32px)); background: var(--due-soft); border: 1.5px solid var(--due); color: var(--ink); border-radius: 12px; padding: 12px 16px; font-size: 13.5px; line-height: 1.5; box-shadow: 0 8px 28px rgba(0,0,0,.18); }
 .storage-full-banner[hidden] { display: none; }
 .batch-property-pick select { min-width: 150px; }
+
+/* ============================================================
+   Receipt thumbnails + lightbox (verify rows against the actual receipt)
+   ============================================================ */
+.receipt-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; display: block; background: var(--soft); }
+.receipt-thumb:hover { border-color: var(--accent); }
+.scan-thumb-wrap { display: flex; align-items: center; gap: 10px; }
+.receipt-lightbox { position: fixed; inset: 0; z-index: 4000; background: rgba(27, 27, 25, .82); display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out; }
+.receipt-lightbox img { max-width: min(92vw, 900px); max-height: 88vh; border-radius: 10px; box-shadow: 0 12px 48px rgba(0,0,0,.5); }
+.receipt-lightbox[hidden] { display: none; }
+.receipt-lightbox .lightbox-caption { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 13px; opacity: .85; }
+
+/* Asset-schedule legend (IA/AA jargon translated) */
+.tax-schedule-legend { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.45; }

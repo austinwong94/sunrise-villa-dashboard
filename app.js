@@ -5939,9 +5939,10 @@ function renderTaxAssets() {
             </div>
           </div>
           <table class="tax-asset-schedule">
-            <thead><tr><th>YA</th><th>Allowance type</th><th>Claim</th><th>Residual c/f</th></tr></thead>
+            <thead><tr><th>YA</th><th>Allowance type</th><th>Claim</th><th title="Cost still left to claim in future years">Residual c/f</th></tr></thead>
             <tbody>${scheduleRows}</tbody>
           </table>
+          <p class="tax-schedule-legend">IA = initial allowance (first year only) · AA = annual allowance (claimed each year) · Residual c/f = cost still to claim in future years — this carries forward automatically.</p>
         </article>`;
     })
     .join("");
@@ -5953,6 +5954,50 @@ function renderTaxAssets() {
 // deterministic rules above decide the treatment.
 // =============================================================================
 let pendingScanData = null;
+
+// Full-size receipt viewer: click any thumbnail to verify a row against the
+// actual receipt without leaving the page.
+function openReceiptLightbox(srcUrl, caption = "") {
+  const safe = safeDataUrl(srcUrl, ["data:image/"]);
+  if (!safe) return;
+  let box = document.querySelector("#receiptLightbox");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "receiptLightbox";
+    box.className = "receipt-lightbox";
+    box.addEventListener("click", () => { box.hidden = true; });
+    document.body.appendChild(box);
+  }
+  box.innerHTML = `<img alt="Receipt full size" /><span class="lightbox-caption"></span>`;
+  box.querySelector("img").src = safe;
+  box.querySelector(".lightbox-caption").textContent = caption ? `${caption} — tap anywhere to close` : "Tap anywhere to close";
+  box.hidden = false;
+}
+
+// Re-rendering a review table used to snap focus + scroll back to the start on
+// EVERY edit — exactly the friction that makes bulk verification stop happening.
+// Capture the focused control + scroll offsets before a rebuild, restore after.
+function captureTableUiState(container) {
+  const state = { scrolls: [], focusAttr: null, focusKey: null };
+  if (!container) return state;
+  container.querySelectorAll(".table-scroll").forEach((el, i) => state.scrolls.push([i, el.scrollLeft, el.scrollTop]));
+  const active = document.activeElement;
+  if (active && container.contains(active)) {
+    const attrs = ["data-batch-sel", "data-batch-date", "data-batch-amt", "data-batch-cat", "data-earn-sel", "data-earn-gross", "data-earn-ya"];
+    state.focusAttr = attrs.find((a) => active.hasAttribute(a)) || null;
+    state.focusKey = state.focusAttr ? active.getAttribute(state.focusAttr) : null;
+  }
+  return state;
+}
+function restoreTableUiState(container, state) {
+  if (!container || !state) return;
+  const scrollEls = container.querySelectorAll(".table-scroll");
+  state.scrolls.forEach(([i, left, top]) => { if (scrollEls[i]) { scrollEls[i].scrollLeft = left; scrollEls[i].scrollTop = top; } });
+  if (state.focusAttr && state.focusKey) {
+    const el = container.querySelector(`[${state.focusAttr}="${CSS.escape(state.focusKey)}"]`);
+    if (el) el.focus({ preventScroll: true });
+  }
+}
 
 // Translate an Edge Function failure into a plain instruction. supabase-js
 // throws FunctionsHttpError with `context` = the Response, whose JSON body our
@@ -6052,7 +6097,9 @@ function renderScanResult(fields) {
   const conf = String(fields.confidence || "").toLowerCase();
   const confTone = conf === "high" ? "ok" : conf === "low" ? "bad" : "warn";
   els.taxScanResult.hidden = false;
+  const scanThumb = safeDataUrl(pendingScanData?.attachment?.dataUrl, ["data:image/"]);
   els.taxScanResult.innerHTML = `
+    ${scanThumb ? `<div class="scan-thumb-wrap"><img class="receipt-thumb" src="${escapeHtml(scanThumb)}" alt="Scanned receipt — click to enlarge" title="${escapeHtml(pendingScanData?.attachment?.name || "receipt")}" /><span class="table-muted">Click to check the extracted figures against the receipt.</span></div>` : ""}
     <div class="scan-result-grid">
       <div><span>Supplier</span><strong>${escapeHtml(fields.vendor || "—")}</strong></div>
       <div><span>Date</span><strong>${escapeHtml(fields.date || "—")}</strong></div>
@@ -6297,10 +6344,11 @@ function renderBatch() {
   const treatLabel = { capital: "Capital asset", deduct: "Claimable", partial: "Claimable (restricted)", no: "Not claimable", ask: "Needs review" };
   const treatTone = { capital: "info", deduct: "ok", partial: "warn", no: "bad", ask: "warn" };
 
+  const uiState = captureTableUiState(els.taxBatchResult);
   const tabs = years.map((y) => {
     const n = ok.filter((b) => b.ya === y).length;
     const sel = ok.filter((b) => b.ya === y && b.selected).length;
-    return `<button type="button" class="batch-tab ${y === batchActiveYa ? "active" : ""}" data-batch-ya="${escapeHtml(String(y))}">YA ${escapeHtml(String(y))} <span>${sel}/${n}</span></button>`;
+    return `<button type="button" role="tab" aria-selected="${y === batchActiveYa}" class="batch-tab ${y === batchActiveYa ? "active" : ""}" data-batch-ya="${escapeHtml(String(y))}">YA ${escapeHtml(String(y))} <span>${sel}/${n}</span></button>`;
   }).join("");
 
   const rows = ok.filter((b) => b.ya === batchActiveYa).map((b) => {
@@ -6309,9 +6357,11 @@ function renderBatch() {
     const conf = String(b.fields.confidence || "").toLowerCase();
     const confTone = conf === "high" ? "ok" : conf === "low" ? "bad" : "warn";
     const catOpts = taxExpenseCategories.map((c) => `<option ${c === b.category ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
+    const thumb = safeDataUrl(b.dataUrl, ["data:image/"]);
     return `
       <tr class="${b.selected ? "" : "batch-row-off"}">
         <td><input type="checkbox" data-batch-sel="${b.id}" ${b.selected ? "checked" : ""} /></td>
+        <td>${thumb ? `<img class="receipt-thumb" src="${escapeHtml(thumb)}" alt="Receipt ${escapeHtml(b.fileName)} — click to enlarge" title="${escapeHtml(b.fileName)}" />` : "—"}</td>
         <td><input type="date" class="batch-date" data-batch-date="${b.id}" value="${escapeHtml(b.fields.date || "")}" /></td>
         <td>${escapeHtml(b.fields.vendor || "—")}<br><span class="table-muted">${escapeHtml((b.fields.description || "").slice(0, 40))}</span></td>
         <td><input type="number" step="0.01" class="batch-amt" data-batch-amt="${b.id}" value="${Number(b.fields.amount || 0)}" /></td>
@@ -6323,11 +6373,11 @@ function renderBatch() {
 
   const selCount = ok.filter((b) => b.selected).length;
   els.taxBatchResult.innerHTML = `
-    <div class="batch-tabs">${tabs}</div>
+    <div class="batch-tabs" role="tablist" aria-label="Receipt years">${tabs}</div>
     <div class="table-scroll">
       <table class="compact-table batch-table">
-        <thead><tr><th>Add</th><th>Date</th><th>Supplier</th><th>Amount</th><th>Category</th><th>Treatment</th><th>Duplicate</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7" class="empty-state">Nothing for this year.</td></tr>`}</tbody>
+        <thead><tr><th>Add</th><th>Receipt</th><th>Date</th><th>Supplier</th><th>Amount</th><th>Category</th><th>Treatment</th><th>Duplicate</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="8" class="empty-state">Nothing for this year.</td></tr>`}</tbody>
       </table>
     </div>
     ${errors.length ? `<p class="tax-ai-note bad">${errors.length} file(s) couldn't be read and were skipped${errors[0]?.error ? ` (e.g. ${escapeHtml(errors[0].error)})` : ""}.</p>` : ""}
@@ -6353,6 +6403,7 @@ function renderBatch() {
   document.querySelector("#batchImportBtn")?.addEventListener("click", importBatch);
   document.querySelector("#batchSelectAll")?.addEventListener("click", () => { batchItems.forEach((b) => { if (!b.error && !(b.dup?.inBatch || b.dup?.existing)) b.selected = true; }); renderBatch(); });
   document.querySelector("#batchClear")?.addEventListener("click", () => { batchItems = []; batchActiveYa = null; els.taxBatchResult.hidden = true; if (els.taxBatchInput) els.taxBatchInput.value = ""; if (els.taxBatchFileName) els.taxBatchFileName.textContent = "No files chosen"; if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = true; setBatchStatus(""); });
+  restoreTableUiState(els.taxBatchResult, uiState);
 }
 
 // The villa the batch imports into — set by the VISIBLE picker, never silently
@@ -6475,39 +6526,47 @@ function renderEarnings(note = "") {
   if (!els.taxEarningsResult) return;
   if (!earningsStaging.length) { els.taxEarningsResult.hidden = true; return; }
   els.taxEarningsResult.hidden = false;
+  const uiState = captureTableUiState(els.taxEarningsResult);
   const years = earningsStagingYears();
   if (!years.includes(earningsActiveYa)) earningsActiveYa = years[0] || null;
   const tabs = years.map((y) => {
     const rowsY = earningsStaging.filter((r) => r.ya === y);
     const total = rowsY.filter((r) => r.selected).reduce((s, r) => s + Number(r.gross || 0), 0);
-    return `<button type="button" class="batch-tab ${y === earningsActiveYa ? "active" : ""}" data-earn-ya="${escapeHtml(String(y))}">YA ${escapeHtml(String(y))} <span>${money(total)}</span></button>`;
+    return `<button type="button" role="tab" aria-selected="${y === earningsActiveYa}" class="batch-tab ${y === earningsActiveYa ? "active" : ""}" data-earn-ya="${escapeHtml(String(y))}">YA ${escapeHtml(String(y))} <span>${money(total)}</span></button>`;
   }).join("");
   const rows = earningsStaging.filter((r) => r.ya === earningsActiveYa).map((r) => {
     const conf = String(r.confidence || "").toLowerCase();
     const confTone = conf === "high" ? "ok" : conf === "low" ? "bad" : "warn";
+    const yaCell = r.ya === "Unknown"
+      ? `<input type="number" class="batch-amt" min="2018" max="2035" step="1" placeholder="Year?" data-earn-setya="${r.id}" title="This row has no year — set its Year of Assessment or it will be skipped" />`
+      : escapeHtml(String(r.ya));
     return `
       <tr class="${r.selected ? "" : "batch-row-off"}">
         <td><input type="checkbox" data-earn-sel="${r.id}" ${r.selected ? "checked" : ""} /></td>
+        <td>${yaCell}</td>
         <td>${escapeHtml(r.period || "—")}</td>
         <td><input type="number" step="0.01" class="batch-amt" data-earn-gross="${r.id}" value="${Number(r.gross || 0)}" /></td>
         <td>${escapeHtml(r.channel || "—")}</td>
         <td>${escapeHtml((r.note || "").slice(0, 50))}${r.confidence ? `<br><span class="scan-conf tone-${confTone}">${escapeHtml(r.confidence)}</span>` : ""}</td>
       </tr>`;
   }).join("");
-  const selTotal = earningsStaging.filter((r) => r.selected).reduce((s, r) => s + Number(r.gross || 0), 0);
+  const importable = earningsStaging.filter((r) => r.selected && Number(r.gross) > 0 && r.ya !== "Unknown");
+  const selTotal = importable.reduce((s, r) => s + Number(r.gross || 0), 0);
+  const unknownSelected = earningsStaging.filter((r) => r.selected && r.ya === "Unknown").length;
   const existing = importedEarningsFor(earningsActiveYa);
   els.taxEarningsResult.innerHTML = `
     ${note ? `<p class="tax-ai-note">${escapeHtml(note)}</p>` : ""}
-    <div class="batch-tabs">${tabs}</div>
+    <div class="batch-tabs" role="tablist" aria-label="Earnings years">${tabs}</div>
     ${existing > 0 ? `<p class="tyr-note">You already have ${money(existing)} of imported earnings stored for YA ${earningsActiveYa} — importing again adds to it (clear old ones first if re-importing).</p>` : ""}
     <div class="table-scroll">
       <table class="compact-table batch-table">
-        <thead><tr><th>Add</th><th>Period</th><th>Gross (RM)</th><th>Channel</th><th>Note · confidence</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="5" class="empty-state">Nothing for this year.</td></tr>`}</tbody>
+        <thead><tr><th>Add</th><th>YA</th><th>Period</th><th>Gross (RM)</th><th>Channel</th><th>Note · confidence</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" class="empty-state">Nothing for this year.</td></tr>`}</tbody>
       </table>
     </div>
+    ${unknownSelected ? `<p class="tax-hint-flag">⚠ ${unknownSelected} selected row(s) have no year — set one in the YA column or they'll be skipped.</p>` : ""}
     <div class="scan-actions">
-      <button type="button" class="primary-button" id="earnImportBtn">Import ${money(selTotal)} (${earningsStaging.filter((r) => r.selected).length} rows)</button>
+      <button type="button" class="primary-button" id="earnImportBtn">Import ${money(selTotal)} (${importable.length} rows)</button>
       <button type="button" class="ghost-button" id="earnClear">Clear</button>
     </div>
     <p class="scan-disclaimer">Each row is matched to its tax year by date. Imported gross income feeds that year's summary and the SST / e-invoice threshold checks. Check the amounts against your records before importing.</p>
@@ -6515,8 +6574,17 @@ function renderEarnings(note = "") {
   els.taxEarningsResult.querySelectorAll("[data-earn-ya]").forEach((b) => b.addEventListener("click", () => { earningsActiveYa = b.dataset.earnYa === "Unknown" ? "Unknown" : Number(b.dataset.earnYa); renderEarnings(note); }));
   els.taxEarningsResult.querySelectorAll("[data-earn-sel]").forEach((c) => c.addEventListener("change", () => { const it = earningsStaging.find((x) => x.id === c.dataset.earnSel); if (it) { it.selected = c.checked; renderEarnings(note); } }));
   els.taxEarningsResult.querySelectorAll("[data-earn-gross]").forEach((a) => a.addEventListener("change", () => { const it = earningsStaging.find((x) => x.id === a.dataset.earnGross); if (it) { it.gross = Number(a.value || 0); renderEarnings(note); } }));
+  els.taxEarningsResult.querySelectorAll("[data-earn-setya]").forEach((y) => y.addEventListener("change", () => {
+    const it = earningsStaging.find((x) => x.id === y.dataset.earnSetya);
+    if (!it) return;
+    const val = Number(y.value || 0);
+    it.ya = val >= 2018 && val <= 2035 ? val : "Unknown";
+    if (it.ya !== "Unknown") earningsActiveYa = it.ya;
+    renderEarnings(note);
+  }));
   document.querySelector("#earnImportBtn")?.addEventListener("click", importEarnings);
   document.querySelector("#earnClear")?.addEventListener("click", () => { earningsStaging = []; earningsActiveYa = null; els.taxEarningsResult.hidden = true; if (els.taxEarningsInput) els.taxEarningsInput.value = ""; if (els.taxEarningsFileName) els.taxEarningsFileName.textContent = "No file chosen"; if (els.taxEarningsBtn) els.taxEarningsBtn.disabled = true; setEarningsStatus(""); });
+  restoreTableUiState(els.taxEarningsResult, uiState);
 }
 
 function importEarnings() {
@@ -8195,6 +8263,12 @@ els.exportTaxExpensesPdf?.addEventListener("click", exportTaxExpensesPdf);
 // Live treatment hint as the host edits the expense form.
 [els.taxExpenseCategory, els.taxExpenseDeductible].forEach((c) => c?.addEventListener("change", renderTaxExpenseHint));
 [els.taxExpenseAmount, els.taxExpenseBizPct].forEach((c) => c?.addEventListener("input", renderTaxExpenseHint));
+
+// Receipt thumbnails: one delegated listener opens the lightbox.
+document.addEventListener("click", (event) => {
+  const thumb = event.target.closest?.(".receipt-thumb");
+  if (thumb) openReceiptLightbox(thumb.src, thumb.title || "");
+});
 
 // ---------------- AI receipt scanner ----------------
 els.taxScanInput?.addEventListener("change", (event) => {
