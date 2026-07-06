@@ -1073,8 +1073,8 @@ details summary::marker { content: ""; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  min-height: 40px;
+  gap: 2px;
+  min-height: 46px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: #fff;
@@ -1086,21 +1086,26 @@ details summary::marker { content: ""; }
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 .month-button:hover { background: var(--soft); }
-/* The name is always 12px ink; the count line is ALWAYS present (a &nbsp; when
-   zero) so every button is the same height and names never shift. Earlier this
-   targeted span:last-child, which shrank the NAME to 9px on months with no
-   count and misaligned the rest. */
+/* BOTH lines are BLOCK elements with a FIXED height so every button is
+   structurally identical — the name sits at the same position and the count
+   slot is always exactly 12px tall whether it holds a number or nothing. The
+   previous fix used min-height on an inline <small>, which browsers IGNORE, so
+   months with no count let their name drop to the vertical centre and fall out
+   of line with months that had a count. */
 .month-button .month-name {
+  display: block;
+  height: 15px;
+  line-height: 15px;
   font-size: 12px;
   font-weight: 600;
   color: var(--ink);
-  line-height: 1.15;
 }
 .month-button .month-count {
+  display: block;
+  height: 12px;
+  line-height: 12px;
   font-size: 9px;
   font-weight: 700;
-  line-height: 1;
-  min-height: 11px;
   color: var(--accent-ink);
 }
 /* Every month name is full-ink — a navigation control must never read as
