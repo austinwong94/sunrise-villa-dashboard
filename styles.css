@@ -1086,17 +1086,31 @@ details summary::marker { content: ""; }
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 .month-button:hover { background: var(--soft); }
-.month-button span:last-child {
-  font-size: 9px;
+/* The name is always 12px ink; the count line is ALWAYS present (a &nbsp; when
+   zero) so every button is the same height and names never shift. Earlier this
+   targeted span:last-child, which shrank the NAME to 9px on months with no
+   count and misaligned the rest. */
+.month-button .month-name {
+  font-size: 12px;
   font-weight: 600;
-  color: var(--faint);
+  color: var(--ink);
+  line-height: 1.15;
 }
+.month-button .month-count {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  min-height: 11px;
+  color: var(--accent-ink);
+}
+/* Months with no bookings read as "no activity" — muted, but full-size and
+   fully tappable (not the old faint 9px). */
+.month-button:not(.has-bookings):not(.active) .month-name { color: var(--muted); }
 .month-button.active {
   border-color: transparent;
   background: var(--accent-soft);
-  color: var(--accent-ink);
 }
-.month-button.active span:last-child { color: var(--accent-ink); }
+.month-button.active .month-name { color: var(--accent-ink); }
 
 /* The prev/next icon-buttons flanking the panel inherit foundation .icon-button.
    Give them a slightly rounder, sidebar-tuned look. */
@@ -2581,8 +2595,17 @@ details summary::marker { content: ""; }
   font-size: 13.5px;
 }
 #dashboardView .commitment-summary:last-child { border-bottom: none; }
+#dashboardView .commitment-summary { flex-wrap: wrap; }
+/* The helper note is a caption on its own line, not a third column squeezed
+   into the space-between row next to the amount. */
+#dashboardView .commitment-summary > small {
+  flex-basis: 100%;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 400;
+}
 #dashboardView .commitment-summary > span:first-child { color: var(--muted); }
-#dashboardView .commitment-summary > span:last-child,
 #dashboardView .commitment-summary > strong {
   color: var(--ink);
   font-weight: 600;
@@ -2670,28 +2693,39 @@ details summary::marker { content: ""; }
   border: 1px solid var(--line);
   border-radius: var(--r-control);
 }
-#dashboardView .one-off-row input[type="text"],
-#dashboardView .commitment-row input[type="text"] {
-  flex: 1 1 auto;
-  height: 36px;
+/* Every control in these rows is 36px — the text inputs are rendered WITHOUT a
+   type attribute (and Expires is type="month"), so targeting input[type="text"]
+   left them at the 42px foundation height next to 36px numbers. Match by row,
+   not by input type. */
+#dashboardView .one-off-row input,
+#dashboardView .commitment-row input,
+#dashboardView .one-off-row select,
+#dashboardView .commitment-row select {
+  height: 34px;
   background: #fff;
+}
+#dashboardView .one-off-row input:not([type="number"]):not([type="month"]),
+#dashboardView .commitment-row input:not([type="number"]):not([type="month"]) {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 #dashboardView .one-off-row input[type="number"],
 #dashboardView .commitment-row input[type="number"] {
   flex: 0 0 120px;
   width: 120px;
-  height: 36px;
-  background: #fff;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+#dashboardView .one-off-row input[type="month"],
+#dashboardView .commitment-row input[type="month"] {
+  flex: 0 0 150px;
+  width: 150px;
 }
 #dashboardView .one-off-row select,
 #dashboardView .commitment-row select {
   flex: 0 0 auto;
   width: auto;
   min-width: 120px;
-  height: 36px;
-  background: #fff;
 }
 /* trailing remove button in a row */
 #dashboardView .one-off-row .icon-button,
@@ -4009,6 +4043,9 @@ details summary::marker { content: ""; }
 #taxView .file-upload-field > input[type="file"] {
   height: auto;
   padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--bg);
   font-size: 12.5px;
   font-weight: 500;
   color: var(--muted);
@@ -4368,6 +4405,16 @@ details summary::marker { content: ""; }
   line-height: 1.65;
   color: var(--ink);
   resize: vertical;
+}
+/* The AI question box is a short 2-row proportional-font input — the
+   message-template ID rule above (monospace, 200px tall) was winning on
+   specificity and turning it into a code editor. */
+#messagesView .ai-draft-card .ai-field textarea {
+  min-height: 0;
+  padding: 9px 11px;
+  background: var(--bg);
+  font-family: inherit;
+  line-height: 1.5;
 }
 
 #messagesView .message-template-card .helper-text {
@@ -5134,14 +5181,20 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #bookingsView .bookings-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 0;                /* kill the 880px floor that forces scroll */
+  /* Floor at the column-width budget so a narrow container SCROLLS the wrap
+     (overflow-x:auto above) instead of compressing every column below its set
+     width — the compression clipped headers ("CHA…","NI…") and bled the date
+     into the nights column ("03 May 20263"). Contained scroll; page never
+     scrolls. */
+  min-width: 1060px;
 }
 
-/* header: smaller, tighter */
+/* header: smaller, tighter so word-headers fit their icon-narrow columns
+   instead of clipping to "CHA…"/"NI…"/"RE…" */
 #bookingsView .bookings-table thead th {
-  padding: 8px 5px;
-  font-size: 10px;
-  letter-spacing: .01em;
+  padding: 8px 4px;
+  font-size: 9.5px;
+  letter-spacing: 0;
 }
 #bookingsView .bookings-table thead th:first-child { padding-left: 14px; }
 #bookingsView .bookings-table thead th:last-child  { padding-right: 14px; }
@@ -5169,6 +5222,8 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 }
 #bookingsView .contact-cell,
 #bookingsView .date-cell { font-size: 12px; }
+/* Dates never bleed into the adjacent nights column. */
+#bookingsView .date-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* money cells: tabular, nowrap, compact, never truncated */
 #bookingsView .bookings-table .money-cell {
@@ -5181,7 +5236,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 
 /* per-column widths (fixed layout reads these off header + first row) */
 #bookingsView .bookings-table th[data-col="channel"],
-#bookingsView .bookings-table td[data-col="channel"]  { width: 54px; }
+#bookingsView .bookings-table td[data-col="channel"]  { width: 70px; }
 #bookingsView .bookings-table th[data-col="record"],
 #bookingsView .bookings-table td[data-col="record"]   { width: 72px; }
 #bookingsView .bookings-table th[data-col="guest"],
@@ -5193,7 +5248,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #bookingsView .bookings-table th[data-col="arrival"],
 #bookingsView .bookings-table td[data-col="arrival"]  { width: 70px; }
 #bookingsView .bookings-table th[data-col="nights"],
-#bookingsView .bookings-table td[data-col="nights"]   { width: 34px; }
+#bookingsView .bookings-table td[data-col="nights"]   { width: 52px; }
 #bookingsView .bookings-table th[data-col="revenue"],
 #bookingsView .bookings-table td[data-col="revenue"],
 #bookingsView .bookings-table th[data-col="deposit"],
@@ -5205,9 +5260,9 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #bookingsView .bookings-table th[data-col="balance"],
 #bookingsView .bookings-table td[data-col="balance"]  { width: 96px; white-space: nowrap; }
 #bookingsView .bookings-table th[data-col="full"],
-#bookingsView .bookings-table td[data-col="full"]     { width: 38px; }
+#bookingsView .bookings-table td[data-col="full"]     { width: 46px; }
 #bookingsView .bookings-table th[data-col="refund"],
-#bookingsView .bookings-table td[data-col="refund"]   { width: 38px; }
+#bookingsView .bookings-table td[data-col="refund"]   { width: 54px; }
 #bookingsView .bookings-table th[data-col="actions"],
 #bookingsView .bookings-table td[data-col="actions"]  { width: 76px; }
 
@@ -5377,11 +5432,11 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
    2. CONTROL HEIGHTS — fold the 36/38px strays into the 34px tier
    --------------------------------------------------------------------- */
 #bookingsView .booking-toolbar .filter-grid select { height: 34px; border-radius: var(--r-sm); }
-#dashboardView .one-off-row input[type="text"],
-#dashboardView .one-off-row input[type="number"],
+/* ALL controls in these rows (by row, not by type — untyped text inputs and the
+   type="month" field must not fall through to a taller tier) sit at 34px. */
+#dashboardView .one-off-row input,
 #dashboardView .one-off-row select,
-#dashboardView .commitment-row input[type="text"],
-#dashboardView .commitment-row input[type="number"],
+#dashboardView .commitment-row input,
 #dashboardView .commitment-row select {
   height: 34px;
   border-radius: var(--r-sm);
@@ -5917,8 +5972,11 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 .batch-tab span { font-size: 11px; opacity: .85; margin-left: 4px; }
 .batch-table { font-size: 13px; }
 .batch-table td { vertical-align: top; padding: 7px 8px; }
-.batch-table input[type="date"], .batch-table input[type="number"], .batch-table select { width: 100%; min-width: 88px; padding: 4px 6px; font-size: 12.5px; }
+.batch-table input[type="date"], .batch-table input[type="number"], .batch-table select { width: 100%; min-width: 88px; padding: 6px 8px; font-size: 12.5px; min-height: 34px; }
 .batch-table input[type="number"] { min-width: 78px; }
+/* Selects need clearance for the native chevron — the tight shorthand padding
+   ran the category text under the arrow. */
+.batch-table select { padding-right: 26px; }
 .batch-row-off { opacity: .5; }
 .batch-treat { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px; }
 .batch-treat.tone-ok { background: var(--ok-soft); color: var(--ok); }
@@ -5965,3 +6023,30 @@ dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-ou
 
 /* Asset-schedule legend (IA/AA jargon translated) */
 .tax-schedule-legend { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+
+/* ============================================================
+   Mobile month stepper (phones only — sidebar picker hidden ≤760px)
+   ============================================================ */
+.mobile-month-bar { display: none; }
+@media (max-width: 760px) {
+  .mobile-month-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 6px 8px;
+    background: var(--soft);
+    border: 1px solid var(--line);
+    border-radius: var(--r-control);
+  }
+  .mobile-month-bar strong { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .mobile-month-bar .icon-button { min-width: 44px; min-height: 44px; font-size: 20px; }
+}
+
+/* ============================================================
+   Batch-tab interaction states + thumbnail keyboard affordance
+   ============================================================ */
+.batch-tab:not(.active):hover { background: var(--soft); color: var(--ink); border-color: var(--muted); }
+.batch-tab:active { transform: translateY(1px); }
+.receipt-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

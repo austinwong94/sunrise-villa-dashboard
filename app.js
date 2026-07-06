@@ -362,6 +362,9 @@ const els = {
   monthYearLabel: document.querySelector("#monthYearLabel"),
   prevMonth: document.querySelector("#prevMonth"),
   nextMonth: document.querySelector("#nextMonth"),
+  mobilePrevMonth: document.querySelector("#mobilePrevMonth"),
+  mobileNextMonth: document.querySelector("#mobileNextMonth"),
+  mobileMonthLabel: document.querySelector("#mobileMonthLabel"),
   pageTitle: document.querySelector("#pageTitle"),
   calendarGrid: document.querySelector("#calendarGrid"),
   detailMonth: document.querySelector("#detailMonth"),
@@ -5646,7 +5649,7 @@ function renderTaxExpenses() {
               <td><strong>${money(expense.amount)}</strong></td>
               <td class="actions">
                 <button class="small-action" type="button" data-edit-tax-expense="${expense.id}">Edit</button>
-                <button class="small-action danger-action" type="button" data-delete-tax-expense="${expense.id}">Delete</button>
+                <button class="small-action danger" type="button" data-delete-tax-expense="${expense.id}">Delete</button>
               </td>
             </tr>
           `,
@@ -5935,7 +5938,7 @@ function renderTaxAssets() {
             </div>
             <div class="actions">
               <button class="small-action" type="button" data-edit-tax-asset="${asset.id}">Edit</button>
-              <button class="small-action danger-action" type="button" data-delete-tax-asset="${asset.id}">Delete</button>
+              <button class="small-action danger" type="button" data-delete-tax-asset="${asset.id}">Delete</button>
             </div>
           </div>
           <table class="tax-asset-schedule">
@@ -5966,11 +5969,13 @@ function openReceiptLightbox(srcUrl, caption = "") {
     box.id = "receiptLightbox";
     box.className = "receipt-lightbox";
     box.addEventListener("click", () => { box.hidden = true; });
+    // Close on Escape (the flow promised "click to enlarge" but trapped keyboard users).
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !box.hidden) box.hidden = true; });
     document.body.appendChild(box);
   }
   box.innerHTML = `<img alt="Receipt full size" /><span class="lightbox-caption"></span>`;
   box.querySelector("img").src = safe;
-  box.querySelector(".lightbox-caption").textContent = caption ? `${caption} — tap anywhere to close` : "Tap anywhere to close";
+  box.querySelector(".lightbox-caption").textContent = caption ? `${caption} — tap anywhere or press Esc to close` : "Tap anywhere or press Esc to close";
   box.hidden = false;
 }
 
@@ -6099,7 +6104,7 @@ function renderScanResult(fields) {
   els.taxScanResult.hidden = false;
   const scanThumb = safeDataUrl(pendingScanData?.attachment?.dataUrl, ["data:image/"]);
   els.taxScanResult.innerHTML = `
-    ${scanThumb ? `<div class="scan-thumb-wrap"><img class="receipt-thumb" src="${escapeHtml(scanThumb)}" alt="Scanned receipt — click to enlarge" title="${escapeHtml(pendingScanData?.attachment?.name || "receipt")}" /><span class="table-muted">Click to check the extracted figures against the receipt.</span></div>` : ""}
+    ${scanThumb ? `<div class="scan-thumb-wrap"><img class="receipt-thumb" tabindex="0" role="button" src="${escapeHtml(scanThumb)}" alt="Scanned receipt — click to enlarge" title="${escapeHtml(pendingScanData?.attachment?.name || "receipt")}" /><span class="table-muted">Click to check the extracted figures against the receipt.</span></div>` : ""}
     <div class="scan-result-grid">
       <div><span>Supplier</span><strong>${escapeHtml(fields.vendor || "—")}</strong></div>
       <div><span>Date</span><strong>${escapeHtml(fields.date || "—")}</strong></div>
@@ -6184,9 +6189,15 @@ let batchItems = [];
 let batchActiveYa = null;
 
 function setBatchStatus(message, tone = "") {
-  if (!els.taxBatchStatus) return;
-  els.taxBatchStatus.textContent = message || "";
-  els.taxBatchStatus.className = `tax-scan-status${tone ? ` ${tone}` : ""}`;
+  const cls = `tax-scan-status${tone ? ` ${tone}` : ""}`;
+  if (els.taxBatchStatus) {
+    els.taxBatchStatus.textContent = message || "";
+    els.taxBatchStatus.className = cls;
+  }
+  // Mirror near the action buttons at the bottom of the table — the top status
+  // is off-screen on a phone when he taps Import.
+  const near = document.querySelector("#batchActionMsg");
+  if (near) { near.textContent = message || ""; near.className = cls; }
 }
 
 // Downscale a captured image so storing many receipts doesn't bloat the cloud blob.
@@ -6361,7 +6372,7 @@ function renderBatch() {
     return `
       <tr class="${b.selected ? "" : "batch-row-off"}">
         <td><input type="checkbox" data-batch-sel="${b.id}" ${b.selected ? "checked" : ""} /></td>
-        <td>${thumb ? `<img class="receipt-thumb" src="${escapeHtml(thumb)}" alt="Receipt ${escapeHtml(b.fileName)} — click to enlarge" title="${escapeHtml(b.fileName)}" />` : "—"}</td>
+        <td>${thumb ? `<img class="receipt-thumb" tabindex="0" role="button" src="${escapeHtml(thumb)}" alt="Receipt ${escapeHtml(b.fileName)} — click to enlarge" title="${escapeHtml(b.fileName)}" />` : "—"}</td>
         <td><input type="date" class="batch-date" data-batch-date="${b.id}" value="${escapeHtml(b.fields.date || "")}" /></td>
         <td>${escapeHtml(b.fields.vendor || "—")}<br><span class="table-muted">${escapeHtml((b.fields.description || "").slice(0, 40))}</span></td>
         <td><input type="number" step="0.01" class="batch-amt" data-batch-amt="${b.id}" value="${Number(b.fields.amount || 0)}" /></td>
@@ -6390,6 +6401,7 @@ function renderBatch() {
       <button type="button" class="primary-button" id="batchImportBtn">Import ${selCount} selected</button>
       <button type="button" class="ghost-button" id="batchSelectAll">Select all (non-duplicate)</button>
       <button type="button" class="ghost-button" id="batchClear">Clear</button>
+      <span class="tax-scan-status" id="batchActionMsg" role="status" aria-live="polite"></span>
     </div>
     <p class="scan-disclaimer">Each row is matched to its year by date and classified against that year's rules. Capital items import to the asset register; the rest to expenses. Duplicates are unticked by default. Always check amounts and dates before importing — then run the AI review.</p>
   `;
@@ -6403,6 +6415,10 @@ function renderBatch() {
   document.querySelector("#batchImportBtn")?.addEventListener("click", importBatch);
   document.querySelector("#batchSelectAll")?.addEventListener("click", () => { batchItems.forEach((b) => { if (!b.error && !(b.dup?.inBatch || b.dup?.existing)) b.selected = true; }); renderBatch(); });
   document.querySelector("#batchClear")?.addEventListener("click", () => { batchItems = []; batchActiveYa = null; els.taxBatchResult.hidden = true; if (els.taxBatchInput) els.taxBatchInput.value = ""; if (els.taxBatchFileName) els.taxBatchFileName.textContent = "No files chosen"; if (els.taxBatchScanBtn) els.taxBatchScanBtn.disabled = true; setBatchStatus(""); });
+  // The freshly-built near-button status starts empty — carry over the current
+  // message (e.g. the "Imported N…" set just before this re-render).
+  const near = document.querySelector("#batchActionMsg");
+  if (near && els.taxBatchStatus) { near.textContent = els.taxBatchStatus.textContent; near.className = els.taxBatchStatus.className; }
   restoreTableUiState(els.taxBatchResult, uiState);
 }
 
@@ -6451,12 +6467,21 @@ async function importBatch() {
     saveTaxPlan();
     // drop imported items from the batch
     batchItems = batchItems.filter((b) => !chosen.includes(b));
+    // Jump the expense-list year filter to the imported records' year so they're
+    // visible when he checks (same trap saveTaxExpense already guards).
+    const importedYear = yearOf(chosen[0]?.fields?.date);
+    if (els.taxExpenseYearFilter && importedYear) els.taxExpenseYearFilter.value = importedYear;
     setBatchStatus(`Imported ${addedExp} expense(s) and ${addedAsset} asset(s) to ${property}. Run the AI review when ready.`, "ok");
     renderBatch();
     renderTaxExpenses();
     renderTaxAssets();
+  } catch (err) {
+    console.error("importBatch", err);
+    setBatchStatus(`Import failed: ${err.message || err}. Nothing was lost — try again.`, "bad");
   } finally {
     batchImportRunning = false;
+    const importBtn = document.querySelector("#batchImportBtn");
+    if (importBtn) { importBtn.disabled = false; importBtn.textContent = "Import selected"; }
   }
 }
 
@@ -6643,7 +6668,7 @@ function renderStoredEarnings() {
                 <td><strong>${money(r.gross)}</strong></td>
                 <td>${escapeHtml(r.channel || "—")}</td>
                 <td class="table-muted">${escapeHtml(r.source || "—")}</td>
-                <td><button class="small-action danger-action" type="button" data-del-earning="${escapeHtml(r.id)}">Delete</button></td>
+                <td><button class="small-action danger" type="button" data-del-earning="${escapeHtml(r.id)}">Delete</button></td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -6696,10 +6721,14 @@ function renderEarningsDocs() {
     .map((d) => {
       const href = safeDataUrl(d.dataUrl, ["data:image/", "data:application/pdf"]);
       const link = href ? `<a class="small-action" href="${escapeHtml(href)}" download="${escapeHtml(d.name || "doc")}">View</a>` : "";
-      return `<div class="earn-doc-row"><strong>YA ${escapeHtml(String(d.ya))}</strong> · ${escapeHtml(d.label || d.name)} ${link} <button class="small-action danger-action" type="button" data-del-earndoc="${d.id}">Delete</button></div>`;
+      return `<div class="earn-doc-row"><strong>YA ${escapeHtml(String(d.ya))}</strong> · ${escapeHtml(d.label || d.name)} ${link} <button class="small-action danger" type="button" data-del-earndoc="${d.id}">Delete</button></div>`;
     })
     .join("");
   els.taxEarnDocList.querySelectorAll("[data-del-earndoc]").forEach((b) => b.addEventListener("click", () => {
+    const doc = (taxPlan.earningsDocs || []).find((x) => x.id === b.dataset.delEarndoc);
+    if (!doc) return;
+    if (!window.confirm(`Delete supporting document "${doc.label || doc.name}" (YA ${doc.ya})?`)) return;
+    createRecoverySnapshot("Before supporting document deleted");
     taxPlan = { ...taxPlan, earningsDocs: (taxPlan.earningsDocs || []).filter((x) => x.id !== b.dataset.delEarndoc) };
     saveTaxPlan();
     renderEarningsDocs();
@@ -6970,6 +6999,7 @@ function exportTaxYaExcel() {
 // deterministic findings always render; the AI only ADDS findings/questions.
 // =============================================================================
 let lastTaxReview = null;
+let lastTaxReviewAi = null; // cached AI payload so re-renders (e.g. ticking the classification box) keep the findings
 
 function setTaxReviewStatus(message, tone = "") {
   if (!els.taxReviewStatus) return;
@@ -6992,6 +7022,7 @@ async function runTaxReview() {
   }
   const review = buildTaxReview(ya); // deterministic — instant, offline
   lastTaxReview = review;
+  lastTaxReviewAi = null; // fresh run — drop any cached AI findings
   renderTaxReview(review, { aiState: "pending" });
 
   // AI judgement layer (optional — needs sign-in + funded API).
@@ -7023,6 +7054,7 @@ async function runTaxReview() {
     const { data, error } = await supabaseClient.functions.invoke("tax-review", { body: payload });
     if (error) throw new Error(await edgeErrorMessage(error, data));
     if (!data?.ok || !data.data) throw new Error(data?.detail || data?.error || "Could not complete the AI review.");
+    lastTaxReviewAi = data.data;
     renderTaxReview(review, { aiState: "done", ai: data.data });
     setTaxReviewStatus("AI review complete.", "ok");
   } catch (err) {
@@ -7114,6 +7146,7 @@ function renderTaxReview(review, opts = {}) {
 }
 
 function renderMonthButtons() {
+  if (els.mobileMonthLabel) els.mobileMonthLabel.textContent = monthLabel(selectedMonth);
   if (!els.monthButtonGrid) return;
   const [year, selectedMonthNumber] = selectedMonth.split("-").map(Number);
   if (els.monthYearLabel) els.monthYearLabel.textContent = String(year);
@@ -7124,9 +7157,9 @@ function renderMonthButtons() {
     const isActive = monthNumber === selectedMonthNumber;
     const hasBookings = monthTotals.bookings > 0;
     return `
-      <button class="month-button ${isActive ? "active" : ""} ${hasBookings ? "has-bookings" : ""}" type="button" data-month-value="${monthValue}" aria-pressed="${isActive}">
-        <span>${shortMonthName(index)}</span>
-        ${hasBookings ? `<small>${monthTotals.bookings}</small>` : ""}
+      <button class="month-button ${isActive ? "active" : ""} ${hasBookings ? "has-bookings" : ""}" type="button" data-month-value="${monthValue}" aria-pressed="${isActive}" title="${shortMonthName(index)} ${year}${hasBookings ? ` · ${monthTotals.bookings} booking${monthTotals.bookings === 1 ? "" : "s"}` : ""}">
+        <span class="month-name">${shortMonthName(index)}</span>
+        <small class="month-count">${hasBookings ? monthTotals.bookings : "&nbsp;"}</small>
       </button>
     `;
   }).join("");
@@ -7459,6 +7492,17 @@ els.nextMonth.addEventListener("click", () => {
   setSelectedMonth(`${year + 1}-${String(month).padStart(2, "0")}`);
   renderAll();
 });
+
+// Mobile month stepper (the sidebar picker is hidden ≤760px). Steps ONE month,
+// wrapping the year — so a phone user isn't stuck on the current month.
+function stepSelectedMonth(delta) {
+  const [year, month] = selectedMonth.split("-").map(Number);
+  const d = new Date(year, month - 1 + delta, 1);
+  setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  renderAll();
+}
+els.mobilePrevMonth?.addEventListener("click", () => stepSelectedMonth(-1));
+els.mobileNextMonth?.addEventListener("click", () => stepSelectedMonth(1));
 
 document.querySelector("#openAddBooking").addEventListener("click", () => openBookingDialog());
 document.querySelector("#addFromTable").addEventListener("click", () => openBookingDialog());
@@ -8264,10 +8308,15 @@ els.exportTaxExpensesPdf?.addEventListener("click", exportTaxExpensesPdf);
 [els.taxExpenseCategory, els.taxExpenseDeductible].forEach((c) => c?.addEventListener("change", renderTaxExpenseHint));
 [els.taxExpenseAmount, els.taxExpenseBizPct].forEach((c) => c?.addEventListener("input", renderTaxExpenseHint));
 
-// Receipt thumbnails: one delegated listener opens the lightbox.
+// Receipt thumbnails: one delegated listener opens the lightbox (click + keyboard).
 document.addEventListener("click", (event) => {
   const thumb = event.target.closest?.(".receipt-thumb");
   if (thumb) openReceiptLightbox(thumb.src, thumb.title || "");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const thumb = event.target.closest?.(".receipt-thumb");
+  if (thumb) { event.preventDefault(); openReceiptLightbox(thumb.src, thumb.title || ""); }
 });
 
 // ---------------- AI receipt scanner ----------------
@@ -8367,7 +8416,11 @@ els.taxClassifyAffirm?.addEventListener("change", () => {
   if (lastTaxReview && els.taxReviewResult && !els.taxReviewResult.hidden) {
     const fresh = buildTaxReview(reviewYa());
     lastTaxReview = fresh;
-    renderTaxReview(fresh, { aiState: supabaseClient ? "done" : "offline" });
+    // Re-render with the CACHED AI findings so ticking this box doesn't wipe the
+    // paid AI review results (it only re-runs the deterministic verdict gate).
+    renderTaxReview(fresh, lastTaxReviewAi
+      ? { aiState: "done", ai: lastTaxReviewAi }
+      : { aiState: supabaseClient ? "done" : "offline" });
   }
 });
 

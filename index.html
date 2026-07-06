@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260626-27" />
+    <link rel="stylesheet" href="./styles.css?v=20260626-28" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -324,6 +324,13 @@
           </div>
         </header>
 
+        <!-- Compact month stepper for phones — the sidebar month picker is hidden ≤760px -->
+        <div class="mobile-month-bar" id="mobileMonthBar" role="group" aria-label="Working month">
+          <button class="icon-button" id="mobilePrevMonth" type="button" title="Previous month" aria-label="Previous month">‹</button>
+          <strong id="mobileMonthLabel">This month</strong>
+          <button class="icon-button" id="mobileNextMonth" type="button" title="Next month" aria-label="Next month">›</button>
+        </div>
+
         <section class="data-health-panel" aria-label="Website data health">
           <span class="health-pill" id="dataHealthStatus" role="status" aria-live="polite">Cloud: checking</span>
           <span class="health-pill secondary" id="dataHealthLastSync">Last synced: -</span>
@@ -572,10 +579,12 @@
                 <strong id="occupancyRate">0%</strong>
                 <small><b id="bookedNights">0</b> booked nights out of <b id="availableNights">0</b> available nights</small>
               </article>
-              <article class="mini-kpi"><span>Weekday Nights</span><strong id="weekdayNights">0</strong><small>Monday to Thursday</small></article>
-              <article class="mini-kpi"><span>Weekend Nights</span><strong id="weekendNights">0</strong><small>Friday to Sunday</small></article>
-              <article class="mini-kpi"><span>Avg Weekday Nightly Rate</span><strong id="avgWeekdayRate">RM 0</strong><small>Accommodation fees only</small></article>
-              <article class="mini-kpi"><span>Avg Weekend Nightly Rate</span><strong id="avgWeekendRate">RM 0</strong><small>Friday, Saturday, Sunday</small></article>
+              <div class="mini-kpis">
+                <article class="mini-kpi"><span>Weekday Nights</span><strong id="weekdayNights">0</strong><small>Monday to Thursday</small></article>
+                <article class="mini-kpi"><span>Weekend Nights</span><strong id="weekendNights">0</strong><small>Friday to Sunday</small></article>
+                <article class="mini-kpi"><span>Avg Weekday Nightly Rate</span><strong id="avgWeekdayRate">RM 0</strong><small>Accommodation fees only</small></article>
+                <article class="mini-kpi"><span>Avg Weekend Nightly Rate</span><strong id="avgWeekendRate">RM 0</strong><small>Friday, Saturday, Sunday</small></article>
+              </div>
             </div>
           </section>
 
@@ -1845,6 +1854,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260626-27"></script>
+    <script src="./app.js?v=20260626-28"></script>
   </body>
 </html>
