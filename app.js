@@ -1847,8 +1847,16 @@ function defaultDepositForChannel(channel) {
   return channel === "Airbnb" ? 0 : 500;
 }
 
+// A lead that hasn't been confirmed yet (status Inquiry/Quoted). These were a
+// DECOY before — the status was saved but read nowhere, so an inquiry counted
+// as revenue and blocked the calendar exactly like a confirmed stay.
+function isTentativeBooking(booking) {
+  return booking?.status === "inquiry" || booking?.status === "quoted";
+}
+
 function isExcludedBooking(booking) {
-  return Boolean(booking?.excludeFromCalculations);
+  // Tentative leads never count toward revenue/KPIs/payment maths.
+  return Boolean(booking?.excludeFromCalculations) || isTentativeBooking(booking);
 }
 
 // Villa scope (Sunrise ⇄ Windmill): every display/financial calc flows through this,
@@ -2692,14 +2700,19 @@ function renderCalendar() {
     booked.slice(0, 3).forEach((booking) => {
       const chip = document.createElement("div");
       const label = shouldShowStayLabel(booking, dayIso);
-      chip.className = `booking-chip stay-segment clickable ${isExcludedBooking(booking) ? "influencer" : booking.channel.toLowerCase()} ${staySegmentClass(booking, dayIso)} ${label ? "" : "label-hidden"}`;
+      // Tentative leads (inquiry/quoted) draw DASHED so a lead is visible on the
+      // calendar without reading as a confirmed, date-blocking stay.
+      const tentative = isTentativeBooking(booking);
+      const kindClass = tentative ? "tentative" : isExcludedBooking(booking) ? "influencer" : booking.channel.toLowerCase();
+      const kindLabel = tentative ? (booking.status === "quoted" ? "Quoted (not confirmed)" : "Inquiry (not confirmed)") : isExcludedBooking(booking) ? "Influencer" : booking.channel;
+      chip.className = `booking-chip stay-segment clickable ${kindClass} ${staySegmentClass(booking, dayIso)} ${label ? "" : "label-hidden"}`;
       chip.dataset.bookingId = booking.id;
       chip.tabIndex = 0; // keyboard-reachable (Enter/Space handled on the grid)
       chip.setAttribute("role", "button");
-      chip.setAttribute("aria-label", `${booking.guest}, ${isExcludedBooking(booking) ? "Influencer" : booking.channel}, ${booking.nights} night${booking.nights === 1 ? "" : "s"} — edit booking`);
+      chip.setAttribute("aria-label", `${booking.guest}, ${kindLabel}, ${booking.nights} night${booking.nights === 1 ? "" : "s"} — edit booking`);
       // Channel is already carried by the chip's color + dot, so the in-cell text shows only
       // the guest name (full width = readable). Channel/nights move to the hover title.
-      chip.title = `${booking.guest} · ${isExcludedBooking(booking) ? "Influencer" : booking.channel} · ${booking.nights} night${booking.nights === 1 ? "" : "s"} — click to edit`;
+      chip.title = `${booking.guest} · ${kindLabel} · ${booking.nights} night${booking.nights === 1 ? "" : "s"} — click to edit`;
       chip.innerHTML = label
         ? `<strong>${escapeHtml(booking.guest)}</strong>`
         : `<span aria-label="${escapeHtml(booking.guest)} ${escapeHtml(booking.channel)} booking">&nbsp;</span>`;
@@ -4630,7 +4643,7 @@ function renderBookingsTable() {
         <tr>
           ${bookingCell("channel", channelBadgeFor(booking))}
           ${bookingCell("record", isExcludedBooking(booking) ? `<span class="channel-badge influencer">Record only</span>` : `<span class="channel-badge direct">Financial</span>`)}
-          ${bookingCell("guest", `${escapeHtml(booking.guest)} ${returningBadgeHtml(booking, bookings)}${blocklistBadgeHtml(booking)}`, "booking-guest-cell")}
+          ${bookingCell("guest", `${escapeHtml(booking.guest)} ${isTentativeBooking(booking) ? `<span class="tentative-badge" title="Not confirmed — excluded from revenue and payment reminders">${booking.status === "quoted" ? "QUOTED" : "INQUIRY"}</span> ` : ""}${returningBadgeHtml(booking, bookings)}${blocklistBadgeHtml(booking)}`, "booking-guest-cell")}
           ${bookingCell("contact", formatPhoneForWhatsapp(booking.contact) ? escapeHtml(booking.contact) : `<span class="contact-missing" title="No WhatsApp number saved">⚠ no phone</span>`, "contact-cell")}
           ${bookingCell("prefix", `<strong>${prefixFor(booking.guest)}</strong>`)}
           ${bookingCell("arrival", shortDate(booking.arrival), "date-cell")}
@@ -7184,6 +7197,7 @@ function sendTodayItems() {
   const horizon7 = addDays(today, 7);
   const items = [];
   scopedBookings().forEach((b) => {
+    if (isTentativeBooking(b)) return; // no check-in info / deposit chasing for unconfirmed leads
     const arr = dateObj(b.arrival);
     const dep = dateObj(departureFor(b));
     const hasPhone = !!formatPhoneForWhatsapp(b.contact);
@@ -7215,6 +7229,7 @@ function upcomingVacancies(daysAhead = 45) {
   today.setHours(0, 0, 0, 0);
   const horizon = addDays(today, daysAhead);
   const intervals = scopedBookings()
+    .filter((b) => !isTentativeBooking(b)) // a lead doesn't occupy the night — it's still open
     .map((b) => ({ start: dateObj(b.arrival), end: dateObj(departureFor(b)) }))
     .filter((iv) => iv.end > today)
     .sort((a, b) => a.start - b.start);
@@ -8034,6 +8049,26 @@ els.openQuoteMessage?.addEventListener("click", () => {
 });
 
 els.ackInquiry?.addEventListener("click", openInquiryAck);
+
+// Quote → booking handoff: the lead he just quoted becomes a QUOTED booking in
+// one tap (dashed on the calendar, excluded from revenue until confirmed) —
+// previously every field had to be re-typed and unrecorded leads evaporated.
+document.querySelector("#quoteToBooking")?.addEventListener("click", () => {
+  const q = quoteCalculation();
+  openBookingDialog(null);
+  if (els.guestTitleInput && els.quoteGuestTitle?.value) els.guestTitleInput.value = els.quoteGuestTitle.value === "Ms" ? "Ms" : "Mr";
+  if (els.guestInput) els.guestInput.value = String(els.quoteGuestName?.value || "").trim();
+  if (els.contactInput && els.quotePhone?.value) els.contactInput.value = els.quotePhone.value.trim();
+  if (els.arrivalInput && q.checkIn) els.arrivalInput.value = q.checkIn;
+  const nights = q.checkIn && q.checkOut ? Math.max(1, Math.round((dateObj(q.checkOut) - dateObj(q.checkIn)) / 86400000)) : 0;
+  if (nights) setNightsChoice(nights);
+  if (els.revenueInput) els.revenueInput.value = q.actualCharge || 0;
+  if (els.paidInput) els.paidInput.value = 0;
+  const depositInput = els.depositAmountInput || document.querySelector("#depositAmountInput");
+  if (depositInput && q.damageDeposit) depositInput.value = q.damageDeposit;
+  if (els.statusInput) els.statusInput.value = "quoted";
+  if (typeof updateCheckoutEcho === "function") updateCheckoutEcho();
+});
 
 // AI guest Q&A drafter wiring
 els.aiDraftBtn?.addEventListener("click", draftGuestReply);
