@@ -1068,16 +1068,19 @@ details summary::marker { content: ""; }
   grid-template-columns: repeat(3, 1fr);
   gap: 5px;
 }
-/* Bulletproof layout: EVERY button is just a centred month name — identical
-   for all 12 months, so alignment can never break. The booking count (when a
-   month has stays) is an ABSOLUTELY-positioned corner badge that is out of flow
-   and therefore cannot shift the name. */
+/* Bulletproof layout: name stacked above the count, BOTH fixed-height block
+   elements. The count slot is ALWAYS present (empty when the month has no
+   stays), so every button is dimensionally identical at every width — names
+   can never misalign, and stacking means the count can never overlap the name
+   (the corner-badge version collided with the name on narrow sidebars). */
 .month-button {
-  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
+  gap: 1px;
+  min-height: 44px;
+  padding: 4px 2px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: #fff;
@@ -1090,18 +1093,20 @@ details summary::marker { content: ""; }
 }
 .month-button:hover { background: var(--soft); }
 .month-button .month-name {
+  display: block;
+  height: 15px;
+  line-height: 15px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--ink);
-  line-height: 1;
 }
 .month-button .month-count {
-  position: absolute;
-  top: 3px;
-  right: 4px;
-  font-size: 8.5px;
+  display: block;
+  height: 11px;
+  line-height: 11px;
+  font-size: 9px;
   font-weight: 700;
-  line-height: 1;
   color: var(--accent-ink);
-  opacity: .8;
 }
 /* Every month name is full-ink — a navigation control must never read as
    "disabled". The booking-count badge (present only when a month has stays) is

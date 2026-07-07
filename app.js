@@ -7172,7 +7172,7 @@ function renderMonthButtons() {
     return `
       <button class="month-button ${isActive ? "active" : ""} ${hasBookings ? "has-bookings" : ""}" type="button" data-month-value="${monthValue}" aria-pressed="${isActive}" title="${shortMonthName(index)} ${year}${hasBookings ? ` · ${monthTotals.bookings} booking${monthTotals.bookings === 1 ? "" : "s"}` : ""}">
         <span class="month-name">${shortMonthName(index)}</span>
-        ${hasBookings ? `<small class="month-count">${monthTotals.bookings}</small>` : ""}
+        <span class="month-count">${hasBookings ? monthTotals.bookings : ""}</span>
       </button>
     `;
   }).join("");
