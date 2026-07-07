@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Ask browsers to revalidate the page so a deploy is seen without a manual hard-refresh -->
+    <meta http-equiv="Cache-Control" content="no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
     <!-- Content Security Policy: only same-origin scripts may run (libraries are self-hosted),
          network egress is restricted to Supabase, and injected/inline scripts are blocked.
          This is the primary defense-in-depth against XSS token theft and supply-chain attacks.
@@ -21,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260707-31" />
+    <link rel="stylesheet" href="./styles.css?v=20260707-32" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -1855,6 +1858,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260707-31"></script>
+    <script src="./app.js?v=20260707-32"></script>
   </body>
 </html>

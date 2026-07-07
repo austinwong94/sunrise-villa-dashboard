@@ -1068,45 +1068,40 @@ details summary::marker { content: ""; }
   grid-template-columns: repeat(3, 1fr);
   gap: 5px;
 }
+/* Bulletproof layout: EVERY button is just a centred month name — identical
+   for all 12 months, so alignment can never break. The booking count (when a
+   month has stays) is an ABSOLUTELY-positioned corner badge that is out of flow
+   and therefore cannot shift the name. */
 .month-button {
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-height: 46px;
+  min-height: 42px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: #fff;
   color: var(--ink);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 .month-button:hover { background: var(--soft); }
-/* BOTH lines are BLOCK elements with a FIXED height so every button is
-   structurally identical — the name sits at the same position and the count
-   slot is always exactly 12px tall whether it holds a number or nothing. The
-   previous fix used min-height on an inline <small>, which browsers IGNORE, so
-   months with no count let their name drop to the vertical centre and fall out
-   of line with months that had a count. */
 .month-button .month-name {
-  display: block;
-  height: 15px;
-  line-height: 15px;
-  font-size: 12px;
-  font-weight: 600;
   color: var(--ink);
+  line-height: 1;
 }
 .month-button .month-count {
-  display: block;
-  height: 12px;
-  line-height: 12px;
-  font-size: 9px;
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-size: 8.5px;
   font-weight: 700;
+  line-height: 1;
   color: var(--accent-ink);
+  opacity: .8;
 }
 /* Every month name is full-ink — a navigation control must never read as
    "disabled". The booking-count badge (present only when a month has stays) is
