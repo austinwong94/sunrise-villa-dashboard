@@ -2865,6 +2865,30 @@ function renderVillaSwitch() {
 // --- Booking candidates queue (improvement #6): auto-parsed Airbnb bookings awaiting review ---
 let bookingCandidates = [];
 
+// RUNG 4: merge the SERVER-refreshed iCal blocks (hourly pg_cron keeps
+// public.ical_blocks fresh even while the app is closed). Read-own via RLS;
+// newest server snapshot replaces the locally-imported set.
+async function mergeServerIcalBlocks() {
+  if (!supabaseClient || !cloudUser) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from("ical_blocks")
+      .select("villa, uid, start_date, end_date, reservation_url, synced_at")
+      .order("synced_at", { ascending: false })
+      .limit(600);
+    if (error || !Array.isArray(data) || !data.length) return;
+    const imported = data.map((r) => ({ villa: r.villa === "Windmill" ? "Windmill" : "Sunrise", uid: r.uid, start: r.start_date, end: r.end_date, reservationUrl: r.reservation_url || "" }));
+    appSettings = {
+      ...appSettings,
+      ical: { ...(appSettings.ical || {}), imported, lastSyncedAt: data[0].synced_at, lastStatus: `✓ Synced ${imported.length} dates (server, hourly)`, lastError: "" },
+    };
+    saveAppSettings();
+    renderCalendar();
+  } catch (e) {
+    console.warn("ical_blocks merge skipped", e);
+  }
+}
+
 async function loadBookingCandidates() {
   if (!supabaseClient || !cloudUser) return;
   try {
@@ -3419,13 +3443,14 @@ async function initCloudStorage() {
     await loadCloudSnapshot();
     maybeAutoSyncIcal();
     loadBookingCandidates();
+    mergeServerIcalBlocks();
   }
 
   client.auth.onAuthStateChange((_event, session) => {
     cloudUser = session?.user || null;
     if (!cloudUser) cloudRecordId = "";
     syncCloudAuthUi();
-    if (cloudUser) loadCloudSnapshot().then(() => { maybeAutoSyncIcal(); loadBookingCandidates(); });
+    if (cloudUser) loadCloudSnapshot().then(() => { mergeServerIcalBlocks(); maybeAutoSyncIcal(); loadBookingCandidates(); });
   });
 }
 
@@ -8615,3 +8640,12 @@ initSidebar();
 initLoginUi();
 renderAll();
 initCloudStorage();
+
+// Coming back to the tab re-pulls what the servers refreshed while it was
+// hidden (hourly iCal blocks, new booking candidates) — no manual sync tap.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && supabaseClient && cloudUser) {
+    mergeServerIcalBlocks();
+    loadBookingCandidates();
+  }
+});
