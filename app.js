@@ -5102,12 +5102,20 @@ function syncDocumentCheckout() {
 
 function renderDocumentPreview(doc = formDocument()) {
   const normalized = normalizeDocument(doc);
+  if (els.documentCodePreview) els.documentCodePreview.textContent = normalized.code;
+  if (els.documentPreview) els.documentPreview.innerHTML = buildDocumentMarkup(normalized);
+}
+
+// Builds the inner HTML for ONE document. Used by both the on-screen preview
+// and the standalone print window, so the printed PDF is exactly this single
+// document — never the surrounding app, the builder form, or any other guest's
+// records that live in the archive.
+function buildDocumentMarkup(normalized) {
   const issuer = issuers[normalized.issuer] || issuers["Sunrise Villa Ventures"];
   const isReceipt = normalized.type === "Official Receipt";
   const totalPayments = paymentTotalFor(normalized);
   const balance = Math.max(0, normalized.totalAmount - totalPayments);
-  if (els.documentCodePreview) els.documentCodePreview.textContent = normalized.code;
-  els.documentPreview.innerHTML = `
+  return `
     <div class="doc-paper-head">
       <div>
         <h2>${escapeHtml(normalized.issuer)}</h2>
@@ -5286,11 +5294,92 @@ function deleteSavedDocument(id) {
   renderDocumentArchive();
 }
 
+// Self-contained stylesheet for the printable document window. It is embedded
+// in the new window (which contains ONLY the one document), so it never depends
+// on the app's stylesheet and can't be polluted by app chrome.
+const DOC_PRINT_CSS = `
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #2b2b29; -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .doc-sheet { width: 100%; max-width: 190mm; margin: 0 auto; padding: 16mm 15mm; font-size: 12px; line-height: 1.5; }
+  @media screen { body { background: #ece9e6; padding: 22px 14px; } .doc-sheet { background: #fff; box-shadow: 0 8px 34px rgba(0,0,0,.14); border-radius: 6px; } }
+  @page { size: A4; margin: 0; }
+  @media print { .doc-sheet { max-width: none; margin: 0; padding: 15mm; box-shadow: none; border-radius: 0; } }
+
+  .doc-paper-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; padding-bottom: 16px; border-bottom: 2px solid #a2402c; }
+  .doc-paper-head > div:first-child { max-width: 62%; }
+  .doc-paper-head h2 { margin: 0 0 6px; font-size: 20px; color: #1f1f1d; letter-spacing: .2px; }
+  .doc-paper-head p { margin: 2px 0; font-size: 11px; color: #6a6a66; line-height: 1.45; }
+  .doc-title-box { text-align: right; min-width: 150px; }
+  .doc-title-box span { display: block; text-transform: uppercase; letter-spacing: 1.6px; font-size: 12px; font-weight: 700; color: #a2402c; }
+  .doc-title-box strong { display: block; font-size: 16px; margin: 5px 0 2px; color: #1f1f1d; }
+  .doc-title-box small { display: block; font-size: 11px; color: #6a6a66; }
+
+  .doc-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 22px 0; }
+  .doc-info-grid h4 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9a9a95; font-weight: 700; }
+  .doc-info-grid p { margin: 2px 0; font-size: 12px; }
+  .doc-info-grid strong { font-size: 13px; color: #1f1f1d; }
+  .doc-address { white-space: pre-wrap; color: #6a6a66; }
+
+  .doc-item-table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; }
+  .doc-item-table th, .doc-item-table td { padding: 10px 12px; text-align: left; font-size: 12px; }
+  .doc-item-table thead th { background: #faf2f0; color: #7a3324; text-transform: uppercase; letter-spacing: .6px; font-size: 10px; border-bottom: 1px solid #e7d3cd; }
+  .doc-item-table thead th:last-child, .doc-item-table tbody td:last-child, .doc-item-table tfoot th:last-child { text-align: right; }
+  .doc-item-table tbody td { border-bottom: 1px solid #efefec; }
+  .doc-item-table tfoot th { padding-top: 12px; font-size: 13px; border-top: 2px solid #d9d9d5; color: #1f1f1d; }
+
+  .doc-payment-section { margin: 22px 0; page-break-inside: avoid; }
+  .doc-payment-section h4 { margin: 0 0 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9a9a95; font-weight: 700; }
+  .compact-doc-table th, .compact-doc-table td { padding: 7px 10px; font-size: 11px; }
+
+  .doc-remarks { margin: 20px 0; page-break-inside: avoid; }
+  .doc-remarks h4 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9a9a95; font-weight: 700; }
+  .doc-remarks p { margin: 0; font-size: 12px; white-space: pre-wrap; }
+
+  .doc-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; margin-top: 46px; page-break-inside: avoid; }
+  .doc-signatures > div { text-align: center; }
+  .doc-signatures span { display: block; height: 42px; border-bottom: 1px solid #b7b7b2; margin-bottom: 6px; }
+  .doc-signatures strong { font-size: 11px; color: #6a6a66; font-weight: 600; }
+`;
+
+// Wraps ONE document in a complete standalone HTML page for printing / Save-as-PDF.
+function standaloneDocumentHtml(normalized) {
+  const title = `${normalized.type} ${normalized.code} — ${normalized.guestName || "Guest"}`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>${DOC_PRINT_CSS}</style>
+</head>
+<body>
+<div class="doc-sheet">${buildDocumentMarkup(normalized)}</div>
+</body>
+</html>`;
+}
+
+// Print / Save-as-PDF for a SINGLE document. Opens a fresh window containing
+// only that one document (same proven pattern as exportTaxExpensesPdf), so the
+// PDF is one clean page and can never leak the builder form or other guests'
+// records. Falls back to the in-page print path only if pop-ups are blocked.
 function printDocumentPreview() {
   if (!els.documentForm.reportValidity()) return;
-  renderDocumentPreview(formDocument());
-  document.body.classList.add("printing-document");
-  window.print();
+  const normalized = normalizeDocument(formDocument());
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    renderDocumentPreview(normalized);
+    document.body.classList.add("printing-document");
+    window.print();
+    return;
+  }
+  printWindow.document.write(standaloneDocumentHtml(normalized));
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
 }
 
 function renderDocumentArchive() {

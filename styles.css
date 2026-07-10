@@ -4840,6 +4840,16 @@ dialog#bookingDialog::backdrop {
     display: block !important;
   }
 
+  /* SAFETY NET (applies to BOTH the in-page fallback print AND a raw browser
+     ⌘+P on the documents page): never print the builder form, the preview
+     toolbar, or the archive of OTHER guests — only the single document paper.
+     The primary Print/PDF button prints in a clean isolated window instead. */
+  #documentsView .document-builder,
+  #documentsView .document-archive,
+  #documentsView .document-preview-shell > :not(.document-preview-paper) {
+    display: none !important;
+  }
+
   /* ---- OWNER REPORT PRINT ---- */
   body.printing-owner-report .app-shell,
   body.printing-owner-report .main,
