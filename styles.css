@@ -3364,17 +3364,25 @@ details summary::marker { content: ""; }
 #documentsView .payment-row label input {
   margin-top: 7px;
 }
-/* the Remove button (.small-action.danger) sits in the last cell */
-#documentsView .payment-row > .small-action {
+/* the actions (Received in full / Remove) sit stacked in the last cell */
+#documentsView .payment-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
   margin-bottom: 1px;
+}
+#documentsView .payment-row-actions .small-action {
+  white-space: nowrap;
 }
 @media (max-width: 680px) {
   #documentsView .payment-row {
     grid-template-columns: 1fr 1fr;
   }
-  #documentsView .payment-row > .small-action {
+  #documentsView .payment-row-actions {
     grid-column: 1 / -1;
-    justify-self: start;
+    flex-direction: row;
+    justify-content: flex-start;
   }
 }
 

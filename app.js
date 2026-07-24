@@ -4988,6 +4988,7 @@ function prefillDocFromBooking(id) {
   if (els.docNights) els.docNights.value = b.nights || 1;
   if (els.docAccommodationFee) els.docAccommodationFee.value = b.revenue || 0;
   if (els.docDepositAmount) els.docDepositAmount.value = b.depositAmount || 0;
+  prefillReceivedIfEmpty(); // carry the received amount into a receipt, not just the line items
   renderDocumentPreview();
 }
 
@@ -5070,19 +5071,38 @@ function renderPaymentRows(payments = [normalizePayment({})]) {
             <input data-payment-date type="date" value="${escapeHtml(payment.date)}" />
           </label>
           <label>Amount Received
-            <input data-payment-amount type="number" min="0" step="0.01" value="${Number(payment.amount || 0)}" />
+            <input data-payment-amount type="number" min="0" step="0.01" inputmode="decimal" value="${Number(payment.amount || 0)}" />
           </label>
-          <button class="small-action danger" type="button" data-remove-payment="${index}">Remove</button>
+          <div class="payment-row-actions">
+            <button class="small-action" type="button" data-fill-payment="${index}">Received in full</button>
+            <button class="small-action danger" type="button" data-remove-payment="${index}">Remove</button>
+          </div>
         </div>
       `,
     )
     .join("");
 }
 
+// A receipt is issued for money actually received, so "Amount Received" should
+// default to the document total (fully paid) — the common case. Never touches a
+// figure the host has already typed.
+function receiptTotalFromForm() {
+  return Number(els.docAccommodationFee.value || 0) + Number(els.docDepositAmount.value || 0);
+}
+function prefillReceivedIfEmpty() {
+  if (els.docType.value !== "Official Receipt") return;
+  const total = receiptTotalFromForm();
+  if (total <= 0) return;
+  const alreadyEntered = paymentRowsFromForm().some((p) => Number(p.amount) > 0);
+  if (alreadyEntered) return;
+  renderPaymentRows([normalizePayment({ date: isoDate(new Date()), amount: total })]);
+}
+
 function updateReceiptVisibility() {
   const isReceipt = els.docType.value === "Official Receipt";
   els.receiptPaymentSection.hidden = !isReceipt;
   if (isReceipt && !els.paymentRows.children.length) renderPaymentRows([normalizePayment({})]);
+  if (isReceipt) prefillReceivedIfEmpty();
 }
 
 function syncDocumentDates() {
@@ -8442,6 +8462,20 @@ els.docNights?.addEventListener("input", () => {
 els.paymentRows?.addEventListener("input", () => renderDocumentPreview(formDocument()));
 
 els.paymentRows?.addEventListener("click", (event) => {
+  const fillIndex = event.target.dataset.fillPayment;
+  if (fillIndex !== undefined) {
+    const rows = [...els.paymentRows.querySelectorAll(".payment-row")];
+    const i = Number(fillIndex);
+    const others = rows.reduce((sum, row, idx) =>
+      idx === i ? sum : sum + Number(row.querySelector("[data-payment-amount]")?.value || 0), 0);
+    const outstanding = Math.max(0, receiptTotalFromForm() - others);
+    const amtInput = rows[i]?.querySelector("[data-payment-amount]");
+    if (amtInput) amtInput.value = outstanding;
+    const dateInput = rows[i]?.querySelector("[data-payment-date]");
+    if (dateInput && !dateInput.value) dateInput.value = isoDate(new Date());
+    renderDocumentPreview(formDocument());
+    return;
+  }
   const removeIndex = event.target.dataset.removePayment;
   if (removeIndex === undefined) return;
   const payments = paymentRowsFromForm();
