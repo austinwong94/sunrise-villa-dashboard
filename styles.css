@@ -3752,6 +3752,27 @@ details summary::marker { content: ""; }
   content: "Generate a preview to see the document.";
 }
 
+/* ---------- LIGHT-YELLOW PAPER (match the generated PDF one-pager) ----------
+   Retints the on-screen preview cards to the same light-yellow paper the
+   printed/saved PDF uses, so the preview is a true WYSIWYG of the output.
+   Placed after the base rules so it wins at equal specificity. */
+#documentsView .document-preview-paper { background: #e7e3d7; }
+#documentsView .document-preview-paper .doc-paper-head,
+#documentsView .document-preview-paper .doc-info-grid,
+#documentsView .document-preview-paper .doc-item-table,
+#documentsView .document-preview-paper .doc-payment-section,
+#documentsView .document-preview-paper .doc-remarks,
+#documentsView .document-preview-paper .doc-signatures {
+  background: #fefbe9;
+  border-color: #efe6c0;
+}
+#documentsView .document-preview-paper .doc-item-table thead th,
+#documentsView .document-preview-paper .doc-item-table tfoot th,
+#documentsView .document-preview-paper .compact-doc-table thead th,
+#documentsView .document-preview-paper .compact-doc-table tfoot th {
+  background: #f6eec2;
+}
+
 /* ---------- ARCHIVE TABLE ---------- */
 #documentsView .document-archive {
   margin-top: 0;
@@ -5575,7 +5596,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
   border-top-right-radius: 14px;
 }
 #documentsView .document-preview-paper .doc-paper-head {
-  border-top: 6px solid var(--accent);
+  border-top: 6px solid #cbaa3e; /* gold cap — matches the light-yellow PDF */
 }
 
 /* ---------------------------------------------------------------------

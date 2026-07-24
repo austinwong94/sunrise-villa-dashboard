@@ -5299,54 +5299,71 @@ function deleteSavedDocument(id) {
 // on the app's stylesheet and can't be polluted by app chrome.
 const DOC_PRINT_CSS = `
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #fff; }
+  html, body { margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #2b2b29; -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    color: #34302a; background: #e7e3d7;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .doc-sheet { width: 100%; max-width: 190mm; margin: 0 auto; padding: 16mm 15mm; font-size: 12px; line-height: 1.5; }
-  @media screen { body { background: #ece9e6; padding: 22px 14px; } .doc-sheet { background: #fff; box-shadow: 0 8px 34px rgba(0,0,0,.14); border-radius: 6px; } }
+  /* A4 sheet: light-yellow paper, framed, footer pinned to the bottom so it
+     always reads as one finished page. */
+  .doc-sheet {
+    position: relative; width: 100%; max-width: 190mm; min-height: 272mm;
+    margin: 0 auto; padding: 16mm 16mm 13mm; font-size: 12px; line-height: 1.5;
+    background: #fefbe9; border: 1px solid #efe6c0;
+    display: flex; flex-direction: column;
+  }
+  @media screen { body { padding: 22px 14px; } .doc-sheet { box-shadow: 0 10px 40px rgba(0,0,0,.16); border-radius: 4px; } }
   @page { size: A4; margin: 0; }
-  @media print { .doc-sheet { max-width: none; margin: 0; padding: 15mm; box-shadow: none; border-radius: 0; } }
+  @media print {
+    body { background: #fefbe9; }
+    .doc-sheet { max-width: none; min-height: 100vh; margin: 0; padding: 15mm; border: none; box-shadow: none; border-radius: 0; }
+  }
 
-  .doc-paper-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; padding-bottom: 16px; border-bottom: 2px solid #a2402c; }
+  .doc-paper-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; padding-bottom: 15px; border-bottom: 2px solid #cbaa3e; }
   .doc-paper-head > div:first-child { max-width: 62%; }
-  .doc-paper-head h2 { margin: 0 0 6px; font-size: 20px; color: #1f1f1d; letter-spacing: .2px; }
-  .doc-paper-head p { margin: 2px 0; font-size: 11px; color: #6a6a66; line-height: 1.45; }
-  .doc-title-box { text-align: right; min-width: 150px; }
-  .doc-title-box span { display: block; text-transform: uppercase; letter-spacing: 1.6px; font-size: 12px; font-weight: 700; color: #a2402c; }
-  .doc-title-box strong { display: block; font-size: 16px; margin: 5px 0 2px; color: #1f1f1d; }
-  .doc-title-box small { display: block; font-size: 11px; color: #6a6a66; }
+  .doc-paper-head h2 { margin: 0 0 6px; font-size: 21px; color: #2a2620; letter-spacing: .2px; }
+  .doc-paper-head p { margin: 2px 0; font-size: 11px; color: #7c7358; line-height: 1.45; }
+  .doc-title-box { text-align: right; min-width: 156px; }
+  .doc-title-box span { display: inline-block; text-transform: uppercase; letter-spacing: 1.6px; font-size: 12px; font-weight: 700; color: #8f761a; background: #f7efc6; padding: 4px 11px; border-radius: 3px; }
+  .doc-title-box strong { display: block; font-size: 16px; margin: 8px 0 2px; color: #2a2620; }
+  .doc-title-box small { display: block; font-size: 11px; color: #7c7358; }
 
-  .doc-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 22px 0; }
-  .doc-info-grid h4 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9a9a95; font-weight: 700; }
+  .doc-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 20px 0; }
+  .doc-info-grid h4 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #a99e73; font-weight: 700; }
   .doc-info-grid p { margin: 2px 0; font-size: 12px; }
-  .doc-info-grid strong { font-size: 13px; color: #1f1f1d; }
-  .doc-address { white-space: pre-wrap; color: #6a6a66; }
+  .doc-info-grid strong { font-size: 13px; color: #2a2620; }
+  .doc-address { white-space: pre-wrap; color: #7c7358; }
 
-  .doc-item-table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; }
+  .doc-item-table { width: 100%; border-collapse: collapse; margin: 6px 0 4px; }
   .doc-item-table th, .doc-item-table td { padding: 10px 12px; text-align: left; font-size: 12px; }
-  .doc-item-table thead th { background: #faf2f0; color: #7a3324; text-transform: uppercase; letter-spacing: .6px; font-size: 10px; border-bottom: 1px solid #e7d3cd; }
+  .doc-item-table thead th { background: #f6eec2; color: #7a6414; text-transform: uppercase; letter-spacing: .6px; font-size: 10px; border-bottom: 1px solid #e5d8a3; }
   .doc-item-table thead th:last-child, .doc-item-table tbody td:last-child, .doc-item-table tfoot th:last-child { text-align: right; }
-  .doc-item-table tbody td { border-bottom: 1px solid #efefec; }
-  .doc-item-table tfoot th { padding-top: 12px; font-size: 13px; border-top: 2px solid #d9d9d5; color: #1f1f1d; }
+  .doc-item-table tbody td { border-bottom: 1px solid #ece3c6; }
+  .doc-item-table tfoot th { padding-top: 12px; font-size: 13px; border-top: 2px solid #dccd90; color: #2a2620; }
 
-  .doc-payment-section { margin: 22px 0; page-break-inside: avoid; }
-  .doc-payment-section h4 { margin: 0 0 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9a9a95; font-weight: 700; }
+  .doc-payment-section { margin: 20px 0; page-break-inside: avoid; }
+  .doc-payment-section h4 { margin: 0 0 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #a99e73; font-weight: 700; }
   .compact-doc-table th, .compact-doc-table td { padding: 7px 10px; font-size: 11px; }
 
-  .doc-remarks { margin: 20px 0; page-break-inside: avoid; }
-  .doc-remarks h4 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9a9a95; font-weight: 700; }
+  .doc-remarks { margin: 18px 0; page-break-inside: avoid; }
+  .doc-remarks h4 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #a99e73; font-weight: 700; }
   .doc-remarks p { margin: 0; font-size: 12px; white-space: pre-wrap; }
 
-  .doc-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; margin-top: 46px; page-break-inside: avoid; }
+  .doc-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; margin-top: 38px; page-break-inside: avoid; }
   .doc-signatures > div { text-align: center; }
-  .doc-signatures span { display: block; height: 42px; border-bottom: 1px solid #b7b7b2; margin-bottom: 6px; }
-  .doc-signatures strong { font-size: 11px; color: #6a6a66; font-weight: 600; }
+  .doc-signatures span { display: block; height: 42px; border-bottom: 1px solid #c4b988; margin-bottom: 6px; }
+  .doc-signatures strong { font-size: 11px; color: #7c7358; font-weight: 600; }
+
+  .doc-foot { margin-top: auto; padding-top: 13px; border-top: 1px solid #ebddaf; display: flex; justify-content: space-between; align-items: baseline; gap: 14px; font-size: 10px; color: #a99e73; }
+  .doc-foot strong { color: #7c7358; font-weight: 700; }
+  .doc-foot span { text-align: right; }
 `;
 
 // Wraps ONE document in a complete standalone HTML page for printing / Save-as-PDF.
 function standaloneDocumentHtml(normalized) {
+  const issuer = issuers[normalized.issuer] || issuers["Sunrise Villa Ventures"];
+  const contact = [issuer.contact, issuer.email].filter(Boolean).map(escapeHtml).join(" · ");
   const title = `${normalized.type} ${normalized.code} — ${normalized.guestName || "Guest"}`;
   return `<!doctype html>
 <html lang="en">
@@ -5357,7 +5374,10 @@ function standaloneDocumentHtml(normalized) {
 <style>${DOC_PRINT_CSS}</style>
 </head>
 <body>
-<div class="doc-sheet">${buildDocumentMarkup(normalized)}</div>
+<div class="doc-sheet">
+${buildDocumentMarkup(normalized)}
+<div class="doc-foot"><strong>${escapeHtml(normalized.issuer)}</strong><span>${escapeHtml(normalized.type)} ${escapeHtml(normalized.code)}${contact ? " · " + contact : ""}</span></div>
+</div>
 </body>
 </html>`;
 }
