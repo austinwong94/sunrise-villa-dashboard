@@ -3752,25 +3752,21 @@ details summary::marker { content: ""; }
   content: "Generate a preview to see the document.";
 }
 
-/* ---------- LIGHT-YELLOW PAPER (match the generated PDF one-pager) ----------
-   Retints the on-screen preview cards to the same light-yellow paper the
-   printed/saved PDF uses, so the preview is a true WYSIWYG of the output.
-   Placed after the base rules so it wins at equal specificity. */
-#documentsView .document-preview-paper { background: #e7e3d7; }
-#documentsView .document-preview-paper .doc-paper-head,
-#documentsView .document-preview-paper .doc-info-grid,
-#documentsView .document-preview-paper .doc-item-table,
-#documentsView .document-preview-paper .doc-payment-section,
-#documentsView .document-preview-paper .doc-remarks,
-#documentsView .document-preview-paper .doc-signatures {
-  background: #fefbe9;
-  border-color: #efe6c0;
+/* ---------- WYSIWYG PREVIEW (renders the real PDF in an iframe) ----------
+   The preview now hosts an <iframe> that renders the exact printable document,
+   scaled to fit the column. So the container is just a neutral frame; all the
+   document styling lives in DOC_PRINT_CSS (one source of truth). */
+#documentsView .document-preview-paper {
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
 }
-#documentsView .document-preview-paper .doc-item-table thead th,
-#documentsView .document-preview-paper .doc-item-table tfoot th,
-#documentsView .document-preview-paper .compact-doc-table thead th,
-#documentsView .document-preview-paper .compact-doc-table tfoot th {
-  background: #f6eec2;
+#documentsView .document-preview-paper .doc-preview-frame {
+  display: block;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  background: transparent;
 }
 
 /* ---------- ARCHIVE TABLE ---------- */

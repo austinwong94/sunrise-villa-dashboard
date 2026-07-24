@@ -5100,10 +5100,49 @@ function syncDocumentCheckout() {
   els.docCheckOut.value = isoDate(addDays(dateObj(checkIn), nights));
 }
 
+// Renders the on-screen preview as the ACTUAL printable document inside an
+// iframe, so the preview is pixel-identical to the saved/printed PDF (one
+// source of truth — no separate preview stylesheet to drift out of sync).
+let _docPreviewTimer = null;
 function renderDocumentPreview(doc = formDocument()) {
   const normalized = normalizeDocument(doc);
   if (els.documentCodePreview) els.documentCodePreview.textContent = normalized.code;
-  if (els.documentPreview) els.documentPreview.innerHTML = buildDocumentMarkup(normalized);
+  const host = els.documentPreview;
+  if (!host) return;
+  let frame = host.querySelector("iframe.doc-preview-frame");
+  if (!frame) {
+    host.textContent = "";
+    frame = document.createElement("iframe");
+    frame.className = "doc-preview-frame";
+    frame.setAttribute("title", "Document preview");
+    frame.setAttribute("scrolling", "no");
+    host.appendChild(frame);
+    frame.addEventListener("load", () => fitDocPreviewFrame(frame));
+    if (!host._docFrameObserved && typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(() => fitDocPreviewFrame(frame)).observe(host);
+      host._docFrameObserved = true;
+    }
+  }
+  const html = standaloneDocumentHtml(normalized);
+  // Debounce the write so live typing in the builder stays smooth.
+  clearTimeout(_docPreviewTimer);
+  _docPreviewTimer = setTimeout(() => { frame.srcdoc = html; }, 60);
+}
+
+// Scales the A4 document iframe down to fit the preview column width (CSS zoom
+// keeps the surrounding layout height correct automatically).
+function fitDocPreviewFrame(frame) {
+  try {
+    const host = frame.parentElement;
+    if (!host || host.clientWidth < 20) return; // view hidden — refit later via ResizeObserver
+    const NATURAL_W = 780; // px: A4 sheet + screen matting
+    frame.style.zoom = "1";
+    frame.style.width = NATURAL_W + "px";
+    const cdoc = frame.contentDocument;
+    const naturalH = cdoc ? Math.max(cdoc.documentElement.scrollHeight, cdoc.body.scrollHeight, 1040) : 1040;
+    frame.style.height = naturalH + "px";
+    frame.style.zoom = String(Math.min(1, host.clientWidth / NATURAL_W));
+  } catch (e) { /* cross-origin never applies to srcdoc; ignore transient */ }
 }
 
 // Builds the inner HTML for ONE document. Used by both the on-screen preview
@@ -5115,20 +5154,27 @@ function buildDocumentMarkup(normalized) {
   const isReceipt = normalized.type === "Official Receipt";
   const totalPayments = paymentTotalFor(normalized);
   const balance = Math.max(0, normalized.totalAmount - totalPayments);
+  const monogram = escapeHtml(
+    ((normalized.issuer || "Sunrise Villa").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("") || "SV").toUpperCase(),
+  );
+  const contactLine = [issuer.contact, issuer.email].filter(Boolean).map(escapeHtml).join(" · ");
   return `
-    <div class="doc-paper-head">
-      <div>
-        <h2>${escapeHtml(normalized.issuer)}</h2>
-        ${issuer.registration ? `<p>Business Registration No.: ${escapeHtml(issuer.registration)}</p>` : ""}
-        ${issuer.address ? `<p>${escapeHtml(issuer.address)}</p>` : ""}
-        ${[issuer.contact, issuer.email].filter(Boolean).length ? `<p>${[issuer.contact, issuer.email].filter(Boolean).map(escapeHtml).join(" · ")}</p>` : ""}
+    <header class="doc-paper-head">
+      <div class="doc-brand">
+        <div class="doc-monogram">${monogram}</div>
+        <div class="doc-issuer">
+          <h2>${escapeHtml(normalized.issuer)}</h2>
+          ${issuer.registration ? `<p>Business Registration No.: ${escapeHtml(issuer.registration)}</p>` : ""}
+          ${issuer.address ? `<p>${escapeHtml(issuer.address)}</p>` : ""}
+          ${contactLine ? `<p>${contactLine}</p>` : ""}
+        </div>
       </div>
       <div class="doc-title-box">
         <span>${escapeHtml(normalized.type)}</span>
         <strong>${escapeHtml(normalized.code)}</strong>
         <small>${shortDate(normalized.date)}</small>
       </div>
-    </div>
+    </header>
 
     <div class="doc-info-grid">
       <section>
@@ -5138,9 +5184,9 @@ function buildDocumentMarkup(normalized) {
         ${normalized.billAddress ? `<p class="doc-address">${escapeMultiline(normalized.billAddress)}</p>` : ""}
       </section>
       <section>
-        <h4>Booking Details</h4>
+        <h4>Stay</h4>
         <p><strong>${escapeHtml(normalized.propertyName || "-")}</strong></p>
-        <p>${shortDate(normalized.checkIn)} to ${shortDate(normalized.checkOut)}</p>
+        <p>${shortDate(normalized.checkIn)} &rarr; ${shortDate(normalized.checkOut)}</p>
         <p>${normalized.nights} night${normalized.nights === 1 ? "" : "s"}</p>
       </section>
     </div>
@@ -5165,7 +5211,7 @@ function buildDocumentMarkup(normalized) {
       <tfoot>
         <tr>
           <th>Total Amount</th>
-          <th>${money(normalized.totalAmount)}</th>
+          <th><span class="doc-total-mark">${money(normalized.totalAmount)}</span></th>
         </tr>
       </tfoot>
     </table>
@@ -5207,9 +5253,9 @@ function buildDocumentMarkup(normalized) {
                   <th colspan="3">Total Received</th>
                   <th>${money(totalPayments)}</th>
                 </tr>
-                <tr>
+                <tr class="doc-balance-row">
                   <th colspan="3">Balance</th>
-                  <th>${money(balance)}</th>
+                  <th><span class="doc-total-mark">${money(balance)}</span></th>
                 </tr>
               </tfoot>
             </table>
@@ -5233,6 +5279,11 @@ function buildDocumentMarkup(normalized) {
         <strong>${isReceipt ? "Received by" : "Accepted by"}</strong>
       </div>
     </div>
+
+    <footer class="doc-foot">
+      <span class="doc-foot-thanks">Thank you for choosing ${escapeHtml(normalized.issuer)}.</span>
+      <span class="doc-foot-meta">${escapeHtml(normalized.type)} · ${escapeHtml(normalized.code)}${contactLine ? " · " + contactLine : ""}</span>
+    </footer>
   `;
 }
 
@@ -5302,68 +5353,91 @@ const DOC_PRINT_CSS = `
   html, body { margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #34302a; background: #e7e3d7;
+    color: #3f3b33; background: #edece7;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  /* A4 sheet: light-yellow paper, framed, footer pinned to the bottom so it
-     always reads as one finished page. */
+  /* A4 sheet: clean WHITE paper, a single hair-thin golden rule at the very top
+     as the only always-on colour, footer pinned to the bottom so it always
+     reads as one finished page. Yellow appears again only as a highlighter
+     swipe behind the amount that matters. */
   .doc-sheet {
     position: relative; width: 100%; max-width: 190mm; min-height: 272mm;
-    margin: 0 auto; padding: 16mm 16mm 13mm; font-size: 12px; line-height: 1.5;
-    background: #fefbe9; border: 1px solid #efe6c0;
+    margin: 0 auto; padding: 19mm 17mm 14mm; font-size: 12px; line-height: 1.55;
+    background: #ffffff; border-top: 3px solid #f2c94c;
     display: flex; flex-direction: column;
   }
-  @media screen { body { padding: 22px 14px; } .doc-sheet { box-shadow: 0 10px 40px rgba(0,0,0,.16); border-radius: 4px; } }
+  @media screen { body { padding: 24px 14px; } .doc-sheet { box-shadow: 0 14px 46px rgba(28,24,14,.15); } }
   @page { size: A4; margin: 0; }
   @media print {
-    body { background: #fefbe9; }
-    .doc-sheet { max-width: none; min-height: 100vh; margin: 0; padding: 15mm; border: none; box-shadow: none; border-radius: 0; }
+    body { background: #fff; }
+    .doc-sheet { max-width: none; min-height: 100vh; margin: 0; padding: 17mm 15mm 13mm; box-shadow: none; }
   }
 
-  .doc-paper-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; padding-bottom: 15px; border-bottom: 2px solid #cbaa3e; }
-  .doc-paper-head > div:first-child { max-width: 62%; }
-  .doc-paper-head h2 { margin: 0 0 6px; font-size: 21px; color: #2a2620; letter-spacing: .2px; }
-  .doc-paper-head p { margin: 2px 0; font-size: 11px; color: #7c7358; line-height: 1.45; }
-  .doc-title-box { text-align: right; min-width: 156px; }
-  .doc-title-box span { display: inline-block; text-transform: uppercase; letter-spacing: 1.6px; font-size: 12px; font-weight: 700; color: #8f761a; background: #f7efc6; padding: 4px 11px; border-radius: 3px; }
-  .doc-title-box strong { display: block; font-size: 16px; margin: 8px 0 2px; color: #2a2620; }
-  .doc-title-box small { display: block; font-size: 11px; color: #7c7358; }
+  /* Header: monogram + serif wordmark on the left, document meta on the right */
+  .doc-paper-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; padding-bottom: 20px; margin-bottom: 22px; border-bottom: 1px solid #ece8e0; }
+  .doc-brand { display: flex; gap: 14px; align-items: flex-start; max-width: 64%; }
+  .doc-monogram {
+    flex: none; width: 46px; height: 46px; border-radius: 11px;
+    background: #23201a; color: #fff; display: flex; align-items: center; justify-content: center;
+    font-family: Georgia, "Times New Roman", serif; font-size: 18px; font-weight: 600; letter-spacing: .5px;
+  }
+  .doc-issuer h2 { margin: 0 0 5px; font-family: Georgia, "Times New Roman", serif; font-size: 20px; font-weight: 600; letter-spacing: .2px; line-height: 1.15; color: #23201a; }
+  .doc-issuer p { margin: 2px 0; font-size: 10.5px; color: #8b8578; line-height: 1.5; }
+  .doc-title-box { text-align: right; flex: none; }
+  .doc-title-box span { display: block; text-transform: uppercase; letter-spacing: 2.4px; font-size: 11px; font-weight: 700; color: #b0891c; }
+  .doc-title-box strong { display: block; font-size: 17px; margin: 6px 0 3px; letter-spacing: .3px; color: #23201a; }
+  .doc-title-box small { display: block; font-size: 11px; color: #8b8578; }
 
-  .doc-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 20px 0; }
-  .doc-info-grid h4 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #a99e73; font-weight: 700; }
-  .doc-info-grid p { margin: 2px 0; font-size: 12px; }
-  .doc-info-grid strong { font-size: 13px; color: #2a2620; }
-  .doc-address { white-space: pre-wrap; color: #7c7358; }
+  /* Bill To / Stay */
+  .doc-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin: 4px 0 24px; }
+  .doc-info-grid h4 { margin: 0 0 7px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 1.4px; color: #aaa393; font-weight: 700; }
+  .doc-info-grid p { margin: 3px 0; font-size: 12px; color: #4a463d; }
+  .doc-info-grid strong { font-size: 13.5px; color: #23201a; font-weight: 600; }
+  .doc-address { white-space: pre-wrap; color: #8b8578; }
 
-  .doc-item-table { width: 100%; border-collapse: collapse; margin: 6px 0 4px; }
-  .doc-item-table th, .doc-item-table td { padding: 10px 12px; text-align: left; font-size: 12px; }
-  .doc-item-table thead th { background: #f6eec2; color: #7a6414; text-transform: uppercase; letter-spacing: .6px; font-size: 10px; border-bottom: 1px solid #e5d8a3; }
-  .doc-item-table thead th:last-child, .doc-item-table tbody td:last-child, .doc-item-table tfoot th:last-child { text-align: right; }
-  .doc-item-table tbody td { border-bottom: 1px solid #ece3c6; }
-  .doc-item-table tfoot th { padding-top: 12px; font-size: 13px; border-top: 2px solid #dccd90; color: #2a2620; }
+  /* Line items — borderless, airy, numbers right-aligned and tabular */
+  .doc-item-table { width: 100%; border-collapse: collapse; margin: 0; }
+  .doc-item-table thead th { padding: 0 2px 9px; text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: 1.4px; color: #aaa393; font-weight: 700; border-bottom: 1.5px solid #23201a; }
+  .doc-item-table thead th:last-child { text-align: right; }
+  .doc-item-table tbody td { padding: 12px 2px; font-size: 12.5px; color: #4a463d; border-bottom: 1px solid #efece5; }
+  .doc-item-table tbody td:last-child { text-align: right; color: #23201a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .doc-item-table tfoot th { padding: 15px 2px 0; text-align: left; font-size: 14px; font-weight: 700; color: #23201a; }
+  .doc-item-table tfoot th:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* THE hint of yellow: a highlighter swipe behind the hero amount */
+  .doc-total-mark {
+    background-image: linear-gradient(120deg, #ffe9a8 0%, #ffdd76 100%);
+    background-repeat: no-repeat; background-size: 100% 48%; background-position: 0 62%;
+    padding: 0 7px; margin-right: -1px; border-radius: 1px;
+  }
 
-  .doc-payment-section { margin: 20px 0; page-break-inside: avoid; }
-  .doc-payment-section h4 { margin: 0 0 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #a99e73; font-weight: 700; }
-  .compact-doc-table th, .compact-doc-table td { padding: 7px 10px; font-size: 11px; }
+  /* Payment received (receipts) */
+  .doc-payment-section { margin: 26px 0 0; page-break-inside: avoid; }
+  .doc-payment-section h4 { margin: 0 0 10px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 1.4px; color: #aaa393; font-weight: 700; }
+  .compact-doc-table thead th { padding: 0 2px 7px; font-size: 9px; letter-spacing: 1.1px; border-bottom: 1px solid #e4dfd4; }
+  .compact-doc-table thead th:last-child { text-align: right; }
+  .compact-doc-table tbody td { padding: 9px 2px; font-size: 11px; }
+  .compact-doc-table tbody td:last-child { text-align: right; }
+  .compact-doc-table tfoot th { padding: 11px 2px 0; font-size: 12px; font-weight: 700; border-top: 1px solid #efece5; }
+  .compact-doc-table tfoot th:last-child { text-align: right; }
+  .doc-balance-row th { font-size: 14px; }
 
-  .doc-remarks { margin: 18px 0; page-break-inside: avoid; }
-  .doc-remarks h4 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #a99e73; font-weight: 700; }
-  .doc-remarks p { margin: 0; font-size: 12px; white-space: pre-wrap; }
-
-  .doc-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; margin-top: 38px; page-break-inside: avoid; }
+  /* Remarks + signatures */
+  .doc-remarks { margin: 26px 0 0; page-break-inside: avoid; }
+  .doc-remarks h4 { margin: 0 0 5px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 1.4px; color: #aaa393; font-weight: 700; }
+  .doc-remarks p { margin: 0; font-size: 12px; color: #4a463d; white-space: pre-wrap; }
+  .doc-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 46px; page-break-inside: avoid; }
   .doc-signatures > div { text-align: center; }
-  .doc-signatures span { display: block; height: 42px; border-bottom: 1px solid #c4b988; margin-bottom: 6px; }
-  .doc-signatures strong { font-size: 11px; color: #7c7358; font-weight: 600; }
+  .doc-signatures span { display: block; height: 40px; border-bottom: 1px solid #cfc9bc; margin-bottom: 8px; }
+  .doc-signatures strong { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #8b8578; font-weight: 700; }
 
-  .doc-foot { margin-top: auto; padding-top: 13px; border-top: 1px solid #ebddaf; display: flex; justify-content: space-between; align-items: baseline; gap: 14px; font-size: 10px; color: #a99e73; }
-  .doc-foot strong { color: #7c7358; font-weight: 700; }
-  .doc-foot span { text-align: right; }
+  /* Footer pinned to the bottom of the page */
+  .doc-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid #ece8e0; display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-size: 9.5px; color: #aaa393; }
+  .doc-foot-thanks { color: #6f6a5e; font-style: italic; }
+  .doc-foot-meta { text-align: right; letter-spacing: .2px; }
 `;
 
 // Wraps ONE document in a complete standalone HTML page for printing / Save-as-PDF.
 function standaloneDocumentHtml(normalized) {
-  const issuer = issuers[normalized.issuer] || issuers["Sunrise Villa Ventures"];
-  const contact = [issuer.contact, issuer.email].filter(Boolean).map(escapeHtml).join(" · ");
   const title = `${normalized.type} ${normalized.code} — ${normalized.guestName || "Guest"}`;
   return `<!doctype html>
 <html lang="en">
@@ -5374,10 +5448,7 @@ function standaloneDocumentHtml(normalized) {
 <style>${DOC_PRINT_CSS}</style>
 </head>
 <body>
-<div class="doc-sheet">
-${buildDocumentMarkup(normalized)}
-<div class="doc-foot"><strong>${escapeHtml(normalized.issuer)}</strong><span>${escapeHtml(normalized.type)} ${escapeHtml(normalized.code)}${contact ? " · " + contact : ""}</span></div>
-</div>
+<div class="doc-sheet">${buildDocumentMarkup(normalized)}</div>
 </body>
 </html>`;
 }
@@ -5389,17 +5460,26 @@ ${buildDocumentMarkup(normalized)}
 function printDocumentPreview() {
   if (!els.documentForm.reportValidity()) return;
   const normalized = normalizeDocument(formDocument());
+  const html = standaloneDocumentHtml(normalized);
   const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    renderDocumentPreview(normalized);
-    document.body.classList.add("printing-document");
-    window.print();
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
     return;
   }
-  printWindow.document.write(standaloneDocumentHtml(normalized));
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+  // Pop-up blocked → print via a hidden iframe. Still ONLY this one document,
+  // never the app or other guests' records.
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;";
+  frame.setAttribute("aria-hidden", "true");
+  frame.addEventListener("load", () => {
+    try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) { /* ignore */ }
+    setTimeout(() => frame.remove(), 2000);
+  });
+  document.body.appendChild(frame);
+  frame.srcdoc = html;
 }
 
 function renderDocumentArchive() {
