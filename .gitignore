@@ -19,3 +19,5 @@ DEPLOYMENT-GUIDE.md
 # Local tooling
 deploy.sh
 *.log
+test-results/
+playwright-report/

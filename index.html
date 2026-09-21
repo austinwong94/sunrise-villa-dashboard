@@ -20,11 +20,11 @@
          headers, so this same-origin script (CSP-clean) refuses to run inside a frame.
          Loaded first so it runs before any content paints. -->
     <script src="./framebuster.js?v=20260623-2"></script>
-    <title>Sunrise Villa</title>
+    <title>Sunrise Villa | Villa Management</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260707-38" />
+    <link rel="stylesheet" href="./styles.css?v=20260921-1" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -185,8 +185,9 @@
         <span>Keep me signed in on this device</span>
       </label>
 
-      <button type="submit" class="login-submit">Unlock the villa</button>
+      <button type="submit" class="login-submit">Sign in</button>
     </form>
+    <button type="button" class="ghost-button" id="retryCloudLoad" hidden>Retry loading workspace</button>
   </div>
 </section>
     <div class="app-shell private-locked" id="appShell" hidden>
@@ -195,12 +196,13 @@
           <div class="brand-mark">SV</div>
           <div class="brand-text">
             <h1>Sunrise Villa</h1>
-            <p>Booking calendar</p>
+            <p>Villa management</p>
           </div>
           <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar"></button>
         </div>
 
         <nav class="nav-tabs" aria-label="Views">
+          <span class="nav-group-label">Daily operations</span>
           <button class="nav-button active" data-view="today" type="button" title="Today">
             <span aria-hidden="true">☀</span>
             Today
@@ -208,10 +210,6 @@
           <button class="nav-button" data-view="calendar" type="button" title="Calendar">
             <span aria-hidden="true">▦</span>
             Calendar
-          </button>
-          <button class="nav-button" data-view="dashboard" type="button" title="Income Dashboard">
-            <span aria-hidden="true">▰</span>
-            Dashboard
           </button>
           <button class="nav-button" data-view="bookings" type="button" title="Bookings">
             <span aria-hidden="true">☰</span>
@@ -228,6 +226,11 @@
           <button class="nav-button" data-view="guide" type="button" title="Digital Guidebook">
             <span aria-hidden="true">▣</span>
             Guidebook
+          </button>
+          <span class="nav-group-label">Finance & records</span>
+          <button class="nav-button" data-view="dashboard" type="button" title="Income Dashboard">
+            <span aria-hidden="true">▰</span>
+            Dashboard
           </button>
           <button class="nav-button" data-view="documents" type="button" title="Villa Documents">
             <span aria-hidden="true">▤</span>
@@ -339,9 +342,17 @@
           <span class="health-pill secondary" id="dataHealthLastSync">Last synced: -</span>
           <span class="health-pill secondary" id="dataHealthBackup">JSON export: not yet</span>
           <span class="health-pill secondary" id="dataHealthRecords">0 bookings saved</span>
-          <span class="health-pill secondary version-pill">Version 2026.05.15</span>
+          <span class="health-pill secondary version-pill">Version 2026.09.21</span>
         </section>
 
+        <div class="sync-notice" id="syncNotice" role="alert" hidden>
+          <p data-sync-message></p>
+          <div class="heading-actions">
+            <button type="button" class="ghost-button compact" id="syncNoticeBackup">Download backup</button>
+            <button type="button" class="ghost-button compact" id="syncNoticeRetry">Retry saving</button>
+            <button type="button" class="ghost-button compact" id="syncNoticeReload">Load cloud copy</button>
+          </div>
+        </div>
         <section class="view active" id="todayView" aria-labelledby="pageTitle">
           <div class="candidates-queue" id="bookingCandidatesQueue" hidden></div>
           <div class="today-grid" id="todayContent"></div>
@@ -428,7 +439,7 @@
                 <article class="mini-kpi"><span>Year Total to Receive</span><strong id="overallTotalToReceive">RM 0</strong></article>
                 <article class="mini-kpi"><span>Year Received</span><strong id="overallPaid">RM 0</strong></article>
                 <article class="mini-kpi warning"><span>Year Balance</span><strong id="overallBalance">RM 0</strong></article>
-                <article class="mini-kpi"><span>Deposit Held</span><strong id="overallDepositHeld">RM 0</strong></article>
+                <article class="mini-kpi"><span>Deposits Refunded</span><strong id="overallDepositHeld">RM 0</strong></article>
                 <article class="mini-kpi warning"><span>Refund Pending</span><strong id="overallRefundPending">RM 0</strong></article>
               </div>
             </div>
@@ -450,7 +461,7 @@
                 <article class="mini-kpi"><span>Total to Receive</span><strong id="kpiTotalToReceive">RM 0</strong></article>
                 <article class="mini-kpi"><span>Amount Received</span><strong id="kpiPaid">RM 0</strong></article>
                 <article class="mini-kpi warning"><span>Balance</span><strong id="kpiBalance">RM 0</strong></article>
-                <article class="mini-kpi"><span>Deposit Held</span><strong id="kpiDepositHeld">RM 0</strong></article>
+                <article class="mini-kpi"><span>Deposits Refunded</span><strong id="kpiDepositHeld">RM 0</strong></article>
                 <article class="mini-kpi warning"><span>Refund Pending</span><strong id="kpiRefundPending">RM 0</strong></article>
                 <article class="mini-kpi"><span>Bookings</span><strong id="kpiBookings">0</strong></article>
               </div>
@@ -461,15 +472,16 @@
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Selected month profit</p>
-                <h3 id="profitTitle">Monthly Profit View</h3>
+                <h3 id="profitTitle">Monthly Cash Plan</h3>
+                <p class="section-note">Fees by check-in month. Costs include loan repayments; this is not taxable profit.</p>
               </div>
             </div>
             <div class="profit-layout">
               <div class="profit-summary">
                 <article class="hero-kpi profit-kpi">
-                  <span>Estimated net profit</span>
+                  <span>Net after costs & loans</span>
                   <strong id="netProfitOut">RM 0</strong>
-                  <small>Accommodation fees minus operating expenses</small>
+                  <small>Booking fees less costs and loan repayments</small>
                 </article>
                 <article class="mini-kpi"><span>Total Expenses</span><strong id="totalExpensesOut">RM 0</strong><small>For selected month</small></article>
                 <article class="mini-kpi"><span>Fixed Costs &amp; Loans</span><strong id="fixedCommitmentsOut">RM 0</strong><small>Recurring monthly outgoings</small></article>
@@ -539,7 +551,7 @@
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Monthly P&L tabulation</p>
-                <h3 id="pnlTitle">Profit & Loss by Month</h3>
+                <h3 id="pnlTitle">Income & Outgoings by Month</h3>
               </div>
               <button class="primary-button" id="printOwnerReport" type="button">Owner Report PDF</button>
             </div>
@@ -559,8 +571,7 @@
                       <th>Accommodation Fees</th>
                       <th>Fixed Costs &amp; Loans</th>
                       <th>Total Expenses</th>
-                      <th>Net Profit</th>
-                      <th>Margin</th>
+                      <th>Net after costs &amp; loans</th>
                     </tr>
                   </thead>
                   <tbody id="pnlRows"></tbody>
@@ -628,12 +639,12 @@
                     <th>Bookings</th>
                     <th>Accommodation Fees</th>
                     <th>Expenses</th>
-                    <th>Net Profit</th>
+                    <th>Net after costs &amp; loans</th>
                     <th>Total to Receive</th>
                     <th>Received</th>
                     <th>Balance</th>
                     <th>Occupancy</th>
-                    <th>Deposit Held</th>
+                    <th>Deposits Refunded</th>
                     <th>Refund Pending</th>
                     <th>Booked Nights</th>
                   </tr>
@@ -656,6 +667,7 @@
               <label class="booking-month-field">
                 <span>Month</span>
                 <select id="bookingMonthFilter">
+                  <option value="Selected">Selected month</option>
                   <option value="All">All months</option>
                 </select>
               </label>
@@ -830,7 +842,7 @@
                   <label>Guest Guide Link
                     <input id="messageGuideLink" placeholder="https://bit.ly/sunrisevilla-guest-guide" />
                   </label>
-                  <label>Bank Details (private — used in payment messages, kept out of the public site code)
+                  <label>Bank Details
                     <textarea id="messageBankDetails" rows="4" placeholder="Bank Details:&#10;Bank Name: ...&#10;Account Name: ...&#10;Account Number: ..."></textarea>
                   </label>
                 </div>
@@ -1006,12 +1018,22 @@
         </section>
 
         <section class="view" id="documentsView" aria-labelledby="pageTitle">
-          <section class="documents-hero">
-            <div>
-              <p class="eyebrow">Villa documents</p>
-              <h3>Quotations, Invoices & Official Receipts</h3>
+          <div class="workspace-toolbar">
+            <div class="message-flow-tabs" role="tablist" aria-label="Documents">
+              <button class="message-flow-tab active" data-document-workspace="editor" role="tab" aria-selected="true" type="button">Create / edit</button>
+              <button class="message-flow-tab" data-document-workspace="archive" role="tab" aria-selected="false" type="button">Saved documents <span id="documentArchiveCount" class="count-pill">0</span></button>
             </div>
-          </section>
+            <span id="documentFeedback" class="workspace-feedback" role="status" aria-live="polite">New document</span>
+          </div>
+          <div class="document-editor-tools">
+            <div class="document-type-choice" role="group" aria-label="Document type">
+              <button type="button" class="booking-channel-option" data-document-type="Quotation">Quotation</button>
+              <button type="button" class="booking-channel-option" data-document-type="Invoice">Invoice</button>
+              <button type="button" class="booking-channel-option" data-document-type="Official Receipt">Official Receipt</button>
+            </div>
+            <div class="document-payment-summary" id="documentPaymentSummary" aria-live="polite"></div>
+            <button type="button" class="ghost-button compact" id="jumpToPayments" hidden>Enter payment transactions</button>
+          </div>
 
           <div class="documents-layout">
             <form class="document-builder" id="documentForm">
@@ -1025,8 +1047,8 @@
                   </div>
                 </div>
                 <div class="form-grid two-col">
-                  <label>Document Type
-                    <select id="docType" required>
+                  <label class="sr-only">Document Type
+                    <select id="docType" tabindex="-1" required>
                       <option>Quotation</option>
                       <option>Invoice</option>
                       <option>Official Receipt</option>
@@ -1073,7 +1095,7 @@
                 </label>
                 <div class="form-grid two-col">
                   <label>Guest / Customer Name
-                    <input id="docGuestName" required placeholder="Example: Michelle Tan" />
+                    <input id="docGuestName" required placeholder="Guest or customer name" />
                   </label>
                   <label>Guest Contact Number
                     <input id="docGuestContact" inputmode="tel" placeholder="Example: +60 12-345 6789" />
@@ -1148,9 +1170,9 @@
                 <div class="section-heading compact-heading">
                   <div>
                     <p class="eyebrow">Step 4</p>
-                    <h3>Receipt Payment Details</h3>
+                    <h3>Payments Received</h3>
                   </div>
-                  <button class="ghost-button compact" id="addPaymentRow" type="button">+ Payment</button>
+                  <button class="ghost-button compact" id="addPaymentRow" type="button">+ Add transaction</button>
                 </div>
                 <div class="payment-rows" id="paymentRows"></div>
               </section>
@@ -1177,11 +1199,10 @@
             </section>
           </div>
 
-          <section class="table-panel document-archive">
+          <section class="table-panel document-archive" hidden>
             <div class="section-heading">
               <div>
-                <p class="eyebrow">Saved database</p>
-                <h3>Document Archive</h3>
+                <h3>Saved Documents</h3>
               </div>
             </div>
             <div class="booking-toolbar">
@@ -1209,7 +1230,7 @@
                     <th>Guest</th>
                     <th>Bill To</th>
                     <th>Stay</th>
-                    <th>Amount / Due</th>
+                    <th>Received / Due</th>
                     <th>Status</th>
                     <th></th>
                   </tr>
@@ -1791,7 +1812,7 @@
                   </div>
                 </div>
                 <label>Guest Name <span class="req" aria-hidden="true">*</span>
-                  <input id="guestInput" required placeholder="Example: Amira Tan" />
+                  <input id="guestInput" required placeholder="Guest full name" />
                 </label>
               </div>
               <label>Villa
@@ -1885,6 +1906,6 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260707-38"></script>
+    <script src="./app.js?v=20260921-1"></script>
   </body>
 </html>

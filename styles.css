@@ -31,9 +31,9 @@
 
   /* Fixed semantic colors — must NOT follow the swappable accent, or a theme choice
      would recolor the channel signal / make "data is safe" look like an error. */
-  --direct: #2F7D6E;       /* Direct channel — fixed teal-green */
-  --direct-bg: #E4F0EC;
-  --direct-text: #1F6657;
+  --direct: #B18924;       /* Direct channel: sunny yellow */
+  --direct-bg: #FFF8DE;
+  --direct-text: #765710;
   --ok: #277049;           /* positive / connected / safe — fixed green (AA on its soft bg) */
   --ok-soft: #E6F3EC;
 
@@ -45,9 +45,9 @@
   --pend-soft: #F5EEE2;
 
   /* Airbnb channel */
-  --airbnb: #B68A4A;
-  --airbnb-bg: #F4EEE2;
-  --airbnb-text: #8A6526;
+  --airbnb: #C86289;
+  --airbnb-bg: #FCEAF1;
+  --airbnb-text: #943D61;
 
   /* Interaction surfaces */
   --row-hover: #FAFAF7;
@@ -56,9 +56,9 @@
   --cb-border: #cfcfc8;
 
   /* Radii */
-  --r-card: 20px;
-  --r-control: 12px;
-  --r-sm: 10px;
+  --r-card: 8px;
+  --r-control: 8px;
+  --r-sm: 6px;
   --r-pill: 999px;
   --r-tile: 7px;
   --r-checkbox: 6px;
@@ -516,6 +516,9 @@ tbody tr:hover { background: var(--row-hover); }
 
 .table-scroll {
   overflow: auto;
+  width: 100%;
+  contain: inline-size;
+  overscroll-behavior-inline: contain;
 }
 
 .compact-table td { padding: 9px 10px; font-size: 13px; }
@@ -818,7 +821,39 @@ details summary::marker { content: ""; }
 * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
 
 /* ---------- 16. TOP-LEVEL VIEW SWITCH ---------- */
-.view { display: none; }
+.view { display: none; min-width: 0; max-width: 100%; }
+.view > *, .table-panel, .table-scroll { min-width: 0; max-width: 100%; }
+label { min-width: 0; }
+input, select, textarea { max-width: 100%; }
+.filter-drawer:not([open]) > :not(summary),
+.column-drawer:not([open]) > :not(summary) { display: none; }
+.nav-group-label { display: none; }
+@media (min-width: 761px) {
+  #appShell.sidebar-pinned .nav-group-label, #appShell.sidebar-hover .nav-group-label {
+    display: block; padding: 12px 14px 4px; font-size: 10px; font-weight: 700; color: var(--muted);
+  }
+}
+.workspace-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.workspace-feedback { color: var(--muted); font-size: 12px; }
+.sync-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; margin-bottom: 18px; border: 1px solid var(--due); border-radius: var(--r-control); background: var(--due-soft); }
+.sync-notice p { flex: 1 1 260px; }
+.sync-notice .heading-actions { flex-wrap: wrap; }
+.document-editor-tools { display: grid; gap: 12px; margin-bottom: 18px; }
+.document-type-choice { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; width: fit-content; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--card); }
+.document-payment-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; border-block: 1px solid var(--line); padding: 14px 0; }
+.document-payment-summary span { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.document-payment-summary strong { font-size: 18px; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#jumpToPayments { justify-self: start; }
+.document-archive .booking-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; padding: 0 18px 16px; align-items: end; }
+.document-archive .booking-toolbar label { display: grid; gap: 6px; }
+.document-archive .booking-toolbar input, .document-archive .booking-toolbar select { width: 100%; height: 40px; }
+@media (max-width: 600px) {
+  .document-archive .booking-toolbar { grid-template-columns: 1fr; }
+  .document-type-choice { width: 100%; }
+  .document-type-choice button { flex: 1; padding-inline: 8px; }
+  .document-payment-summary { gap: 8px; }
+  .document-payment-summary strong { font-size: 15px; }
+}
 .view:not(.active) { display: none !important; }
 .view.active { display: block; }
 
@@ -1120,7 +1155,19 @@ details summary::marker { content: ""; }
 /* The prev/next icon-buttons flanking the panel inherit foundation .icon-button.
    Give them a slightly rounder, sidebar-tuned look. */
 .month-switcher .icon-button {
-  border-radius: 11px;
+  border-radius: var(--r-control);
+}
+@media (min-width: 761px) {
+  #appShell.sidebar-hover .month-switcher, #appShell.sidebar-pinned .month-switcher {
+    display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px; align-items: start; gap: 0; position: relative;
+  }
+  .month-switcher .month-picker-panel { grid-column: 1 / -1; grid-row: 1; padding: 8px; }
+  .month-switcher .month-picker-head { justify-content: center; height: 30px; margin-bottom: 8px; }
+  .month-switcher .month-picker-head > span { display: none; }
+  .month-switcher .month-button-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .month-switcher > .icon-button { grid-row: 1; z-index: 1; margin-top: 8px; width: 30px; height: 30px; min-width: 30px; }
+  #prevMonth { grid-column: 1; margin-left: 8px; }
+  #nextMonth { grid-column: 3; margin-left: -8px; }
 }
 
 /* ---------- SIDEBAR PANEL (payment snapshot / focus) ---------- */
@@ -1436,6 +1483,9 @@ details summary::marker { content: ""; }
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.health-pill.version-pill { display: none; }
+.health-pill#dataHealthLastSync { border: 0; background: transparent; }
+.health-pill#dataHealthRecords { border: 0; background: transparent; }
 .health-pill::before {
   content: "";
   width: 7px;
@@ -2600,6 +2650,11 @@ details summary::marker { content: ""; }
   display: grid;
   gap: 2px;
 }
+#dashboardView .pnl-breakdown-list > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+#dashboardView .pnl-breakdown-list > div:last-child { border: 0; }
+#dashboardView .pnl-breakdown-list strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#dashboardView .dashboard-toggle { min-width: 44px; }
+#dashboardView .profit-summary .hero-kpi, #dashboardView .pnl-breakdown-card { border: 0; border-radius: 0; padding: 0; }
 #dashboardView .commitment-summary {
   display: flex;
   align-items: baseline;
@@ -2701,7 +2756,8 @@ details summary::marker { content: ""; }
 #dashboardView .one-off-row,
 #dashboardView .commitment-row {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: end;
   gap: 10px;
   padding: 8px 10px;
   background: var(--soft);
@@ -3135,13 +3191,16 @@ details summary::marker { content: ""; }
   white-space: nowrap;
   border: 0;
 }
-#bookingsView #bookingSearch { min-width: 180px; }
+#bookingsView #bookingSearch { min-width: 0; width: 100%; }
+#bookingsView .booking-toolbar > label:not(.booking-month-field) { flex: 1 1 180px; }
+#bookingsView .booking-month-field { max-width: 100%; }
+#bookingsView .booking-month-field select { min-width: 0; max-width: 100%; }
 
 /* push the two drawers (columns + filters) to the right */
 #bookingsView .booking-toolbar > details.filter-drawer:first-of-type { margin-left: auto; }
 
 /* drawer popovers: stack the labeled selects with a little air */
-#bookingsView .booking-toolbar .filter-grid { min-width: 220px; }
+#bookingsView .booking-toolbar .filter-grid { min-width: 220px; width: 260px; max-width: calc(100vw - 32px); }
 #bookingsView .booking-toolbar .filter-grid select { height: 38px; }
 #bookingsView .booking-toolbar .column-grid { min-width: 260px; }
 
@@ -3351,7 +3410,7 @@ details summary::marker { content: ""; }
 }
 #documentsView .payment-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   align-items: end;
   padding: 14px;
@@ -3361,14 +3420,21 @@ details summary::marker { content: ""; }
 }
 #documentsView .payment-row label {
   margin-bottom: 0;
+  min-width: 0;
+  font-size: 11px;
+  letter-spacing: 0;
 }
+#documentsView .payment-row label input { width: 100%; }
+#documentsView .payment-row-heading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 650; }
 #documentsView .payment-row label input {
   margin-top: 7px;
 }
 /* the actions (Received in full / Remove) sit stacked in the last cell */
 #documentsView .payment-row-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
   gap: 6px;
   align-items: stretch;
   margin-bottom: 1px;
@@ -4287,8 +4353,15 @@ details summary::marker { content: ""; }
 
 /* ---------- LAYOUT SHELL ---------- */
 #messagesView .message-panel {
-  padding: 22px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  overflow: visible;
 }
+#messagesView.message-mode-quote .message-layout { grid-template-columns: minmax(0, 1fr); }
+#messagesView .message-details-card > .helper-text { padding: 0 18px 18px; }
+#messagesView .ai-draft-card { order: 5; }
+#messagesView .message-template-stack > .helper-text { order: 6; }
 
 #messagesView .message-flow-tabs {
   margin-bottom: 20px;
@@ -4970,10 +5043,14 @@ dialog#bookingDialog::backdrop {
     z-index: auto;
   }
   .sidebar .nav-tabs {
-    display: flex; /* base rule is display:grid — must override or flex props below are inert */
+    display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    gap: 4px;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
   }
   .sidebar .nav-button {
     flex: 0 0 auto; /* size to content so buttons wrap into compact rows, not full-width stacks */
@@ -5218,6 +5295,8 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
    keeps it for screen readers (matches the existing .wa-toggle pattern).
    Recovers ~140-180px per table — the single biggest fit win.
    --------------------------------------------------------------------- */
+#bookingsView .bookings-table .refund-toggle,
+#calendarView .quick-view-table .refund-toggle { position: relative; }
 #bookingsView .bookings-table .refund-toggle span,
 #calendarView .quick-view-table .refund-toggle span {
   position: absolute !important;
@@ -5822,7 +5901,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 dialog#bookingDialog[open] { animation: svDialogIn var(--dur-base) var(--ease-out); }
 
 /* View switch: a subtle fade-up when a view becomes active (once per switch, not on data re-render) */
-@keyframes svViewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes svViewIn { from { opacity: 0; } to { opacity: 1; } }
 .view.active { animation: svViewIn var(--dur-base) var(--ease-out); }
 
 /* Non-negotiable for a daily tool: kill all of the above under reduced-motion */
