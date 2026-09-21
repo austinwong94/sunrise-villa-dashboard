@@ -1075,6 +1075,9 @@
                   <label>Guest / Customer Name
                     <input id="docGuestName" required placeholder="Example: Michelle Tan" />
                   </label>
+                  <label>Guest Contact Number
+                    <input id="docGuestContact" inputmode="tel" placeholder="Example: +60 12-345 6789" />
+                  </label>
                   <label>Company to Claim / Bill To
                     <input id="docBillTo" placeholder="Company name or guest name" />
                   </label>
@@ -1113,6 +1116,30 @@
                   </label>
                   <label class="wide-field">Remarks
                     <textarea id="docRemarks" rows="3" placeholder="Optional payment terms, claim notes, or booking remarks"></textarea>
+                  </label>
+                </div>
+              </section>
+
+              <section class="document-form-section invoice-balance-only" id="invoiceBalanceSection" hidden>
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Invoice option</p>
+                    <h3>Balance Payment Invoice</h3>
+                  </div>
+                </div>
+                <div class="form-grid two-col">
+                  <label>Invoice Amount
+                    <select id="docInvoiceScope">
+                      <option value="Full Booking">Full booking amount</option>
+                      <option value="Balance Payment">Balance payment only</option>
+                    </select>
+                    <small>Use balance payment when a receipt was already issued for partial payment.</small>
+                  </label>
+                  <label>Amount Already Received
+                    <input id="docPreviouslyReceived" type="number" min="0" step="0.01" inputmode="decimal" />
+                  </label>
+                  <label class="wide-field">Related Receipt / Payment Reference
+                    <input id="docLinkedReceiptCode" placeholder="Example: SVV-0601-RA08 or transfer reference" />
                   </label>
                 </div>
               </section>
@@ -1182,7 +1209,7 @@
                     <th>Guest</th>
                     <th>Bill To</th>
                     <th>Stay</th>
-                    <th>Total</th>
+                    <th>Amount / Due</th>
                     <th>Status</th>
                     <th></th>
                   </tr>

@@ -544,6 +544,7 @@ const els = {
   docStatus: document.querySelector("#docStatus"),
   docBookingType: document.querySelector("#docBookingType"),
   docGuestName: document.querySelector("#docGuestName"),
+  docGuestContact: document.querySelector("#docGuestContact"),
   docBillTo: document.querySelector("#docBillTo"),
   docBillAddress: document.querySelector("#docBillAddress"),
   docProperty: document.querySelector("#docProperty"),
@@ -554,6 +555,10 @@ const els = {
   docDepositAmount: document.querySelector("#docDepositAmount"),
   docFromBooking: document.querySelector("#docFromBooking"),
   docRemarks: document.querySelector("#docRemarks"),
+  invoiceBalanceSection: document.querySelector("#invoiceBalanceSection"),
+  docInvoiceScope: document.querySelector("#docInvoiceScope"),
+  docPreviouslyReceived: document.querySelector("#docPreviouslyReceived"),
+  docLinkedReceiptCode: document.querySelector("#docLinkedReceiptCode"),
   receiptPaymentSection: document.querySelector("#receiptPaymentSection"),
   paymentRows: document.querySelector("#paymentRows"),
   addPaymentRow: document.querySelector("#addPaymentRow"),
@@ -1532,6 +1537,7 @@ function normalizeDocument(doc) {
     status: String(doc.status || "Draft"),
     bookingType,
     guestName: String(doc.guestName || ""),
+    guestContact: String(doc.guestContact || doc.contact || ""),
     billTo: String(doc.billTo || ""),
     billAddress: String(doc.billAddress || ""),
     propertyName: String(doc.propertyName || "Sunrise Villa"),
@@ -1540,17 +1546,23 @@ function normalizeDocument(doc) {
     nights,
     accommodationFee: Number(doc.accommodationFee || 0),
     securityDeposit: Number(doc.securityDeposit ?? 500),
+    invoiceScope: doc.invoiceScope === "Balance Payment" ? "Balance Payment" : "Full Booking",
+    previouslyReceived: Number(doc.previouslyReceived || 0),
+    linkedReceiptCode: String(doc.linkedReceiptCode || ""),
     remarks: String(doc.remarks || ""),
     payments: Array.isArray(doc.payments) ? doc.payments.map(normalizePayment) : [],
     createdAt: doc.createdAt || now,
     updatedAt: doc.updatedAt || now,
   };
-  return { ...normalized, code: documentCodeFor(normalized), totalAmount: documentTotalFor(normalized) };
+  const totalAmount = documentTotalFor(normalized);
+  const amountDue = documentAmountDueFor({ ...normalized, totalAmount });
+  return { ...normalized, code: documentCodeFor(normalized), totalAmount, amountDue };
 }
 
 function normalizePayment(payment) {
   return {
     mode: String(payment.mode || ""),
+    bank: String(payment.bank || payment.bankDetails || ""),
     reference: String(payment.reference || ""),
     date: String(payment.date || isoDate(new Date())),
     amount: Number(payment.amount || 0),
@@ -2418,6 +2430,14 @@ function documentCodeFor(doc) {
 
 function documentTotalFor(doc) {
   return Number(doc.accommodationFee || 0) + Number(doc.securityDeposit || 0);
+}
+
+function documentAmountDueFor(doc) {
+  const total = Number(doc.totalAmount ?? documentTotalFor(doc));
+  if (doc.type === "Invoice" && doc.invoiceScope === "Balance Payment") {
+    return Math.max(0, total - Number(doc.previouslyReceived || 0));
+  }
+  return total;
 }
 
 function paymentTotalFor(doc) {
@@ -4954,6 +4974,7 @@ function defaultDocumentDraft() {
     status: "Draft",
     bookingType: "Direct Booking",
     guestName: "",
+    guestContact: "",
     billTo: "",
     billAddress: "",
     propertyName: activeVillaKey() === "Windmill" ? "Windmill Villa" : "Sunrise Villa",
@@ -4962,6 +4983,9 @@ function defaultDocumentDraft() {
     nights: 1,
     accommodationFee: 0,
     securityDeposit: 500,
+    invoiceScope: "Full Booking",
+    previouslyReceived: 0,
+    linkedReceiptCode: "",
     remarks: "",
     payments: [],
   });
@@ -4982,13 +5006,26 @@ function prefillDocFromBooking(id) {
   const b = bookings.find((x) => x.id === id);
   if (!b) return;
   if (els.docGuestName) els.docGuestName.value = b.guest || "";
+  if (els.docGuestContact) els.docGuestContact.value = b.contact || "";
   if (els.docProperty) els.docProperty.value = b.villa === "Windmill" ? "Windmill Villa" : "Sunrise Villa";
   if (els.docCheckIn) els.docCheckIn.value = b.arrival || "";
   if (els.docCheckOut) els.docCheckOut.value = departureFor(b);
   if (els.docNights) els.docNights.value = b.nights || 1;
   if (els.docAccommodationFee) els.docAccommodationFee.value = b.revenue || 0;
   if (els.docDepositAmount) els.docDepositAmount.value = b.depositAmount || 0;
-  prefillReceivedIfEmpty(); // carry the received amount into a receipt, not just the line items
+
+  const fullTotal = Number(b.revenue || 0) + Number(b.depositAmount || 0);
+  const received = Number(b.paid || 0);
+  if (els.docType?.value === "Official Receipt" && received > 0) {
+    renderPaymentRows([normalizePayment({ date: isoDate(new Date()), amount: Math.min(received, fullTotal || received) })]);
+  }
+  if (els.docType?.value === "Invoice" && els.docInvoiceScope) {
+    const isPartial = received > 0 && fullTotal > 0 && received < fullTotal;
+    els.docInvoiceScope.value = isPartial ? "Balance Payment" : "Full Booking";
+    if (els.docPreviouslyReceived) els.docPreviouslyReceived.value = isPartial ? received : 0;
+    if (els.docLinkedReceiptCode && !isPartial) els.docLinkedReceiptCode.value = "";
+  }
+  updateReceiptVisibility();
   renderDocumentPreview();
 }
 
@@ -5001,6 +5038,7 @@ function formDocument() {
     status: els.docStatus.value,
     bookingType: els.docBookingType.value,
     guestName: els.docGuestName.value.trim(),
+    guestContact: els.docGuestContact?.value.trim() || "",
     billTo: els.docBillTo.value.trim(),
     billAddress: els.docBillAddress.value.trim(),
     propertyName: els.docProperty.value.trim(),
@@ -5009,6 +5047,9 @@ function formDocument() {
     nights: Number(els.docNights.value || 1),
     accommodationFee: Number(els.docAccommodationFee.value || 0),
     securityDeposit: Number(els.docDepositAmount.value || 0),
+    invoiceScope: els.docInvoiceScope?.value || "Full Booking",
+    previouslyReceived: Number(els.docPreviouslyReceived?.value || 0),
+    linkedReceiptCode: els.docLinkedReceiptCode?.value.trim() || "",
     remarks: els.docRemarks.value.trim(),
     payments: els.docType.value === "Official Receipt" ? paymentRowsFromForm() : [],
   };
@@ -5029,6 +5070,7 @@ function fillDocumentForm(doc) {
   els.docStatus.value = normalized.status;
   els.docBookingType.value = normalized.bookingType;
   els.docGuestName.value = normalized.guestName;
+  if (els.docGuestContact) els.docGuestContact.value = normalized.guestContact;
   els.docBillTo.value = normalized.billTo;
   els.docBillAddress.value = normalized.billAddress;
   els.docProperty.value = normalized.propertyName;
@@ -5037,6 +5079,9 @@ function fillDocumentForm(doc) {
   els.docNights.value = normalized.nights;
   els.docAccommodationFee.value = normalized.accommodationFee;
   els.docDepositAmount.value = normalized.securityDeposit;
+  if (els.docInvoiceScope) els.docInvoiceScope.value = normalized.invoiceScope;
+  if (els.docPreviouslyReceived) els.docPreviouslyReceived.value = normalized.previouslyReceived;
+  if (els.docLinkedReceiptCode) els.docLinkedReceiptCode.value = normalized.linkedReceiptCode;
   els.docRemarks.value = normalized.remarks;
   renderPaymentRows(normalized.payments.length ? normalized.payments : [normalizePayment({})]);
   updateReceiptVisibility();
@@ -5048,12 +5093,13 @@ function paymentRowsFromForm() {
     .map((row) =>
       normalizePayment({
         mode: row.querySelector("[data-payment-mode]")?.value,
+        bank: row.querySelector("[data-payment-bank]")?.value,
         reference: row.querySelector("[data-payment-reference]")?.value,
         date: row.querySelector("[data-payment-date]")?.value,
         amount: row.querySelector("[data-payment-amount]")?.value,
       }),
     )
-    .filter((payment) => payment.mode || payment.reference || payment.amount);
+    .filter((payment) => payment.mode || payment.bank || payment.reference || payment.amount);
 }
 
 function renderPaymentRows(payments = [normalizePayment({})]) {
@@ -5063,6 +5109,9 @@ function renderPaymentRows(payments = [normalizePayment({})]) {
         <div class="payment-row">
           <label>Payment Mode
             <input data-payment-mode value="${escapeHtml(payment.mode)}" placeholder="Bank transfer, cash, card" />
+          </label>
+          <label>Bank / Payment Details
+            <input data-payment-bank value="${escapeHtml(payment.bank)}" placeholder="RHB, Maybank, cash" />
           </label>
           <label>Reference No.
             <input data-payment-reference value="${escapeHtml(payment.reference)}" placeholder="Transaction ID" />
@@ -5100,7 +5149,12 @@ function prefillReceivedIfEmpty() {
 
 function updateReceiptVisibility() {
   const isReceipt = els.docType.value === "Official Receipt";
-  els.receiptPaymentSection.hidden = !isReceipt;
+  const isInvoice = els.docType.value === "Invoice";
+  const isBalanceInvoice = isInvoice && els.docInvoiceScope?.value === "Balance Payment";
+  if (els.receiptPaymentSection) els.receiptPaymentSection.hidden = !isReceipt;
+  if (els.invoiceBalanceSection) els.invoiceBalanceSection.hidden = !isInvoice;
+  if (els.docPreviouslyReceived) els.docPreviouslyReceived.disabled = !isBalanceInvoice;
+  if (els.docLinkedReceiptCode) els.docLinkedReceiptCode.disabled = !isBalanceInvoice;
   if (isReceipt && !els.paymentRows.children.length) renderPaymentRows([normalizePayment({})]);
   if (isReceipt) prefillReceivedIfEmpty();
 }
@@ -5172,8 +5226,12 @@ function fitDocPreviewFrame(frame) {
 function buildDocumentMarkup(normalized) {
   const issuer = issuers[normalized.issuer] || issuers["Sunrise Villa Ventures"];
   const isReceipt = normalized.type === "Official Receipt";
+  const isBalanceInvoice = normalized.type === "Invoice" && normalized.invoiceScope === "Balance Payment";
+  const previouslyReceived = isBalanceInvoice ? Math.min(Number(normalized.previouslyReceived || 0), normalized.totalAmount) : 0;
+  const amountDue = Math.max(0, normalized.totalAmount - previouslyReceived);
   const totalPayments = paymentTotalFor(normalized);
-  const balance = Math.max(0, normalized.totalAmount - totalPayments);
+  const receiptBalance = Math.max(0, normalized.totalAmount - totalPayments);
+  const totalLabel = isBalanceInvoice ? "Balance Amount Due" : "Total Amount";
   const monogram = escapeHtml(
     ((normalized.issuer || "Sunrise Villa").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("") || "SV").toUpperCase(),
   );
@@ -5200,6 +5258,7 @@ function buildDocumentMarkup(normalized) {
       <section>
         <h4>Bill To</h4>
         <p><strong>${escapeHtml(normalized.guestName || "Guest Name")}</strong></p>
+        ${normalized.guestContact ? `<p>Contact: ${escapeHtml(normalized.guestContact)}</p>` : ""}
         ${normalized.billTo ? `<p>${escapeHtml(normalized.billTo)}</p>` : ""}
         ${normalized.billAddress ? `<p class="doc-address">${escapeMultiline(normalized.billAddress)}</p>` : ""}
       </section>
@@ -5227,11 +5286,16 @@ function buildDocumentMarkup(normalized) {
           <td>Refundable Damage Security Deposit</td>
           <td>${money(normalized.securityDeposit)}</td>
         </tr>
+        ${
+          isBalanceInvoice && previouslyReceived > 0
+            ? `<tr class="doc-less-row"><td>Less: Amount Previously Received${normalized.linkedReceiptCode ? ` (${escapeHtml(normalized.linkedReceiptCode)})` : ""}</td><td>- ${money(previouslyReceived)}</td></tr>`
+            : ""
+        }
       </tbody>
       <tfoot>
         <tr>
-          <th>Total Amount</th>
-          <th><span class="doc-total-mark">${money(normalized.totalAmount)}</span></th>
+          <th>${escapeHtml(totalLabel)}</th>
+          <th><span class="doc-total-mark">${money(amountDue)}</span></th>
         </tr>
       </tfoot>
     </table>
@@ -5245,6 +5309,7 @@ function buildDocumentMarkup(normalized) {
               <thead>
                 <tr>
                   <th>Mode</th>
+                  <th>Bank / Details</th>
                   <th>Reference No.</th>
                   <th>Date</th>
                   <th>Amount</th>
@@ -5258,6 +5323,7 @@ function buildDocumentMarkup(normalized) {
                           (payment) => `
                             <tr>
                               <td>${escapeHtml(payment.mode || "-")}</td>
+                              <td>${escapeHtml(payment.bank || "-")}</td>
                               <td>${escapeHtml(payment.reference || "-")}</td>
                               <td>${payment.date ? shortDate(payment.date) : "-"}</td>
                               <td>${money(payment.amount)}</td>
@@ -5265,20 +5331,21 @@ function buildDocumentMarkup(normalized) {
                           `,
                         )
                         .join("")
-                    : `<tr><td colspan="4">No payment transaction entered.</td></tr>`
+                    : `<tr><td colspan="5">No payment transaction entered.</td></tr>`
                 }
               </tbody>
               <tfoot>
                 <tr>
-                  <th colspan="3">Total Received</th>
+                  <th colspan="4">Total Received</th>
                   <th>${money(totalPayments)}</th>
                 </tr>
                 <tr class="doc-balance-row">
-                  <th colspan="3">Balance</th>
-                  <th><span class="doc-total-mark">${money(balance)}</span></th>
+                  <th colspan="4">Balance Remaining</th>
+                  <th><span class="doc-total-mark">${money(receiptBalance)}</span></th>
                 </tr>
               </tfoot>
             </table>
+            <p class="doc-balance-note">This receipt confirms only the payment received above. Any balance remaining is payable before check-in unless otherwise agreed.</p>
           </section>
         `
         : ""
@@ -5356,6 +5423,28 @@ function duplicateSavedDocument(id) {
   );
 }
 
+function createBalanceInvoiceFromReceipt(id) {
+  const receipt = documents.find((item) => item.id === id);
+  if (!receipt) return;
+  const received = paymentTotalFor(receipt);
+  const total = documentTotalFor(receipt);
+  fillDocumentForm(
+    normalizeDocument({
+      ...receipt,
+      id: crypto.randomUUID(),
+      type: "Invoice",
+      date: isoDate(new Date()),
+      status: "Draft",
+      invoiceScope: "Balance Payment",
+      previouslyReceived: Math.min(received, total),
+      linkedReceiptCode: receipt.code,
+      payments: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+  );
+}
+
 function deleteSavedDocument(id) {
   const doc = documents.find((item) => item.id === id);
   if (!window.confirm(`Delete ${doc?.code || "this document"}?`)) return;
@@ -5421,6 +5510,8 @@ const DOC_PRINT_CSS = `
   .doc-item-table thead th:last-child { text-align: right; }
   .doc-item-table tbody td { padding: 12px 2px; font-size: 12.5px; color: #4a463d; border-bottom: 1px solid #efece5; }
   .doc-item-table tbody td:last-child { text-align: right; color: #23201a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .doc-less-row td { color: #8b8578; }
+  .doc-less-row td:last-child { color: #a1495e; }
   .doc-item-table tfoot th { padding: 15px 2px 0; text-align: left; font-size: 14px; font-weight: 700; color: #23201a; }
   .doc-item-table tfoot th:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   /* THE hint of yellow: a highlighter swipe behind the hero amount */
@@ -5440,6 +5531,7 @@ const DOC_PRINT_CSS = `
   .compact-doc-table tfoot th { padding: 11px 2px 0; font-size: 12px; font-weight: 700; border-top: 1px solid #efece5; }
   .compact-doc-table tfoot th:last-child { text-align: right; }
   .doc-balance-row th { font-size: 14px; }
+  .doc-balance-note { margin: 10px 0 0; font-size: 10.5px; line-height: 1.45; color: #8b8578; }
 
   /* Remarks + signatures */
   .doc-remarks { margin: 26px 0 0; page-break-inside: avoid; }
@@ -5508,7 +5600,7 @@ function renderDocumentArchive() {
   const type = els.documentTypeFilter?.value || "All";
   const filtered = documents
     .filter((doc) => {
-      const haystack = `${doc.code} ${doc.type} ${doc.issuer} ${doc.guestName} ${doc.billTo} ${doc.billAddress} ${doc.propertyName} ${doc.checkIn} ${doc.checkOut}`.toLowerCase();
+      const haystack = `${doc.code} ${doc.type} ${doc.issuer} ${doc.guestName} ${doc.guestContact} ${doc.billTo} ${doc.billAddress} ${doc.propertyName} ${doc.linkedReceiptCode} ${doc.checkIn} ${doc.checkOut}`.toLowerCase();
       if (type !== "All" && doc.type !== type) return false;
       return !search || haystack.includes(search);
     })
@@ -5516,7 +5608,11 @@ function renderDocumentArchive() {
   els.documentArchiveRows.innerHTML = filtered.length
     ? filtered
         .map(
-          (doc) => `
+          (doc) => {
+            const amountDue = documentAmountDueFor(doc);
+            const receiptBalance = doc.type === "Official Receipt" ? Math.max(0, documentTotalFor(doc) - paymentTotalFor(doc)) : 0;
+            const canCreateBalanceInvoice = doc.type === "Official Receipt" && receiptBalance > 0;
+            return `
             <tr>
               <td><strong>${escapeHtml(doc.code)}</strong><br><span class="table-muted">${shortDate(doc.date)}</span></td>
               <td>${escapeHtml(doc.type)}</td>
@@ -5524,16 +5620,18 @@ function renderDocumentArchive() {
               <td>${escapeHtml(doc.guestName || "-")}</td>
               <td>${escapeHtml(doc.billTo || "-")}</td>
               <td>${shortDate(doc.checkIn)}<br><span class="table-muted">${doc.nights} night${doc.nights === 1 ? "" : "s"}</span></td>
-              <td>${money(doc.totalAmount)}</td>
+              <td><strong>${money(amountDue)}</strong>${amountDue !== doc.totalAmount ? `<br><span class="table-muted">Full: ${money(doc.totalAmount)}</span>` : ""}</td>
               <td><span class="doc-status ${documentStatusClass(doc.status)}">${escapeHtml(doc.status)}</span></td>
               <td class="actions">
                 <button class="small-action" type="button" data-open-document="${doc.id}">Open</button>
                 <button class="small-action" type="button" data-duplicate-document="${doc.id}">Duplicate</button>
+                ${canCreateBalanceInvoice ? `<button class="small-action" type="button" data-balance-invoice-document="${doc.id}">Balance Invoice</button>` : ""}
                 <button class="small-action" type="button" data-print-document="${doc.id}">Print</button>
                 <button class="small-action danger" type="button" data-delete-document="${doc.id}">Delete</button>
               </td>
             </tr>
-          `,
+          `;
+          },
         )
         .join("")
     : `<tr><td colspan="9" class="empty-row">No saved documents yet.</td></tr>`;
@@ -8430,11 +8528,15 @@ document.querySelector("#dashboardView")?.addEventListener("click", (event) => {
   els.docStatus,
   els.docBookingType,
   els.docGuestName,
+  els.docGuestContact,
   els.docBillTo,
   els.docBillAddress,
   els.docProperty,
   els.docAccommodationFee,
   els.docDepositAmount,
+  els.docInvoiceScope,
+  els.docPreviouslyReceived,
+  els.docLinkedReceiptCode,
   els.docRemarks,
 ].forEach((control) => {
   control?.addEventListener("input", () => renderDocumentPreview(formDocument()));
@@ -8509,9 +8611,11 @@ els.documentArchiveRows?.addEventListener("click", (event) => {
   const duplicateId = event.target.dataset.duplicateDocument;
   const deleteId = event.target.dataset.deleteDocument;
   const printId = event.target.dataset.printDocument;
+  const balanceInvoiceId = event.target.dataset.balanceInvoiceDocument;
   if (openId) openSavedDocument(openId);
   if (duplicateId) duplicateSavedDocument(duplicateId);
   if (deleteId) deleteSavedDocument(deleteId);
+  if (balanceInvoiceId) createBalanceInvoiceFromReceipt(balanceInvoiceId);
   if (printId) {
     openSavedDocument(printId);
     printDocumentPreview();
