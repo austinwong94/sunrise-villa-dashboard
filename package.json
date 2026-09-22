@@ -1,10 +1,11 @@
 {
   "name": "sunrise-villa-dashboard",
   "private": true,
-  "version": "2026.9.21",
+  "version": "2026.9.22",
   "description": "Static villa management app with isolated browser regression tests",
   "scripts": {
-    "test": "node --check app.js && node tests/regression.cjs && node tests/audit.cjs"
+    "test": "node --check app.js && node --check workflow-core.js && node --check workspace.js && node --check recovery.js && node --check expense-review.js && node --check backup-crypto.js && node --check backup-ui.js && node tests/backup-security.cjs && node tests/regression.cjs && node tests/cloud-recovery.cjs && node tests/workflows.cjs && node tests/encrypted-backup.cjs && node tests/audit.cjs",
+    "check:public-access": "node scripts/check-public-access.cjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

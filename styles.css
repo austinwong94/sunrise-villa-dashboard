@@ -3884,18 +3884,18 @@ input, select, textarea { max-width: 100%; }
 
 /* ===================== SCREEN: tax ===================== */
 /* ============================================================
-   SUNRISE VILLA — TAX PLAN MODULE  (#taxView)
+   SUNRISE VILLA — TAX PLAN MODULE  (:is(#taxView, #financeExpenses))
    Builds on the foundation. Calm, warm, editorial.
-   Only styles classes the app actually emits inside #taxView.
+   Only styles classes the app actually emits inside :is(#taxView, #financeExpenses).
    Accent is themeable — always var(--accent).
    ============================================================ */
 
 /* ---------- Layout rhythm: stack the inner tabs + panels ---------- */
-#taxView .tax-inner-tabs {
+:is(#taxView, #financeExpenses) .tax-inner-tabs {
   margin-bottom: 18px;
 }
 
-#taxView .tax-inner-panel.active {
+:is(#taxView, #financeExpenses) .tax-inner-panel.active {
   display: grid;
   gap: 20px;
   align-content: start;
@@ -3906,7 +3906,7 @@ input, select, textarea { max-width: 100%; }
    ============================================================ */
 
 /* ---- Structure / income inputs (.tax-form-grid inside dashboard-section) ---- */
-#taxView .tax-form-grid {
+:is(#taxView, #financeExpenses) .tax-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 20px;
@@ -3914,7 +3914,7 @@ input, select, textarea { max-width: 100%; }
 }
 /* The labels in the plan grid wrap their inputs — neutralise the uppercase
    label baseline so the field text sits naturally above each control */
-#taxView .tax-form-grid > label {
+:is(#taxView, #financeExpenses) .tax-form-grid > label {
   display: block;
   margin: 0;
   color: var(--muted);
@@ -3923,20 +3923,20 @@ input, select, textarea { max-width: 100%; }
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-#taxView .tax-form-grid > label > input {
+:is(#taxView, #financeExpenses) .tax-form-grid > label > input {
   margin-top: 7px;
 }
 @media (max-width: 640px) {
-  #taxView .tax-form-grid { grid-template-columns: 1fr; }
+  :is(#taxView, #financeExpenses) .tax-form-grid { grid-template-columns: 1fr; }
 }
 
 /* ---- Summary stat cards (.tax-summary-grid > article.tax-card) ---- */
-#taxView .tax-summary-grid {
+:is(#taxView, #financeExpenses) .tax-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 14px;
 }
-#taxView .tax-card {
+:is(#taxView, #financeExpenses) .tax-card {
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -3945,12 +3945,12 @@ input, select, textarea { max-width: 100%; }
   border: 1px solid var(--line);
   border-radius: var(--r-card);
 }
-#taxView .tax-card > span {
+:is(#taxView, #financeExpenses) .tax-card > span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
 }
-#taxView .tax-card > strong {
+:is(#taxView, #financeExpenses) .tax-card > strong {
   font-size: 25px;
   font-weight: 600;
   letter-spacing: -.01em;
@@ -3958,38 +3958,38 @@ input, select, textarea { max-width: 100%; }
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-#taxView .tax-card > small {
+:is(#taxView, #financeExpenses) .tax-card > small {
   color: var(--faint);
   font-size: 12px;
   font-weight: 500;
 }
 /* The total-tax emphasis card — accent number + soft accent wash */
-#taxView .tax-card.warning {
+:is(#taxView, #financeExpenses) .tax-card.warning {
   background: var(--accent-soft);
   border-color: transparent;
 }
-#taxView .tax-card.warning > span { color: var(--accent); }
-#taxView .tax-card.warning > strong { color: var(--accent); }
-#taxView .tax-card.warning > small {
+:is(#taxView, #financeExpenses) .tax-card.warning > span { color: var(--accent); }
+:is(#taxView, #financeExpenses) .tax-card.warning > strong { color: var(--accent); }
+:is(#taxView, #financeExpenses) .tax-card.warning > small {
   color: var(--accent);
   opacity: .72;
 }
 
 /* ---- Two breakdown panels (.tax-split-grid > .chart-panel > .tax-breakdown) ---- */
-#taxView .tax-split-grid {
+:is(#taxView, #financeExpenses) .tax-split-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   align-items: start;
 }
 @media (max-width: 760px) {
-  #taxView .tax-split-grid { grid-template-columns: 1fr; }
+  :is(#taxView, #financeExpenses) .tax-split-grid { grid-template-columns: 1fr; }
 }
 
-#taxView .tax-breakdown {
+:is(#taxView, #financeExpenses) .tax-breakdown {
   padding: 4px 22px 18px;
 }
-#taxView .tax-breakdown > div {
+:is(#taxView, #financeExpenses) .tax-breakdown > div {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -3997,11 +3997,11 @@ input, select, textarea { max-width: 100%; }
   padding: 11px 0;
   border-bottom: 1px solid var(--line);
 }
-#taxView .tax-breakdown > div > span {
+:is(#taxView, #financeExpenses) .tax-breakdown > div > span {
   font-size: 13px;
   color: var(--muted);
 }
-#taxView .tax-breakdown > div > strong {
+:is(#taxView, #financeExpenses) .tax-breakdown > div > strong {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--ink);
@@ -4009,30 +4009,30 @@ input, select, textarea { max-width: 100%; }
   white-space: nowrap;
 }
 /* Last row = tax payable: bold accent total, separated by a top border */
-#taxView .tax-breakdown > div:last-child {
+:is(#taxView, #financeExpenses) .tax-breakdown > div:last-child {
   margin-top: 4px;
   padding: 14px 0 2px;
   border-bottom: none;
   border-top: 1px solid var(--line);
 }
-#taxView .tax-breakdown > div:last-child > span {
+:is(#taxView, #financeExpenses) .tax-breakdown > div:last-child > span {
   font-size: 14px;
   font-weight: 700;
   color: var(--ink);
 }
-#taxView .tax-breakdown > div:last-child > strong {
+:is(#taxView, #financeExpenses) .tax-breakdown > div:last-child > strong {
   font-size: 18px;
   font-weight: 700;
   color: var(--accent);
 }
 
 /* ---- Preparation checklist (.tax-checklist > label > checkbox + text) ---- */
-#taxView .tax-checklist {
+:is(#taxView, #financeExpenses) .tax-checklist {
   display: grid;
   gap: 4px;
   padding: 0 22px 22px;
 }
-#taxView .tax-checklist > label {
+:is(#taxView, #financeExpenses) .tax-checklist > label {
   display: flex;
   align-items: flex-start;
   gap: 11px;
@@ -4050,11 +4050,11 @@ input, select, textarea { max-width: 100%; }
   cursor: pointer;
   transition: border-color .15s ease, background .15s ease;
 }
-#taxView .tax-checklist > label:hover {
+:is(#taxView, #financeExpenses) .tax-checklist > label:hover {
   background: var(--card);
   border-color: var(--accent-soft);
 }
-#taxView .tax-checklist > label > input[type="checkbox"] {
+:is(#taxView, #financeExpenses) .tax-checklist > label > input[type="checkbox"] {
   margin-top: 1px;
 }
 
@@ -4063,15 +4063,15 @@ input, select, textarea { max-width: 100%; }
    ============================================================ */
 
 /* ---- Add-expense form ---- */
-#taxView .tax-expense-form {
+:is(#taxView, #financeExpenses) .tax-expense-form {
   padding: 0 22px 22px;
 }
-#taxView .tax-expense-grid {
+:is(#taxView, #financeExpenses) .tax-expense-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px 18px;
 }
-#taxView .tax-expense-grid > label {
+:is(#taxView, #financeExpenses) .tax-expense-grid > label {
   display: block;
   margin: 0;
   color: var(--muted);
@@ -4080,30 +4080,30 @@ input, select, textarea { max-width: 100%; }
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-#taxView .tax-expense-grid > label > input,
-#taxView .tax-expense-grid > label > select,
-#taxView .tax-expense-grid > label > textarea {
+:is(#taxView, #financeExpenses) .tax-expense-grid > label > input,
+:is(#taxView, #financeExpenses) .tax-expense-grid > label > select,
+:is(#taxView, #financeExpenses) .tax-expense-grid > label > textarea {
   margin-top: 7px;
 }
-#taxView .tax-expense-grid > label.wide-field {
+:is(#taxView, #financeExpenses) .tax-expense-grid > label.wide-field {
   grid-column: 1 / -1;
 }
 @media (max-width: 820px) {
-  #taxView .tax-expense-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :is(#taxView, #financeExpenses) .tax-expense-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
-  #taxView .tax-expense-grid { grid-template-columns: 1fr; }
+  :is(#taxView, #financeExpenses) .tax-expense-grid { grid-template-columns: 1fr; }
 }
 
 /* ---- Accounting drawer (details.tax-accounting-drawer) ---- */
-#taxView .tax-accounting-drawer {
+:is(#taxView, #financeExpenses) .tax-accounting-drawer {
   margin-top: 18px;
   border: 1px solid var(--line);
   border-radius: var(--r-control);
   background: var(--soft);
   overflow: hidden;
 }
-#taxView .tax-accounting-drawer > summary {
+:is(#taxView, #financeExpenses) .tax-accounting-drawer > summary {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -4112,7 +4112,7 @@ input, select, textarea { max-width: 100%; }
   font-size: 13px;
   font-weight: 600;
 }
-#taxView .tax-accounting-drawer > summary::before {
+:is(#taxView, #financeExpenses) .tax-accounting-drawer > summary::before {
   content: "";
   width: 8px;
   height: 8px;
@@ -4122,22 +4122,22 @@ input, select, textarea { max-width: 100%; }
   transform: rotate(-45deg);
   transition: transform .15s ease;
 }
-#taxView .tax-accounting-drawer[open] > summary {
+:is(#taxView, #financeExpenses) .tax-accounting-drawer[open] > summary {
   border-bottom: 1px solid var(--line);
 }
-#taxView .tax-accounting-drawer[open] > summary::before {
+:is(#taxView, #financeExpenses) .tax-accounting-drawer[open] > summary::before {
   transform: rotate(45deg);
 }
-#taxView .tax-accounting-drawer > summary:hover { color: var(--accent); }
+:is(#taxView, #financeExpenses) .tax-accounting-drawer > summary:hover { color: var(--accent); }
 
-#taxView .tax-accounting-grid {
+:is(#taxView, #financeExpenses) .tax-accounting-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px 18px;
   padding: 18px 16px;
   background: var(--card);
 }
-#taxView .tax-accounting-grid > label {
+:is(#taxView, #financeExpenses) .tax-accounting-grid > label {
   display: block;
   margin: 0;
   color: var(--muted);
@@ -4146,24 +4146,24 @@ input, select, textarea { max-width: 100%; }
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-#taxView .tax-accounting-grid > label > input,
-#taxView .tax-accounting-grid > label > select {
+:is(#taxView, #financeExpenses) .tax-accounting-grid > label > input,
+:is(#taxView, #financeExpenses) .tax-accounting-grid > label > select {
   margin-top: 7px;
 }
 @media (max-width: 820px) {
-  #taxView .tax-accounting-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :is(#taxView, #financeExpenses) .tax-accounting-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
-  #taxView .tax-accounting-grid { grid-template-columns: 1fr; }
+  :is(#taxView, #financeExpenses) .tax-accounting-grid { grid-template-columns: 1fr; }
 }
 
 /* File-upload field: a <label> wrapping the file input + status span */
-#taxView .file-upload-field {
+:is(#taxView, #financeExpenses) .file-upload-field {
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
-#taxView .file-upload-field > input[type="file"] {
+:is(#taxView, #financeExpenses) .file-upload-field > input[type="file"] {
   height: auto;
   padding: 9px 12px;
   border: 1px solid var(--line);
@@ -4177,7 +4177,7 @@ input, select, textarea { max-width: 100%; }
   color: transparent;
   cursor: pointer;
 }
-#taxView .file-upload-field > input[type="file"]::file-selector-button {
+:is(#taxView, #financeExpenses) .file-upload-field > input[type="file"]::file-selector-button {
   margin-right: 10px;
   height: 26px;
   padding: 0 12px;
@@ -4191,10 +4191,10 @@ input, select, textarea { max-width: 100%; }
   cursor: pointer;
   transition: background .15s ease;
 }
-#taxView .file-upload-field > input[type="file"]::file-selector-button:hover {
+:is(#taxView, #financeExpenses) .file-upload-field > input[type="file"]::file-selector-button:hover {
   background: var(--line);
 }
-#taxView .file-upload-field > span {
+:is(#taxView, #financeExpenses) .file-upload-field > span {
   font-size: 12px;
   font-weight: 500;
   color: var(--faint);
@@ -4203,14 +4203,14 @@ input, select, textarea { max-width: 100%; }
 }
 
 /* Accountant-reviewed checkbox — align baseline within the grid cell */
-#taxView .tax-review-check {
+:is(#taxView, #financeExpenses) .tax-review-check {
   align-self: end;
   height: 42px;
   padding: 0 2px;
 }
 
 /* ---- Form action buttons ---- */
-#taxView .tax-expense-actions {
+:is(#taxView, #financeExpenses) .tax-expense-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -4219,13 +4219,13 @@ input, select, textarea { max-width: 100%; }
 }
 
 /* ---- Summary stat strip (#taxExpenseSummary > article.tax-expense-card) ---- */
-#taxView .tax-expense-summary {
+:is(#taxView, #financeExpenses) .tax-expense-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 14px;
 }
-#taxView .tax-expense-summary:empty { display: none; }
-#taxView .tax-expense-card {
+:is(#taxView, #financeExpenses) .tax-expense-summary:empty { display: none; }
+:is(#taxView, #financeExpenses) .tax-expense-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -4234,14 +4234,14 @@ input, select, textarea { max-width: 100%; }
   border: 1px solid var(--line);
   border-radius: var(--r-card);
 }
-#taxView .tax-expense-card > span {
+:is(#taxView, #financeExpenses) .tax-expense-card > span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .03em;
   text-transform: uppercase;
 }
-#taxView .tax-expense-card > strong {
+:is(#taxView, #financeExpenses) .tax-expense-card > strong {
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -.01em;
@@ -4251,14 +4251,14 @@ input, select, textarea { max-width: 100%; }
 }
 
 /* ---- Filter toolbar (.booking-toolbar.tax-expense-toolbar) ---- */
-#taxView .tax-expense-toolbar {
+:is(#taxView, #financeExpenses) .tax-expense-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px 14px;
   padding: 4px 22px 16px;
 }
-#taxView .tax-expense-toolbar > label {
+:is(#taxView, #financeExpenses) .tax-expense-toolbar > label {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -4266,34 +4266,34 @@ input, select, textarea { max-width: 100%; }
   text-transform: none;
   letter-spacing: 0;
 }
-#taxView .tax-expense-toolbar > label > span {
+:is(#taxView, #financeExpenses) .tax-expense-toolbar > label > span {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--muted);
 }
-#taxView .tax-expense-toolbar input[type="number"],
-#taxView .tax-expense-toolbar select {
+:is(#taxView, #financeExpenses) .tax-expense-toolbar input[type="number"],
+:is(#taxView, #financeExpenses) .tax-expense-toolbar select {
   height: 34px;
   border-radius: var(--r-sm);
   font-size: 13px;
 }
-#taxView .tax-expense-toolbar input[type="number"] {
+:is(#taxView, #financeExpenses) .tax-expense-toolbar input[type="number"] {
   width: 96px;
 }
-#taxView .tax-expense-toolbar select {
+:is(#taxView, #financeExpenses) .tax-expense-toolbar select {
   min-width: 140px;
   width: auto;
 }
-#taxView .tax-expense-toolbar input[type="search"] {
+:is(#taxView, #financeExpenses) .tax-expense-toolbar input[type="search"] {
   min-width: 180px;
 }
 
 /* ---- Expense table ---- */
 /* Category tag — emitted as <span class="doc-status">Category</span>.
    Tasteful neutral chip; accent on row hover for a calm, editorial lift. */
-#taxView #taxExpenseRows .doc-status {
+:is(#taxView, #financeExpenses) #taxExpenseRows .doc-status {
   display: inline-flex;
   align-items: center;
   height: 22px;
@@ -4305,39 +4305,39 @@ input, select, textarea { max-width: 100%; }
   font-weight: 600;
   white-space: nowrap;
 }
-#taxView #taxExpenseRows tr:hover .doc-status {
+:is(#taxView, #financeExpenses) #taxExpenseRows tr:hover .doc-status {
   background: var(--accent-soft);
   color: var(--accent);
 }
 
 /* Receipt cell: label line + muted reference + inline View link */
-#taxView #taxExpenseRows td .table-muted {
+:is(#taxView, #financeExpenses) #taxExpenseRows td .table-muted {
   display: inline-block;
   margin-top: 2px;
   font-size: 12px;
 }
-#taxView #taxExpenseRows td .small-action {
+:is(#taxView, #financeExpenses) #taxExpenseRows td .small-action {
   margin-left: 8px;
   vertical-align: middle;
 }
 
 /* Amount strong — tabular money */
-#taxView #taxExpenseRows td strong {
+:is(#taxView, #financeExpenses) #taxExpenseRows td strong {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 /* Row action buttons cell */
-#taxView #taxExpenseRows td.actions {
+:is(#taxView, #financeExpenses) #taxExpenseRows td.actions {
   white-space: nowrap;
   text-align: right;
 }
-#taxView #taxExpenseRows td.actions .small-action + .small-action {
+:is(#taxView, #financeExpenses) #taxExpenseRows td.actions .small-action + .small-action {
   margin-left: 6px;
 }
 
 /* Footnote disclaimer sits flush in the panel flow if present */
-#taxView .tax-disclaimer {
+:is(#taxView, #financeExpenses) .tax-disclaimer {
   margin: 2px 4px 0;
   color: var(--faint);
   font-size: 11.5px;
@@ -5538,11 +5538,11 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 
 /* P&L drawer + tax expense + doc archive: keep scroll inside the card */
 #dashboardView .pnl-table-wrap,
-#taxView .tax-inner-panel .table-scroll,
+:is(#taxView, #financeExpenses) .tax-inner-panel .table-scroll,
 #documentsView .document-archive .table-scroll { overflow-x: auto; max-width: 100%; }
 
 /* compact tax + archive action buttons to match primary tables */
-#taxView #taxExpenseRows td .small-action,
+:is(#taxView, #financeExpenses) #taxExpenseRows td .small-action,
 #documentsView .document-archive td .small-action {
   height: 24px; padding: 0 7px; font-size: 11px;
 }
@@ -5698,13 +5698,13 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 /* ---------------------------------------------------------------------
    9. TAX — even stat cards, aligned breakdown totals, seated checkbox.
    --------------------------------------------------------------------- */
-#taxView .tax-summary-grid { align-items: stretch; }
-#taxView .tax-card { min-height: 116px; justify-content: flex-start; }
-#taxView .tax-card.warning { border: 1px solid transparent; }   /* match lined-card box height */
-#taxView .tax-breakdown > div:last-child { align-items: center; } /* center big total vs its label */
-#taxView .tax-expense-summary { align-items: stretch; }
-#taxView .tax-expense-card { min-height: 92px; justify-content: flex-start; }
-#taxView .tax-review-check {
+:is(#taxView, #financeExpenses) .tax-summary-grid { align-items: stretch; }
+:is(#taxView, #financeExpenses) .tax-card { min-height: 116px; justify-content: flex-start; }
+:is(#taxView, #financeExpenses) .tax-card.warning { border: 1px solid transparent; }   /* match lined-card box height */
+:is(#taxView, #financeExpenses) .tax-breakdown > div:last-child { align-items: center; } /* center big total vs its label */
+:is(#taxView, #financeExpenses) .tax-expense-summary { align-items: stretch; }
+:is(#taxView, #financeExpenses) .tax-expense-card { min-height: 92px; justify-content: flex-start; }
+:is(#taxView, #financeExpenses) .tax-review-check {
   align-self: end;
   height: 42px;
   margin-top: 18px;   /* match caption(11px)+gap(7px) of sibling fields */
@@ -5716,7 +5716,7 @@ body:has(#appShell:not([hidden])) #cloudAuthPanel { display: none !important; }
 #dashboardView .hero-kpi strong,
 #dashboardView .mini-kpi strong,
 #dashboardView .performance-hero strong,
-#taxView .tax-card strong { white-space: nowrap; }
+:is(#taxView, #financeExpenses) .tax-card strong { white-space: nowrap; }
 
 /* ===================== PHASE 1 — Today operations view ===================== */
 #todayView .today-grid { display: grid; gap: 16px; }

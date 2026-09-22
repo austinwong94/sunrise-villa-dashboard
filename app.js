@@ -10,7 +10,7 @@ const SUPABASE_URL = "https://nigzeyamrzrozftbujmm.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Hs81yUXxrGC4ydDZ7nWGsQ_MlCtxqED";
 const CLOUD_DATA_TYPE = "full_app_backup";
 const CLOUD_RECORD_KEY = "sunrise-villa-main";
-const APP_VERSION = "2026.09.21";
+const APP_VERSION = "2026.09.22";
 
 // --- "Keep me signed in" storage adapter (the only user-approved edit to the frozen auth layer) ---
 // Routes the Supabase session token to localStorage (persists across browser restarts) when the
@@ -724,7 +724,9 @@ function normalizeBooking(booking) {
     arrival: String(booking.arrival || ""),
     nights: Number(booking.nights || 1),
     revenue: Number(booking.revenue || 0),
-    paid: Number(booking.paid || 0),
+    paid: VillaLedger.received(booking),
+    ...(Array.isArray(booking.paymentLedger) ? { paymentLedger: booking.paymentLedger.map(VillaLedger.normalize) } : {}),
+    guestId: String(booking.guestId || ""),
     depositAmount: channel === "Airbnb" && !booking.depositPaid && depositAmount === 500 ? 0 : depositAmount,
     depositPaid: Boolean(booking.depositPaid),
     depositRefunded: Boolean(booking.depositRefunded),
@@ -834,6 +836,9 @@ function normalizeTaxExpense(expense = {}) {
     reviewed: Boolean(expense.reviewed),
     notes: String(expense.notes || ""),
     amount: Number(expense.amount || 0),
+    financeMode: ["additional", "commitment", "legacy", "tax-only", "unreviewed"].includes(expense.financeMode) ? expense.financeMode : "unreviewed",
+    commitmentId: String(expense.commitmentId || ""),
+    legacyCost: expense.financeMode === "legacy" && expense.legacyCost ? { monthKey: String(expense.legacyCost.monthKey || ""), costId: String(expense.legacyCost.costId || "") } : null,
     businessUsePct: clampPct(expense.businessUsePct, 100), // apportionment for mixed-use running costs
     createdAt: expense.createdAt || new Date().toISOString(),
     updatedAt: expense.updatedAt || new Date().toISOString(),
@@ -1559,10 +1564,11 @@ function normalizeDocument(doc) {
 
 function normalizePayment(payment) {
   return {
+    id: String(payment.id || crypto.randomUUID()),
     mode: String(payment.mode || ""),
     bank: String(payment.bank || payment.bankDetails || ""),
     reference: String(payment.reference || ""),
-    date: String(payment.date || isoDate(new Date())),
+    date: String(payment.date ?? isoDate(new Date())),
     amount: Number(payment.amount || 0),
   };
 }
@@ -1813,7 +1819,7 @@ function expenseBreakdownFor(monthValue) {
   breakdown.total = breakdown.housekeeping + breakdown.maintenance + breakdown.utilities + breakdown.propertyLoan + breakdown.loans + breakdown.supplies + breakdown.other;
   breakdown.adHoc = adHocExpenseTotalFor(monthValue);
   breakdown.commitments = commitmentTotalFor(monthValue);
-  return breakdown;
+  return typeof unifiedExpenseBreakdown === "function" ? unifiedExpenseBreakdown(monthValue, breakdown) : breakdown;
 }
 
 function initialMonth() {
@@ -1889,13 +1895,19 @@ function calculationBookings(list = scopedBookings()) {
 // Derived stats come straight from bookings; only notes/tags/blocklist/consent are stored
 // (in appSettings.guestProfiles, keyed by normalized phone or name — additive, cloud-synced).
 function guestKeyFor(booking) {
+  if (booking?.guestId) return booking.guestId;
   const phone = formatPhoneForWhatsapp(booking?.contact);
   if (phone) return "p:" + phone;
   const name = String(booking?.guest || "").trim().toLowerCase();
-  return name ? "n:" + name : "";
+  return name ? "b:" + booking.id : "";
 }
 function guestProfile(key) {
-  return (appSettings.guestProfiles && appSettings.guestProfiles[key]) || {};
+  const profiles = appSettings.guestProfiles || {};
+  if (profiles[key]) return profiles[key];
+  const booking = bookings.find(item => guestKeyFor(item) === key);
+  const oldKey = booking ? "n:" + booking.guest.trim().toLowerCase() : "";
+  const matches = oldKey ? bookings.filter(item => "n:" + item.guest.trim().toLowerCase() === oldKey) : [];
+  return matches.length === 1 ? profiles[oldKey] || {} : {};
 }
 function setGuestProfile(key, patch) {
   if (!key) return;
@@ -1910,9 +1922,9 @@ function guestStatsList(list = scopedBookings()) {
     if (!key) return;
     if (!map.has(key)) map.set(key, { key, name: b.guest, phone: formatPhoneForWhatsapp(b.contact), email: b.guestEmail || "", stays: 0, revenue: 0, nights: 0, firstStay: b.arrival, lastStay: b.arrival, channels: new Set() });
     const g = map.get(key);
-    g.stays += 1;
+    if (!isTentativeBooking(b) && departureFor(b) <= isoDate(new Date())) g.stays += 1;
     g.revenue += isExcludedBooking(b) ? 0 : Number(b.revenue || 0);
-    g.nights += Number(b.nights || 0);
+    if (!isTentativeBooking(b)) g.nights += Number(b.nights || 0);
     if (b.arrival < g.firstStay) g.firstStay = b.arrival;
     if (b.arrival > g.lastStay) g.lastStay = b.arrival;
     if (b.guest) g.name = b.guest;
@@ -1925,7 +1937,7 @@ function guestStatsList(list = scopedBookings()) {
 function guestStayTotal(booking, list = scopedBookings()) {
   const key = guestKeyFor(booking);
   if (!key) return 1;
-  return list.reduce((n, b) => n + (guestKeyFor(b) === key ? 1 : 0), 0);
+  return list.reduce((n, b) => n + (guestKeyFor(b) === key && !isTentativeBooking(b) && departureFor(b) <= isoDate(new Date()) ? 1 : 0), 0);
 }
 function returningBadgeHtml(booking, list = scopedBookings()) {
   const total = guestStayTotal(booking, list);
@@ -2198,17 +2210,26 @@ function setFullReceived(id, checked) {
   }
   bookings = bookings.map((booking) =>
     booking.id === id
-      ? { ...booking, paid: Math.max(Number(booking.paid || 0), totalToReceiveFor(booking)), depositPaid: Number(booking.depositAmount || 0) > 0 }
+      ? { ...VillaLedger.setTotal(booking, Math.max(Number(booking.paid || 0), totalToReceiveFor(booking)), isoDate(new Date()), "payment"), depositPaid: Number(booking.depositAmount || 0) > 0 }
       : booking,
   );
   saveBookings();
   renderAll();
 }
 
+function hasCheckinBeenSent(booking) {
+  return Boolean(booking.whatsappSent || booking.checkinSentAt || booking.sentLog?.checkin);
+}
+
 function setWhatsappSent(id, checked) {
-  bookings = bookings.map((booking) => (booking.id === id ? { ...booking, whatsappSent: Boolean(checked) } : booking));
+  const stamp = checked ? isoDate(new Date()) : null;
+  bookings = bookings.map(booking => booking.id === id ? {
+    ...booking, whatsappSent: Boolean(checked), checkinSentAt: stamp,
+    sentLog: { ...(booking.sentLog || {}), checkin: stamp },
+  } : booking);
   saveBookings();
   renderDetails();
+  renderToday();
 }
 
 // Improvement #2: capture / edit a guest phone inline, no dialog. Saves and re-renders.
@@ -2221,7 +2242,8 @@ function setBookingContact(id, value) {
 
 // Improvement #1: stamp a comms timestamp so the "Send today" list self-clears once messaged.
 function markBookingMessaged(id, field) {
-  const key = field === "reminder" ? "reminderSentAt" : "checkinSentAt";
+  if (field !== "reminder") { setWhatsappSent(id, true); return; }
+  const key = "reminderSentAt";
   const stamp = isoDate(new Date());
   bookings = bookings.map((booking) => (booking.id === id ? { ...booking, [key]: stamp } : booking));
   saveBookings();
@@ -2242,7 +2264,7 @@ function markNudgeSent(id, type) {
   const stamp = isoDate(new Date());
   bookings = bookings.map((booking) =>
     booking.id === id
-      ? { ...booking, sentLog: { ...(booking.sentLog || {}), [type]: stamp }, ...(type === "checkin" ? { checkinSentAt: stamp } : {}) }
+      ? { ...booking, sentLog: { ...(booking.sentLog || {}), [type]: stamp }, ...(type === "checkin" ? { checkinSentAt: stamp, whatsappSent: true } : {}) }
       : booking,
   );
   saveBookings();
@@ -2453,6 +2475,7 @@ function documentStatusClass(status) {
 }
 
 function channelBadgeFor(booking) {
+  if (isTentativeBooking(booking)) return `<span class="channel-badge tentative">${booking.status === "quoted" ? "Quoted" : "Inquiry"}</span>`;
   if (isExcludedBooking(booking)) return `<span class="channel-badge influencer">Influencer</span>`;
   return `<span class="channel-badge ${booking.channel.toLowerCase()}">${escapeHtml(booking.channel)}</span>`;
 }
@@ -2628,6 +2651,7 @@ function setView(view) {
     documents: "Villa Documents",
     tax: "Tax Plan",
   }[view];
+  if (typeof renderWorkflowShell === "function") renderWorkflowShell();
 }
 
 function setMessageFlow(flow) {
@@ -2649,6 +2673,8 @@ function setMessageFlow(flow) {
 }
 
 function setTaxInnerTab(mode) {
+  if (mode === "expenses" && typeof showFinanceSection === "function") { showFinanceSection("expenses"); return; }
+  if (["assets", "claim", "plan"].includes(mode) && typeof showFinanceSection === "function") setView("tax");
   const valid = ["plan", "expenses", "assets", "claim"];
   const nextMode = valid.includes(mode) ? mode : "plan";
   document.querySelectorAll("[data-tax-inner-tab]").forEach((button) => {
@@ -3017,7 +3043,7 @@ function renderDetails() {
               <div class="guest-cell">
                 <span class="guest-code">${prefixFor(booking.guest)}</span>
                 <span class="guest-meta">
-                  <strong>${escapeHtml(booking.guest)}</strong>
+                  <button type="button" class="workspace-link" data-workspace-booking="${booking.id}">${escapeHtml(booking.guest)}</button>
                   <span>${shortDate(departureFor(booking))} out</span>
                 </span>
               </div>
@@ -3160,8 +3186,9 @@ function drawQuickViewImage() {
 
 function allAppData() {
   return {
-    version: 2,
+    version: 3,
     appVersion: APP_VERSION,
+    ownerId: cloudUser?.id || readSyncState().userId || "",
     exportedAt: new Date().toISOString(),
     bookings,
     documents,
@@ -3180,6 +3207,9 @@ function recoveryCounts(data = allAppData()) {
     earnings: Array.isArray(data.taxPlan?.earnings) ? data.taxPlan.earnings.length : 0,
     earningsDocs: Array.isArray(data.taxPlan?.earningsDocs) ? data.taxPlan.earningsDocs.length : 0,
     lhdnDocs: Array.isArray(data.taxPlan?.lhdnDocs) ? data.taxPlan.lhdnDocs.length : 0,
+    commitments: Array.isArray(data.appSettings?.commitments) ? data.appSettings.commitments.length : 0,
+    guestProfiles: Object.keys(data.appSettings?.guestProfiles || {}).length,
+    calendarSources: Array.isArray(data.appSettings?.ical?.sources) ? data.appSettings.ical.sources.length : 0,
   };
 }
 
@@ -3196,7 +3226,11 @@ function stripAttachmentImages(data) {
       expenses: Array.isArray(tp.expenses) ? tp.expenses.map((e) => (e.attachment ? { ...e, attachment: stripAtt(e.attachment) } : e)) : tp.expenses,
       assets: Array.isArray(tp.assets) ? tp.assets.map((a) => (a.attachment ? { ...a, attachment: stripAtt(a.attachment) } : a)) : tp.assets,
       earningsDocs: Array.isArray(tp.earningsDocs) ? tp.earningsDocs.map((d) => ({ ...d, dataUrl: "" })) : tp.earningsDocs,
+      lhdnDocs: Array.isArray(tp.lhdnDocs) ? tp.lhdnDocs.map((d) => ({ ...d, dataUrl: "" })) : tp.lhdnDocs,
     },
+    profitData: Object.fromEntries(Object.entries(data.profitData || {}).map(([key, month]) => [key, { ...month,
+      oneOffCosts: (month.oneOffCosts || []).map(cost => ({ ...cost, receiptImage: "" })),
+    }])),
   };
 }
 
@@ -3244,7 +3278,7 @@ function createRecoverySnapshot(reason, data = allAppData()) {
     createdAt: new Date().toISOString(),
     reason,
     appVersion: APP_VERSION,
-    ownerId: readSyncState().userId || cloudUser?.id || "",
+    ownerId: data.ownerId || cloudUser?.id || readSyncState().userId || "",
     counts: recoveryCounts(data),
     data: stripAttachmentImages(data),
   };
@@ -3339,6 +3373,13 @@ function syncCloudAuthUi() {
   const canOpen = isLoggedIn && cloudReady;
   ui.appShell?.classList.toggle("private-locked", !canOpen);
   if (ui.appShell) ui.appShell.hidden = !canOpen;
+  if (!canOpen) {
+    document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
+    const workspace = document.querySelector("#bookingWorkspace");
+    if (workspace) workspace.replaceChildren();
+    if (typeof closeRestorePreview === "function") closeRestorePreview();
+    if (typeof closeBackupDialog === "function") closeBackupDialog();
+  }
   const retry = document.querySelector("#retryCloudLoad");
   if (retry) retry.hidden = !isLoggedIn || canOpen;
   ui.form.classList.toggle("hidden", isLoggedIn);
@@ -3367,7 +3408,12 @@ function initSupabaseClient() {
 }
 
 function readSyncState() {
-  try { return JSON.parse(localStorage.getItem(SYNC_STATE_KEY) || "{}"); } catch { return {}; }
+  try {
+    const state = JSON.parse(localStorage.getItem(SYNC_STATE_KEY) || "{}");
+    if (!state || typeof state !== "object" || Array.isArray(state)) return {};
+    return { userId: typeof state.userId === "string" ? state.userId : "",
+      updatedAt: typeof state.updatedAt === "string" ? state.updatedAt : "", dirty: state.dirty === true };
+  } catch { return {}; }
 }
 
 function writeSyncState() {
@@ -3382,14 +3428,19 @@ function scheduleCloudSave() {
   cloudDirty = true;
   writeSyncState();
   window.clearTimeout(cloudSaveTimer);
-  if (cloudConflict) return;
+  if (cloudConflict || cloudLoadPromise) return;
   setCloudStatus("syncing", "Changes waiting to save", "Your changes are waiting to be saved to Supabase.");
   cloudSaveTimer = window.setTimeout(() => saveCloudSnapshot(), 700);
 }
 
 async function saveCloudSnapshot() {
-  if (!supabaseClient || !cloudUser || !cloudReady || cloudConflict) return false;
+  if (!supabaseClient || !cloudUser || !cloudReady || cloudConflict || cloudLoadPromise) return false;
   if (cloudSavePromise) return cloudSavePromise;
+  if (cloudRecordId && !cloudKnownUpdatedAt) {
+    cloudConflict = true;
+    setCloudStatus("error", "Save paused", "The loaded cloud copy has no save version. Download a backup and reload before saving.");
+    return false;
+  }
   window.clearTimeout(cloudSaveTimer);
   const user = cloudUser;
   const generation = authGeneration;
@@ -3443,46 +3494,79 @@ async function saveCloudSnapshot() {
   return cloudSavePromise;
 }
 
-async function loadCloudSnapshot() {
+async function loadCloudSnapshot({ replaceLocal = false } = {}) {
   if (!supabaseClient || !cloudUser) return false;
   if (cloudLoadPromise) return cloudLoadPromise;
   const user = cloudUser;
   const generation = authGeneration;
   cloudLoadPromise = (async () => {
+    if (cloudSavePromise) await cloudSavePromise;
+    if (generation !== authGeneration || cloudUser?.id !== user.id) return false;
+    window.clearTimeout(cloudSaveTimer);
+    const revision = cloudRevision;
+    const fingerprint = replaceLocal ? JSON.stringify([bookings, documents, taxPlan, profitData, appSettings]) : "";
     setCloudStatus("syncing", "Loading your workspace", "Checking Supabase for your latest saved data.");
     const { data, error } = await supabaseClient.from("app_data")
       .select("id, data, updated_at").eq("data_type", CLOUD_DATA_TYPE)
       .eq("record_key", CLOUD_RECORD_KEY).eq("user_id", user.id)
-      .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      .order("updated_at", { ascending: false }).limit(2).maybeSingle();
     if (generation !== authGeneration || cloudUser?.id !== user.id) return false;
+    if (error?.code === "PGRST116") throw Object.assign(new Error("There are multiple cloud workspace records. Loading stopped without choosing or deleting one. Contact support to review the database."), { pauseSaving: true });
     if (error) throw error;
-    const local = readSyncState();
+    if (replaceLocal && (revision !== cloudRevision || fingerprint !== JSON.stringify([bookings, documents, taxPlan, profitData, appSettings]))) {
+      throw new Error("Your records changed while the cloud copy was loading. Nothing was replaced. Download a backup and load the cloud copy again when you have finished editing.");
+    }
+    // An open tab's pending state is authoritative; another tab may have changed the shared cache.
+    const local = cloudReady
+      ? { userId: user.id, updatedAt: cloudKnownUpdatedAt, dirty: cloudDirty }
+      : readSyncState();
     const ownsLocal = local.userId === user.id;
-    cloudRecordId = data?.id || "";
-    cloudKnownUpdatedAt = data?.updated_at || "";
-    cloudConflict = false;
-    if (data?.data) {
-      validateBackupData(data.data);
-      if (ownsLocal && local.dirty) {
+    if (!data && ownsLocal && (local.dirty || local.updatedAt)) {
+      cloudDirty = Boolean(local.dirty);
+      cloudKnownUpdatedAt = local.updatedAt || "";
+      cloudConflict = true;
+      cloudReady = true;
+      writeSyncState();
+      syncCloudAuthUi();
+      setCloudStatus("error", "Cloud record not found", "Your previous cloud workspace is missing. Local records were kept and automatic saving is paused. Download a full backup before investigating; no empty workspace was uploaded.");
+      return false;
+    }
+    if (data) {
+      if (!data.id || typeof data.updated_at !== "string" || !data.updated_at) {
+        throw Object.assign(new Error("The cloud record has no valid save version. Nothing was replaced. The database needs review before this copy can be used."), { pauseSaving: true });
+      }
+      if (!data.data) throw Object.assign(new Error("The cloud record has no workspace data. Nothing was replaced."), { pauseSaving: true });
+      if (data.data.ownerId && data.data.ownerId !== user.id) throw Object.assign(new Error("The cloud workspace owner does not match this account. Nothing was replaced."), { pauseSaving: true });
+      prepareRestoreData(data.data);
+      if (ownsLocal && local.dirty && !replaceLocal) {
+        cloudRecordId = data.id;
+        cloudKnownUpdatedAt = local.updatedAt || "";
         cloudDirty = true;
-        if (local.updatedAt !== cloudKnownUpdatedAt) {
-          cloudKnownUpdatedAt = local.updatedAt || "";
-          cloudConflict = true;
-          createRecoverySnapshot("Local edits preserved: cloud also changed");
-        }
+        cloudConflict = local.updatedAt !== data.updated_at;
+        if (cloudConflict) createRecoverySnapshot("Local edits preserved: cloud also changed");
       } else {
-        createRecoverySnapshot("Before loading cloud data");
+        if (hasMeaningfulAppData() && !createRecoverySnapshot("Before loading cloud data")) {
+          throw new Error("Cloud reload stopped: the browser could not save a recovery point. Your records and pending edits were kept. Download a full backup, free browser storage, then retry.");
+        }
         isRestoringCloudData = true;
         try { restoreAppData(data.data); } finally { isRestoringCloudData = false; }
+        cloudRecordId = data.id;
+        cloudKnownUpdatedAt = data.updated_at;
         cloudDirty = false;
+        cloudConflict = false;
       }
     } else {
-      // An empty account must never inherit another account's browser cache.
-      createRecoverySnapshot("Local data preserved before opening an empty cloud account");
+      // Only a genuinely new account may initialize an empty workspace.
+      if (hasMeaningfulAppData() && !createRecoverySnapshot("Local data preserved before opening an empty cloud account")) {
+        throw new Error("The browser could not preserve its previous records. Nothing was replaced. Free browser storage before opening this empty account.");
+      }
       isRestoringCloudData = true;
       try {
         restoreAppData({ bookings: [], documents: [], taxPlan: defaultTaxPlan(), profitData: {}, appSettings: defaultAppSettings() });
       } finally { isRestoringCloudData = false; }
+      cloudRecordId = "";
+      cloudKnownUpdatedAt = "";
+      cloudConflict = false;
       cloudDirty = true;
     }
     cloudReady = true;
@@ -3492,16 +3576,23 @@ async function loadCloudSnapshot() {
       setCloudStatus("error", "Save paused", "This device has unsaved edits and the cloud also changed. Download a backup, then load the cloud copy.");
       return false;
     }
-    if (cloudDirty) return await saveCloudSnapshot();
-    appSettings = { ...appSettings, lastCloudSyncAt: data.updated_at || "" };
-    safeSetItem(SETTINGS_KEY, JSON.stringify(appSettings));
-    setCloudStatus("connected", "All changes saved", "Loaded your latest saved workspace.");
+    if (!cloudDirty) {
+      appSettings = { ...appSettings, lastCloudSyncAt: data.updated_at };
+      safeSetItem(SETTINGS_KEY, JSON.stringify(appSettings));
+      setCloudStatus("connected", "All changes saved", "Loaded your latest saved workspace.");
+    }
     return true;
   })().catch(error => {
-    if (generation === authGeneration) setCloudStatus("error", "Could not load your workspace", error.message || "Check your connection, then retry.");
+    if (generation === authGeneration) {
+      if (error.pauseSaving) cloudConflict = true;
+      setCloudStatus("error", "Could not load your workspace", error.message || "Check your connection, then retry.");
+    }
     return false;
   }).finally(() => { cloudLoadPromise = null; });
-  return cloudLoadPromise;
+  const loaded = await cloudLoadPromise;
+  if (!loaded || generation !== authGeneration || cloudUser?.id !== user.id) return false;
+  // Saving starts only after the read has settled, never during a replacement.
+  return cloudDirty ? saveCloudSnapshot() : true;
 }
 
 async function applyCloudSession(session) {
@@ -3522,7 +3613,7 @@ async function applyCloudSession(session) {
   if (cloudUser?.id !== nextUser.id) return;
   const localOwner = readSyncState().userId;
   if (localOwner && localOwner !== nextUser.id) {
-    createRecoverySnapshot("Before switching accounts");
+    createRecoverySnapshot("Before switching accounts", { ...allAppData(), ownerId: localOwner });
     writeRecoverySnapshots(loadRecoverySnapshots().map(snapshot => ({ ...snapshot, ownerId: snapshot.ownerId || localOwner })));
     bookings = [];
     documents = [];
@@ -3637,17 +3728,18 @@ function downloadBackup() {
 }
 
 function renderBackupStatus() {
+  if (typeof renderBackupSafety === "function") renderBackupSafety();
   if (!els.backupStatus) return;
   if (!appSettings.lastBackupAt) {
     els.backupStatus.textContent = "Not yet";
-    if (els.dataHealthBackup) els.dataHealthBackup.textContent = "JSON export: not yet";
+    if (els.dataHealthBackup) els.dataHealthBackup.textContent = "Export requested: not yet";
     return;
   }
   const last = new Date(appSettings.lastBackupAt);
   const days = Math.floor((Date.now() - last.getTime()) / 86400000);
   const label = days <= 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} ago`;
   els.backupStatus.textContent = label;
-  if (els.dataHealthBackup) els.dataHealthBackup.textContent = `JSON export: ${label}`;
+  if (els.dataHealthBackup) els.dataHealthBackup.textContent = `Export requested: ${label}`;
 }
 
 function shortDateTimeLabel(value) {
@@ -3676,7 +3768,9 @@ function renderDataHealth(statusMode = cloudStatusMode) {
         ? "Saving changes..."
         : statusMode === "error"
           ? "Cloud: needs attention"
-          : "All changes saved"
+          : statusMode === "connected" && cloudReady && !cloudDirty
+            ? "All changes saved"
+            : "Cloud: check connection"
       : "Cloud: login required";
     els.dataHealthStatus.textContent = cloudLabel;
     els.dataHealthStatus.dataset.status = statusMode || (cloudUser ? "connected" : "offline");
@@ -3685,7 +3779,7 @@ function renderDataHealth(statusMode = cloudStatusMode) {
     els.dataHealthLastSync.textContent = `Last synced: ${shortDateTimeLabel(appSettings.lastCloudSyncAt)}`;
   }
   if (els.dataHealthRecords) {
-    els.dataHealthRecords.textContent = `${bookings.length} booking${bookings.length === 1 ? "" : "s"} saved`;
+    els.dataHealthRecords.textContent = `${bookings.length} booking${bookings.length === 1 ? "" : "s"}`;
   }
   renderBackupStatus();
 }
@@ -3708,16 +3802,23 @@ async function syncCloudNow() {
 async function restoreJsonFromInput(event, label = "backup file") {
   const file = event.target.files?.[0];
   if (!file) return;
+  const ownerId = cloudUser?.id;
   try {
+    if (!cloudReady || !ownerId) throw new Error("Log in before restoring a backup.");
+    if (file.size > VillaBackup.MAX_FILE_BYTES) throw new Error("This file exceeds the 90 MB import limit.");
     const text = await file.text();
+    if (!cloudReady || cloudUser?.id !== ownerId) return;
     const parsed = JSON.parse(text);
-    validateBackupData(parsed);
-    const counts = recoveryCounts(Array.isArray(parsed) ? { bookings: parsed } : parsed);
-    if (!window.confirm(`Restore ${counts.bookings} bookings and ${counts.documents} documents from this backup? A recovery copy of your current records will be kept.`)) return;
-    restoreAppData(parsed);
+    if (VillaBackup.isEncrypted(parsed)) openEncryptedImport(parsed, { label: file.name });
+    else {
+      validateBackupData(parsed);
+      openRestorePreview(parsed, { label: file.name });
+    }
   } catch (error) {
-    window.alert(`Could not restore this ${label}. Please choose a valid Sunrise Villa JSON backup file.`);
-    console.error("Restore failed", error);
+    if (cloudReady && cloudUser?.id === ownerId) {
+      const message = error instanceof SyntaxError ? "The file is not valid JSON." : error.message;
+      window.alert(`Could not restore this ${label}. ${message || "Please choose a valid Sunrise Villa JSON backup file."}`);
+    }
   } finally {
     event.target.value = "";
   }
@@ -3775,7 +3876,7 @@ function renderOneOffCosts() {
                 <input data-one-off-field="description" data-one-off-id="${cost.id}" value="${escapeHtml(cost.description)}" placeholder="Example: BBQ charcoal, towels, petrol" />
               </label>
               <label>Amount
-                <input data-one-off-field="amount" data-one-off-id="${cost.id}" type="number" min="0" step="0.01" value="${Number(cost.amount || 0)}" />
+                <input data-one-off-field="amount" data-one-off-id="${cost.id}" type="number" min="0" step="0.01" value="${Number(cost.amount || 0)}" ${typeof linkedLegacyExpense === "function" && linkedLegacyExpense(profitMonthKey(selectedMonth), cost.id) ? 'readonly title="Edit the linked amount in Finance > Expenses"' : ""} />
               </label>
               <div class="receipt-field">
                 <span>Receipt Image</span>
@@ -3794,7 +3895,9 @@ function renderOneOffCosts() {
                       </label>`
                 }
               </div>
-              <button class="small-action danger" type="button" data-delete-one-off="${cost.id}">Delete</button>
+              ${typeof linkedLegacyExpense === "function" && linkedLegacyExpense(profitMonthKey(selectedMonth), cost.id)
+                ? `<button class="small-action" type="button" data-open-linked-cost="${cost.id}">Edit linked record</button>`
+                : `<button class="small-action danger" type="button" data-delete-one-off="${cost.id}">Delete</button>`}
             </div>
           `,
         )
@@ -3887,6 +3990,7 @@ function validateBackupData(data) {
   if (!payload || typeof payload !== "object" || !Array.isArray(payload.bookings)) {
     throw new Error("This file is not a Sunrise Villa backup. No records were changed.");
   }
+  if (Number(payload.version || 1) > 3) throw new Error("This backup uses a newer format. Update the application before importing it.");
   for (const key of ["documents"]) {
     if (payload[key] !== undefined && !Array.isArray(payload[key])) throw new Error("Invalid " + key + " collection.");
   }
@@ -3921,6 +4025,11 @@ function validateBackupData(data) {
   const validDate = value => /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(value || "")) && isoDate(dateObj(value)) === value;
   for (const booking of payload.bookings) {
     amounts(booking, ["revenue", "paid", "depositAmount"]);
+    if (booking.paymentLedger !== undefined) {
+      const ledger = collection(booking.paymentLedger, "booking payments");
+      if (ledger.some(entry => !Number.isSafeInteger(entry.amountSen) || !["payment", "opening", "adjustment"].includes(entry.kind) || (entry.date && !validDate(entry.date)) || (entry.kind !== "adjustment" && entry.amountSen < 0))) throw new Error("Invalid booking payment history.");
+      if (VillaLedger.total(ledger) < 0 || VillaLedger.cents(VillaLedger.total(ledger)) !== VillaLedger.cents(booking.paid)) throw new Error("Booking payments do not match the recorded received total.");
+    }
     if (!booking || !validDate(booking.arrival) || !Number.isInteger(Number(booking.nights)) || Number(booking.nights) < 1 || Number(booking.nights) > 3660) {
       throw new Error("A booking has an invalid date or stay length. No records were changed.");
     }
@@ -3933,7 +4042,7 @@ function validateBackupData(data) {
   return payload;
 }
 
-function restoreAppData(data) {
+function prepareRestoreData(data) {
   validateBackupData(data);
   const staged = { bookings, documents, taxPlan, profitData, appSettings };
   if (Array.isArray(data)) {
@@ -3986,7 +4095,15 @@ function restoreAppData(data) {
         }
       : appSettings;
   }
-  if (!isRestoringCloudData) createRecoverySnapshot("Before data restore/import");
+  if (typeof validateLegacyExpenseLinks === "function") validateLegacyExpenseLinks(staged);
+  return staged;
+}
+
+function restoreAppData(data) {
+  const staged = prepareRestoreData(data);
+  if (!isRestoringCloudData && hasMeaningfulAppData() && !createRecoverySnapshot("Before data restore/import")) {
+    throw new Error("Restore stopped: the browser could not save a recovery point. Your records have not been replaced. Free browser storage and try again.");
+  }
   ({ bookings, documents, taxPlan, profitData, appSettings } = staged);
   saveBookings();
   saveDocuments();
@@ -4861,7 +4978,7 @@ function renderBookingsTable() {
         <tr>
           ${bookingCell("channel", channelBadgeFor(booking))}
           ${bookingCell("record", isExcludedBooking(booking) ? `<span class="channel-badge influencer">Record only</span>` : `<span class="channel-badge direct">Financial</span>`)}
-          ${bookingCell("guest", `${escapeHtml(booking.guest)} ${isTentativeBooking(booking) ? `<span class="tentative-badge" title="Not confirmed — excluded from revenue and payment reminders">${booking.status === "quoted" ? "QUOTED" : "INQUIRY"}</span> ` : ""}${returningBadgeHtml(booking, bookings)}${blocklistBadgeHtml(booking)}`, "booking-guest-cell")}
+          ${bookingCell("guest", `<button type="button" class="workspace-link" data-workspace-booking="${booking.id}">${escapeHtml(booking.guest)}</button> ${isTentativeBooking(booking) ? `<span class="tentative-badge" title="Not confirmed — excluded from revenue and payment reminders">${booking.status === "quoted" ? "QUOTED" : "INQUIRY"}</span> ` : ""}${returningBadgeHtml(booking, bookings)}${blocklistBadgeHtml(booking)}`, "booking-guest-cell")}
           ${bookingCell("contact", formatPhoneForWhatsapp(booking.contact) ? escapeHtml(booking.contact) : `<span class="contact-missing" title="No WhatsApp number saved">⚠ no phone</span>`, "contact-cell")}
           ${bookingCell("prefix", `<strong>${prefixFor(booking.guest)}</strong>`)}
           ${bookingCell("arrival", shortDate(booking.arrival), "date-cell")}
@@ -5120,7 +5237,8 @@ function conflictingBookings(candidate) {
     && villaOf(booking) === villaOf(candidate) && booking.arrival < end && departureFor(booking) > candidate.arrival);
 }
 
-function openBookingDialog(booking = null) {
+function openBookingDialog(booking = null, edit = false) {
+  if (booking && !edit && typeof openBookingWorkspace === "function") { openBookingWorkspace(booking.id); return; }
   els.dialogTitle.textContent = booking ? "Edit Booking" : "Add Booking";
   els.bookingId.value = booking?.id || "";
   els.channelInput.value = booking?.channel || "Direct";
@@ -5172,19 +5290,23 @@ function defaultDocumentDraft() {
 }
 
 // "Prefill from booking" — stop re-typing guest/dates/fee/deposit that already live on a booking.
-function renderDocBookingPicker() {
+function renderDocBookingPicker(selectedId = null) {
   if (!els.docFromBooking) return;
-  const current = els.docFromBooking.value;
-  const opts = [...scopedBookings()]
+  const current = selectedId ?? (els.docFromBooking.value || els.docFromBooking.dataset.currentId || "");
+  const opts = [...bookings]
     .sort((a, b) => b.arrival.localeCompare(a.arrival))
-    .map((b) => `<option value="${b.id}">${escapeHtml(quickDate(b.arrival))} · ${escapeHtml(b.guest)}</option>`)
+    .map((b) => `<option value="${b.id}">${escapeHtml(villaOf(b))} · ${escapeHtml(shortDate(b.arrival))} · ${escapeHtml(b.guest)}</option>`)
     .join("");
-  els.docFromBooking.innerHTML = `<option value="">— Start blank —</option>${opts}`;
+  els.docFromBooking.innerHTML = `<option value="">— Start blank —</option>${opts}${current && !bookings.some(booking => booking.id === current) ? `<option value="${escapeHtml(current)}">Archived booking link</option>` : ""}`;
   if (current && [...els.docFromBooking.options].some((o) => o.value === current)) els.docFromBooking.value = current;
 }
 function prefillDocFromBooking(id) {
   const b = bookings.find((x) => x.id === id);
   if (!b) return;
+  const type = els.docType.value;
+  fillDocumentForm({ ...defaultDocumentDraft(), type });
+  els.docFromBooking.value = b.id;
+  els.docFromBooking.dataset.currentId = b.id;
   els.docBookingType.value = b.channel === "Airbnb" ? "Airbnb Booking" : "Direct Booking";
   els.docIssuer.value = b.villa === "Windmill" ? "Windmill Villa Ventures" : "Sunrise Villa Ventures";
   if (els.docGuestName) els.docGuestName.value = b.guest || "";
@@ -5196,11 +5318,15 @@ function prefillDocFromBooking(id) {
   if (els.docAccommodationFee) els.docAccommodationFee.value = b.revenue || 0;
   if (els.docDepositAmount) els.docDepositAmount.value = b.depositAmount || 0;
 
+  els.docBillTo.value = "";
+  els.docBillAddress.value = "";
+  els.docRemarks.value = "";
+  els.docPreviouslyReceived.value = 0;
+  els.docLinkedReceiptCode.value = "";
   const fullTotal = Number(b.revenue || 0) + Number(b.depositAmount || 0);
   const received = Number(b.paid || 0);
-  if (els.docType?.value === "Official Receipt" && received > 0) {
-    renderPaymentRows([{ ...normalizePayment({ amount: received }), date: "" }]);
-  }
+  const recordedPayments = typeof bookingReceiptPayments === "function" ? bookingReceiptPayments(b) : [];
+  renderPaymentRows(recordedPayments.length ? recordedPayments : [{ ...normalizePayment({ amount: received }), date: "" }]);
   if (els.docType?.value === "Invoice" && els.docInvoiceScope) {
     const isPartial = received > 0 && fullTotal > 0 && received < fullTotal;
     els.docInvoiceScope.value = isPartial ? "Balance Payment" : "Full Booking";
@@ -5237,6 +5363,7 @@ function formDocument() {
     payments: els.docType.value === "Official Receipt" ? paymentRowsFromForm() : [],
   };
   const existing = documents.find((doc) => doc.id === raw.id);
+  if (raw.type === "Official Receipt" && typeof receiptPreviouslyReceived === "function") raw.previouslyReceived = receiptPreviouslyReceived(raw);
   return normalizeDocument({
     ...raw,
     code: existing?.code,
@@ -5248,8 +5375,11 @@ function formDocument() {
 function fillDocumentForm(doc) {
   const normalized = normalizeDocument(doc);
   els.documentId.value = normalized.id;
-  renderDocBookingPicker();
-  if (els.docFromBooking) els.docFromBooking.value = normalized.bookingId;
+  renderDocBookingPicker(normalized.bookingId);
+  if (els.docFromBooking) {
+    els.docFromBooking.value = normalized.bookingId;
+    els.docFromBooking.dataset.currentId = normalized.bookingId;
+  }
   els.docType.value = normalized.type;
   els.docIssuer.value = normalized.issuer;
   els.docDate.value = normalized.date;
@@ -5273,13 +5403,15 @@ function fillDocumentForm(doc) {
   updateReceiptVisibility();
   renderDocumentPreview(normalized);
   setDocumentWorkspace("editor");
-  setDocumentFeedback(documents.some(item => item.id === normalized.id) ? "Saved document opened" : normalized.guestName ? "Unsaved document" : "New document");
+  const saved = documents.some(item => item.id === normalized.id);
+  setDocumentFeedback(saved ? "Saved document opened" : normalized.guestName ? "Unsaved document" : "New document", !saved && Boolean(normalized.guestName));
 }
 
 function paymentRowsFromForm(includeEmpty = false) {
   return [...els.paymentRows.querySelectorAll(".payment-row")]
     .map((row) =>
       normalizePayment({
+        id: row.dataset.paymentId,
         mode: row.querySelector("[data-payment-mode]")?.value,
         bank: row.querySelector("[data-payment-bank]")?.value,
         reference: row.querySelector("[data-payment-reference]")?.value,
@@ -5294,7 +5426,7 @@ function renderPaymentRows(payments = [normalizePayment({})]) {
   els.paymentRows.innerHTML = payments
     .map(
       (payment, index) => `
-        <div class="payment-row">
+        <div class="payment-row" data-payment-id="${escapeHtml(payment.id || crypto.randomUUID())}">
           <div class="payment-row-heading">Transaction ${index + 1}</div>
           <label>Payment Mode
             <input data-payment-mode value="${escapeHtml(payment.mode)}" placeholder="Bank transfer, cash, card" />
@@ -5416,7 +5548,7 @@ function buildDocumentMarkup(normalized) {
   const previouslyReceived = isBalanceInvoice ? Math.min(Number(normalized.previouslyReceived || 0), normalized.totalAmount) : 0;
   const amountDue = Math.max(0, normalized.totalAmount - previouslyReceived);
   const totalPayments = paymentTotalFor(normalized);
-  const receiptBalance = Math.max(0, normalized.totalAmount - totalPayments);
+  const receiptBalance = Math.max(0, normalized.totalAmount - totalPayments - Number(normalized.previouslyReceived || 0));
   const totalLabel = isBalanceInvoice ? "Balance Amount Due" : "Total Amount";
   const monogram = escapeHtml(
     ((normalized.issuer || "Sunrise Villa").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("") || "SV").toUpperCase(),
@@ -5531,6 +5663,7 @@ function buildDocumentMarkup(normalized) {
                 </tr>
               </tfoot>
             </table>
+            ${normalized.previouslyReceived > 0 ? `<p class="doc-balance-note">Other payments already recorded: ${money(normalized.previouslyReceived)}.</p>` : ""}
             <p class="doc-balance-note">This receipt confirms only the payment received above. Any balance remaining is payable before check-in unless otherwise agreed.</p>
           </section>
         `
@@ -5571,10 +5704,10 @@ function renderDocuments() {
 
 let documentHasUnsavedChanges = false;
 
-function setDocumentFeedback(message) {
+function setDocumentFeedback(message, dirty = documentHasUnsavedChanges) {
   const node = document.querySelector("#documentFeedback");
   if (node) node.textContent = message;
-  documentHasUnsavedChanges = message.startsWith("Unsaved");
+  documentHasUnsavedChanges = dirty;
 }
 
 function setDocumentWorkspace(mode) {
@@ -5583,6 +5716,8 @@ function setDocumentWorkspace(mode) {
   view.querySelector(".documents-layout").hidden = archive;
   view.querySelector(".document-editor-tools").hidden = archive;
   view.querySelector(".document-archive").hidden = !archive;
+  const mobileSwitch = view.querySelector(".document-mobile-switch");
+  if (mobileSwitch) mobileSwitch.hidden = archive;
   view.querySelectorAll("[data-document-workspace]").forEach(button => {
     const selected = button.dataset.documentWorkspace === (archive ? "archive" : "editor");
     button.classList.toggle("active", selected);
@@ -5595,7 +5730,7 @@ function renderDocumentPaymentSummary(doc) {
   if (!summary) return;
   const received = doc.type === "Official Receipt" ? paymentTotalFor(doc) : doc.invoiceScope === "Balance Payment" && doc.type === "Invoice" ? doc.previouslyReceived : 0;
   const total = documentTotalFor(doc);
-  const balance = Math.max(0, total - received);
+  const balance = Math.max(0, total - received - (doc.type === "Official Receipt" ? Number(doc.previouslyReceived || 0) : 0));
   summary.innerHTML = `<span>Booking total<strong>${money(total)}</strong></span>
     <span>${doc.type === "Official Receipt" ? "Received on this receipt" : "Previously received"}<strong>${money(received)}</strong></span>
     <span>${received > total ? "Overpayment" : "Balance due"}<strong>${money(received > total ? received - total : balance)}</strong></span>`;
@@ -5633,7 +5768,7 @@ function saveCurrentDocument() {
   saveDocuments();
   fillDocumentForm(doc);
   renderDocumentArchive();
-  setDocumentFeedback("Saved on this device. Cloud status is shown above.");
+  setDocumentFeedback("Saved on this device. Cloud status is shown above.", false);
 }
 
 function duplicateCurrentDocument() {
@@ -5672,9 +5807,12 @@ function duplicateSavedDocument(id) {
 }
 
 function createBalanceInvoiceFromReceipt(id) {
+  if (!confirmDocumentReplacement()) return;
   const receipt = documents.find((item) => item.id === id);
   if (!receipt) return;
-  const received = paymentTotalFor(receipt);
+  const linkedBooking = bookings.find(booking => booking.id === receipt.bookingId);
+  const received = linkedBooking ? Number(linkedBooking.paid || 0) : paymentTotalFor(receipt) + Number(receipt.previouslyReceived || 0);
+  if (linkedBooking && received < paymentTotalFor(receipt)) { setDocumentFeedback("Reconcile this receipt with the booking payment history before creating a balance invoice."); return; }
   const total = documentTotalFor(receipt);
   fillDocumentForm(
     normalizeDocument({
@@ -5862,7 +6000,7 @@ function renderDocumentArchive() {
         .map(
           (doc) => {
             const amountDue = doc.type === "Official Receipt" ? paymentTotalFor(doc) : documentAmountDueFor(doc);
-            const receiptBalance = doc.type === "Official Receipt" ? Math.max(0, documentTotalFor(doc) - paymentTotalFor(doc)) : 0;
+            const receiptBalance = doc.type === "Official Receipt" ? Math.max(0, documentTotalFor(doc) - paymentTotalFor(doc) - Number(doc.previouslyReceived || 0)) : 0;
             const canCreateBalanceInvoice = doc.type === "Official Receipt" && receiptBalance > 0;
             return `
             <tr>
@@ -5946,6 +6084,7 @@ function taxExpenseFilters() {
     category: els.taxExpenseCategoryFilter?.value || "All",
     receipt: els.taxExpenseReceiptFilter?.value || "All",
     search: els.taxExpenseSearch?.value.trim().toLowerCase() || "",
+    property: document.querySelector("#expensePropertyFilter")?.value || "All",
   };
 }
 
@@ -5956,6 +6095,8 @@ function filteredTaxExpenses() {
       const date = new Date(`${expense.date}T00:00:00`);
       if (Number.isNaN(date.getTime())) return false;
       if (date.getFullYear() !== filters.year) return false;
+      const property = filters.property === "Selected" ? activeVillaKey() + " Villa" : filters.property;
+      if (property !== "All" && expense.property !== property) return false;
       if (filters.month !== "All" && expense.date.slice(5, 7) !== filters.month) return false;
       if (filters.category !== "All" && expense.category !== filters.category) return false;
       if (filters.receipt === "Missing" && (expense.receipt || expense.attachment?.dataUrl)) return false;
@@ -5982,7 +6123,8 @@ function clearTaxExpenseForm() {
   els.taxExpenseId.value = "";
   els.taxExpenseDate.value = isoDate(new Date());
   els.taxExpenseEntity.value = "Enterprise";
-  els.taxExpenseProperty.value = "Sunrise Villa";
+  els.taxExpenseProperty.value = activeVillaKey() + " Villa";
+  if (typeof renderExpenseFinanceOptions === "function") renderExpenseFinanceOptions();
   els.taxExpenseCategory.value = "Housekeeping/Cleaning";
   els.taxExpenseType.value = "One-off";
   els.taxExpenseDeductible.value = "Auto (from rule)";
@@ -6016,6 +6158,9 @@ function formTaxExpense() {
     reviewed: els.taxExpenseReviewed.checked,
     notes: els.taxExpenseNotes.value.trim(),
     amount: Number(els.taxExpenseAmount.value || 0),
+    financeMode: document.querySelector("#expenseFinanceMode")?.value || existing?.financeMode || "unreviewed",
+    commitmentId: document.querySelector("#expenseCommitment")?.value || "",
+    legacyCost: typeof selectedLegacyExpenseSource === "function" ? selectedLegacyExpenseSource() : existing?.legacyCost,
     businessUsePct: els.taxExpenseBizPct ? clampPct(els.taxExpenseBizPct.value, 100) : 100,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
@@ -6133,6 +6278,8 @@ function fillTaxExpenseForm(id) {
   els.taxExpenseAmount.value = expense.amount;
   els.taxExpenseVendor.value = expense.vendor;
   els.taxExpensePayment.value = expense.payment;
+  if (typeof renderExpenseFinanceOptions === "function") renderExpenseFinanceOptions(expense);
+  document.querySelector("#expenseEntryDisclosure")?.setAttribute("open", "");
   els.taxExpenseClaimStatus.value = expense.claimStatus;
   els.taxExpenseReceipt.value = expense.receipt;
   els.taxExpenseReviewed.checked = Boolean(expense.reviewed);
@@ -6160,6 +6307,21 @@ function saveTaxExpense(event) {
   event.preventDefault();
   if (!els.taxExpenseForm.reportValidity()) return;
   const expense = formTaxExpense();
+  if (["additional", "commitment"].includes(expense.financeMode) && expense.property === "Shared") {
+    window.alert("Choose Sunrise or Windmill for finance reporting. Split shared costs into one record per property.");
+    return;
+  }
+  if (expense.financeMode === "commitment" && !(appSettings.commitments || []).some(item => item.id === expense.commitmentId && (item.villa || "Sunrise") + " Villa" === expense.property)) {
+    window.alert("Select a recurring commitment for this property.");
+    return;
+  }
+  try {
+    if (typeof validateExpenseFinanceChange === "function" && !validateExpenseFinanceChange(expense)) return;
+  } catch (error) { window.alert(error.message); return; }
+  const revisedProfitData = typeof prepareExpenseFinanceChange === "function" ? prepareExpenseFinanceChange(expense) : profitData;
+  createRecoverySnapshot("Before expense saved");
+  profitData = revisedProfitData;
+  saveProfitData();
   taxPlan = {
     ...taxPlan,
     expenses: (taxPlan.expenses || []).some((item) => item.id === expense.id)
@@ -6172,19 +6334,25 @@ function saveTaxExpense(event) {
   // the filter shows, jump the filter — otherwise it silently "disappears" and
   // the natural (wrong) reaction is to enter it again.
   const savedYear = yearOf(expense.date);
+  const propertyFilter = document.querySelector("#expensePropertyFilter");
+  if (propertyFilter && propertyFilter.value !== "All") propertyFilter.value = expense.property;
   if (els.taxExpenseYearFilter && savedYear && Number(els.taxExpenseYearFilter.value) !== savedYear) {
     els.taxExpenseYearFilter.value = savedYear;
   }
   renderTaxExpenses();
+  renderDashboard();
   showSaveStatus(els.taxExpenseSaveStatus, `✓ Saved: ${expense.vendor || expense.category} ${money(expense.amount)} — ${shortDate(expense.date)} (YA ${savedYear})`);
 }
 
 function deleteTaxExpense(id) {
-  if (!window.confirm("Delete this expense record?")) return;
+  const existing = (taxPlan.expenses || []).find(expense => expense.id === id);
+  if (!window.confirm(existing?.financeMode === "legacy" ? "Delete this receipt record? The original monthly cost will stay in Finance." : "Delete this expense record?")) return;
   createRecoverySnapshot("Before tax expense deleted");
   taxPlan = { ...taxPlan, expenses: (taxPlan.expenses || []).filter((expense) => expense.id !== id) };
   saveTaxPlan();
+  if (els.taxExpenseId.value === id) clearTaxExpenseForm();
   renderTaxExpenses();
+  renderDashboard();
 }
 
 function taxExpenseExportRows(rows = filteredTaxExpenses()) {
@@ -6242,7 +6410,7 @@ function renderTaxExpenses() {
               <td><span class="doc-status">${escapeHtml(expense.category)}</span></td>
               <td>${escapeHtml(expense.vendor || "-")}</td>
               <td>${escapeHtml(receiptLabel(expense))}<br><span class="table-muted">${escapeHtml(expense.receipt || expense.attachment?.name || "-")}</span>${attachmentLink(expense)}</td>
-              <td>${expense.reviewed ? "Reviewed" : "Pending"}</td>
+              <td>${expense.reviewed ? "Reviewed" : "Pending"}<small class="expense-finance-status">${expense.financeMode === "additional" ? "Finance: included" : expense.financeMode === "commitment" ? "Finance: replaces budget" : expense.financeMode === "legacy" ? "Finance: linked monthly cost" : expense.financeMode === "tax-only" ? "Tax only" : "Finance: not reconciled"}</small></td>
               <td><strong>${money(expense.amount)}</strong></td>
               <td class="actions">
                 <button class="small-action" type="button" data-edit-tax-expense="${expense.id}">Edit</button>
@@ -6253,6 +6421,7 @@ function renderTaxExpenses() {
         )
         .join("")
     : `<tr><td colspan="9" class="empty-state">No expense records for this filter.</td></tr>`;
+  if (typeof renderExpenseReview === "function") renderExpenseReview();
 }
 
 function exportTaxExpensesExcel() {
@@ -7786,7 +7955,7 @@ function sendTodayItems() {
     const dep = dateObj(departureFor(b));
     const hasPhone = !!formatPhoneForWhatsapp(b.contact);
     // 1) Pre-arrival check-in info (≤7 days out, not yet sent OR phone missing)
-    if (arr >= today && arr <= horizon7 && (!b.checkinSentAt || !hasPhone)) {
+    if (arr >= today && arr <= horizon7 && !hasCheckinBeenSent(b)) {
       items.push({ booking: b, type: "checkin", label: `arrives ${shortDate(b.arrival)} · check-in info` });
     }
     // 2) Deposit not received (current/future booking with an expected deposit)
@@ -7798,7 +7967,7 @@ function sendTodayItems() {
       items.push({ booking: b, type: "midstay", label: `in-house · mid-stay check` });
     }
     // 4) Review request (departed today or in the last 2 days) — clears once sent today; not nagged beyond the window
-    if (dep <= today && dep >= addDays(today, -2) && b.sentLog?.review !== todayIso) {
+    if (dep <= today && dep >= addDays(today, -2) && !b.sentLog?.review) {
       items.push({ booking: b, type: "review", label: `checked out ${shortDate(departureFor(b))} · ask for review` });
     }
   });
@@ -7852,6 +8021,7 @@ function upcomingVacancies(daysAhead = 45) {
 
 function renderToday() {
   const bookings = scopedBookings();
+  const stays = bookings.filter(booking => !isTentativeBooking(booking));
   const host = document.querySelector("#todayContent");
   if (!host) return;
   const todayIso = isoDate(new Date());
@@ -7859,9 +8029,9 @@ function renderToday() {
   today.setHours(0, 0, 0, 0);
   const fmtNights = (n) => `${n} night${Number(n) === 1 ? "" : "s"}`;
 
-  const arrivals = bookings.filter((b) => b.arrival === todayIso).sort((a, b) => a.guest.localeCompare(b.guest));
-  const departures = bookings.filter((b) => departureFor(b) === todayIso);
-  const inhouse = bookings.filter((b) => overlapsDate(b, todayIso));
+  const arrivals = stays.filter((b) => b.arrival === todayIso).sort((a, b) => a.guest.localeCompare(b.guest));
+  const departures = stays.filter((b) => departureFor(b) === todayIso);
+  const inhouse = stays.filter((b) => overlapsDate(b, todayIso));
 
   const daysFromToday = (iso) => Math.round((dateObj(iso) - today) / 86400000);
   const airbnbPayouts = [];
@@ -7875,13 +8045,13 @@ function renderToday() {
       // Money owed by Airbnb (held until release ~24h after check-in). Show near-term ones.
       const release = airbnbReleaseDate(b);
       const relDays = daysFromToday(release);
-      if (relDays >= 0 && relDays <= 30) airbnbPayouts.push({ b, release, relDays, amount: Number(b.revenue || 0) });
-    } else if (bal > 0 && dep >= today) {
+      if (bal > 0 && relDays <= 30) airbnbPayouts.push({ b, release, relDays, amount: bal });
+    } else if (bal > 0) {
       // Direct: balance still owed (should be settled 2–4 weeks before arrival).
       directBalances.push({ b, bal, daysToArrival: daysFromToday(b.arrival), depositPaid: b.depositPaid, depositAmount: Number(b.depositAmount || 0) });
     }
     // Security deposit to refund after checkout (both channels).
-    if (b.depositPaid && !b.depositRefunded && Number(b.depositAmount || 0) > 0 && dep < today) {
+    if (refundPendingFor(b) > 0 && dep <= today) {
       depositRefunds.push({ b, dep });
     }
   });
@@ -7918,7 +8088,7 @@ function renderToday() {
       const sentToday = !!(b.sentLog && b.sentLog[type] === todayIso);
       const btnText = sentToday ? "✓ Sent · resend" : type === "checkin" && b.checkinSentAt ? "Resend check-in" : sendBtnLabel[type];
       const action = hasPhone
-        ? `<button class="small-action wa-action${sentToday ? " sent" : ""}" type="button" data-send="${type}" data-send-id="${b.id}">${btnText}</button>`
+        ? `<div class="message-task-actions"><button class="small-action wa-action" type="button" data-send="${type}" data-send-id="${b.id}">Open WhatsApp</button><button class="small-action" type="button" data-mark-sent="${type}" data-send-id="${b.id}">${sentToday ? "Marked sent" : "Mark sent"}</button></div>`
         : `<div class="send-phone">
              <input type="tel" inputmode="tel" placeholder="+60 12-345 6789" data-contact-input="${b.id}" aria-label="WhatsApp number for ${escapeHtml(b.guest)}" />
              <button class="small-action" type="button" data-set-contact="${b.id}">Save</button>
@@ -7970,23 +8140,23 @@ function renderToday() {
       <div class="today-row-main"><strong>${escapeHtml(b.guest)} ${returningBadgeHtml(b, bookings)}${blocklistBadgeHtml(b)}</strong><span>${b.villa === "Windmill" ? "Windmill" : "Sunrise"} · ${sub}</span></div>
       ${flag}
     </div>`;
-  const relText = (d) => (d === 0 ? "today" : `in ${d}d`);
+  const relText = (d) => d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? "today" : `in ${d}d`;
   // Pills show the amount only — the group label above already names the type (payout / balance / refund).
   const airbnbRowsHtml = airbnbPayouts
-    .map(({ b, release, relDays, amount }) => attnRow(b, `<span class="today-flag pend">${money(amount)}</span>`, `releases ${shortDate(release)} (${relText(relDays)})`))
+    .map(({ b, release, relDays, amount }) => attnRow(b, `<span class="today-flag pend">${money(amount)}</span>`, `expected ${shortDate(release)} (${relText(relDays)})`))
     .join("");
-  const arrivalText = (d) => (d > 0 ? `arrives in ${d} day${d === 1 ? "" : "s"}` : d === 0 ? "arrives today" : "in-house — balance overdue");
+  const arrivalText = (d) => (d > 0 ? `arrives in ${d} day${d === 1 ? "" : "s"}` : d === 0 ? "arrives today" : "balance overdue");
   const depositText = (paid, amt) => (amt > 0 ? (paid ? `deposit ${money(amt)} ✓ held` : `deposit ${money(amt)} ⚠ not collected`) : "");
   const directRowsHtml = directBalances
     .map(({ b, bal, daysToArrival, depositPaid, depositAmount }) => {
       // Red only when payment is genuinely pressing: overdue, or inside the firm 2-week deadline.
-      const tone = daysToArrival < 0 || daysToArrival <= 14 ? "due" : "pend";
+      const tone = daysToArrival < 0 || daysToArrival <= 28 ? "due" : "pend";
       const dep = depositText(depositPaid, depositAmount);
       return attnRow(b, `<span class="today-flag ${tone}">${money(bal)}</span>`, `${arrivalText(daysToArrival)}${dep ? " · " + dep : ""}`);
     })
     .join("");
   const refundRowsHtml = depositRefunds
-    .map(({ b }) => attnRow(b, `<span class="today-flag pend">${money(b.depositAmount)}</span>`, `checked out ${shortDate(departureFor(b))}`))
+    .map(({ b }) => attnRow(b, `<span class="today-flag pend">${money(refundPendingFor(b))}</span>`, `checked out ${shortDate(departureFor(b))}`))
     .join("");
   const groupLabel = (t) => `<div class="attn-group-label">${t}</div>`;
   const attentionBody = attentionCount
@@ -8039,10 +8209,17 @@ function renderAll() {
   applyDashboardMode();
 }
 
+function renderActiveView() {
+  const renderers = { today: renderToday, calendar: () => { renderCalendar(); renderDetails(); }, dashboard: renderDashboard,
+    bookings: renderBookingsTable, guests: renderGuests, messages: renderMessageGenerator, guide: renderGuide, documents: renderDocuments, tax: renderTaxPlan };
+  renderers[activeView]?.();
+  renderDataHealth();
+}
+
 document.querySelectorAll(".nav-button").forEach((button) => {
   button.addEventListener("click", () => {
     setView(button.dataset.view);
-    renderAll();
+    renderActiveView();
   });
 });
 
@@ -8169,7 +8346,7 @@ els.form.addEventListener("submit", (event) => {
     }
   }
   const existing = bookings.find((booking) => booking.id === id);
-  const nextBooking = {
+  let nextBooking = {
     ...existing,
     id,
     channel: els.channelInput.value,
@@ -8193,6 +8370,8 @@ els.form.addEventListener("submit", (event) => {
     incidentLog: els.incidentLogInput?.value.trim() ?? (existing?.incidentLog || ""),
   };
 
+  if (Array.isArray(existing?.paymentLedger)) nextBooking = VillaLedger.setTotal({ ...nextBooking, paid: existing.paid }, nextBooking.paid);
+  if (!nextBooking.guestId) nextBooking.guestId = guestKeyFor(existing || nextBooking);
   const conflicts = conflictingBookings(nextBooking);
   if (conflicts.length && !window.confirm("These dates overlap an existing stay: " + conflicts.map(booking => booking.guest).join(", ") + ". Save this booking anyway?")) return;
   bookings = bookings.some((booking) => booking.id === id)
@@ -8232,7 +8411,7 @@ els.bookingRows.addEventListener("click", (event) => {
   }
   if (editId) {
     const booking = bookings.find((item) => item.id === editId);
-    if (booking) openBookingDialog(booking);
+    if (booking) openBookingDialog(booking, true);
   }
   if (deleteId) {
     const booking = bookings.find((item) => item.id === deleteId);
@@ -8254,17 +8433,18 @@ todayContentEl?.addEventListener("click", (event) => {
     if (booking) openBookingDialog(booking);
     return;
   }
+  const markSent = event.target.closest("[data-mark-sent]");
+  if (markSent) {
+    markNudgeSent(markSent.dataset.sendId, markSent.dataset.markSent);
+    renderDetails();
+    return;
+  }
   const sendBtn = event.target.closest("[data-send]");
   if (sendBtn) {
     const type = sendBtn.dataset.send;
     const booking = bookings.find((b) => b.id === sendBtn.dataset.sendId);
     if (booking) {
-      try {
-        openWhatsappForBooking(booking, type);
-      } catch (_) {
-        /* popup blocked in some browsers — still record below */
-      }
-      markNudgeSent(booking.id, type);
+      openWhatsappForBooking(booking, type);
     }
     return;
   }
@@ -8483,13 +8663,11 @@ els.quickColumnControls?.addEventListener("change", (event) => {
 });
 
 els.addOneOffCost?.addEventListener("click", () => {
-  const current = profitMonth(selectedMonth);
-  saveSelectedProfitMonth({
-    ...current,
-    oneOffCosts: [...current.oneOffCosts, normalizeOneOffCost({ category: "Groceries", description: "", amount: 0 })],
-  });
-  renderDashboard();
-  document.querySelector(".one-off-block")?.setAttribute("open", "");
+  showFinanceSection("expenses");
+  clearTaxExpenseForm();
+  els.taxExpenseDate.value = selectedMonth === isoDate(new Date()).slice(0, 7) ? isoDate(new Date()) : selectedMonth + "-01";
+  document.querySelector("#expenseEntryDisclosure").open = true;
+  els.taxExpenseVendor.focus();
 });
 
 els.oneOffCostList?.addEventListener("change", (event) => {
@@ -8516,6 +8694,11 @@ els.oneOffCostList?.addEventListener("change", (event) => {
   const field = event.target.dataset.oneOffField;
   if (!id || !field) return;
   const current = profitMonth(selectedMonth);
+  if (field === "amount" && typeof linkedLegacyExpense === "function" && linkedLegacyExpense(profitMonthKey(selectedMonth), id)) {
+    window.alert("This cost is linked to an expense record. Update its amount from Finance > Expenses to keep both records aligned.");
+    renderOneOffCosts();
+    return;
+  }
   saveSelectedProfitMonth({
     ...current,
     oneOffCosts: current.oneOffCosts.map((cost) =>
@@ -8532,6 +8715,8 @@ els.oneOffCostList?.addEventListener("change", (event) => {
 });
 
 els.oneOffCostList?.addEventListener("click", (event) => {
+  const linkedCost = event.target.dataset.openLinkedCost;
+  if (linkedCost) { openLegacyCostRecord(profitMonthKey(selectedMonth), linkedCost); return; }
   const receiptId = event.target.dataset.removeReceipt;
   if (receiptId) {
     const current = profitMonth(selectedMonth);
@@ -8545,6 +8730,10 @@ els.oneOffCostList?.addEventListener("click", (event) => {
   }
   const id = event.target.dataset.deleteOneOff;
   if (!id) return;
+  if (typeof linkedLegacyExpense === "function" && linkedLegacyExpense(profitMonthKey(selectedMonth), id)) {
+    window.alert("This cost is linked to an expense record. Delete or unlink that receipt record first. No cost was deleted.");
+    return;
+  }
   createRecoverySnapshot("Before one-off cost deleted");
   const current = profitMonth(selectedMonth);
   saveSelectedProfitMonth({
@@ -8558,21 +8747,23 @@ els.oneOffCostList?.addEventListener("click", (event) => {
 document.querySelector("#retryCloudLoad")?.addEventListener("click", () => loadCloudSnapshot());
 document.querySelector("#syncNoticeRetry")?.addEventListener("click", syncCloudNow);
 document.querySelector("#syncNoticeBackup")?.addEventListener("click", downloadBackup);
-document.querySelector("#syncNoticeReload")?.addEventListener("click", async () => {
-  if (cloudSavePromise) await cloudSavePromise;
-  if (cloudDirty && !window.confirm("Load the cloud copy? Your current local records will be kept in recovery history. Download a backup first if you need to compare both versions.")) return;
-  if (cloudDirty) createRecoverySnapshot("Before resolving cloud conflict");
-  const previous = { dirty: cloudDirty, conflict: cloudConflict, generation: authGeneration };
-  cloudDirty = false;
-  cloudConflict = false;
-  writeSyncState();
-  const loaded = await loadCloudSnapshot();
-  if (!loaded && authGeneration === previous.generation) {
-    cloudDirty = previous.dirty;
-    cloudConflict = previous.conflict;
-    writeSyncState();
+async function reloadCloudCopy() {
+  if (!cloudUser || !cloudReady || cloudLoadPromise) return false;
+  const generation = authGeneration;
+  const ownerId = cloudUser.id;
+  const button = document.querySelector("#syncNoticeReload");
+  if (button?.disabled) return false;
+  if (button) button.disabled = true;
+  try {
+    if (cloudSavePromise) await cloudSavePromise;
+    if (!cloudReady || generation !== authGeneration || cloudUser?.id !== ownerId) return false;
+    if (cloudDirty && !window.confirm("Replace these local records with the cloud copy? Download a full backup first. Browser recovery keeps records but omits receipt images.")) return false;
+    return await loadCloudSnapshot({ replaceLocal: true });
+  } finally {
+    if (button) button.disabled = false;
   }
-});
+}
+document.querySelector("#syncNoticeReload")?.addEventListener("click", reloadCloudCopy);
 window.addEventListener("beforeunload", event => {
   if (!cloudDirty && !documentHasUnsavedChanges) return;
   event.preventDefault();
@@ -8594,14 +8785,14 @@ document.querySelectorAll("[data-document-type]").forEach(button => {
     }
     updateReceiptVisibility();
     renderDocumentPreview();
-    setDocumentFeedback("Unsaved changes");
+    setDocumentFeedback("Unsaved changes", true);
   });
 });
 document.querySelector("#jumpToPayments")?.addEventListener("click", () => {
   els.receiptPaymentSection.scrollIntoView({ behavior: "smooth", block: "center" });
   els.paymentRows.querySelector("input")?.focus({ preventScroll: true });
 });
-els.documentForm?.addEventListener("input", () => setDocumentFeedback("Unsaved changes"));
+els.documentForm?.addEventListener("input", () => setDocumentFeedback("Unsaved changes", true));
 els.backupNow?.addEventListener("click", downloadBackup);
 els.syncCloudNow?.addEventListener("click", syncCloudNow);
 
@@ -8610,8 +8801,9 @@ els.restoreBackup?.addEventListener("change", (event) => restoreJsonFromInput(ev
 els.restoreRecoverySnapshot?.addEventListener("click", () => {
   const snapshot = selectedRecoverySnapshot();
   if (!snapshot?.data) return;
-  if (!window.confirm("Restore this recovery point? Your current data will be saved as a recovery point first.")) return;
-  restoreAppData(snapshot.data);
+  try {
+    openRestorePreview(snapshot.data, { label: recoverySnapshotLabel(snapshot), ownerId: snapshot.ownerId, recordsOnly: true });
+  } catch (error) { window.alert(error.message); }
 });
 
 els.downloadRecoverySnapshot?.addEventListener("click", () => {
@@ -8899,7 +9091,16 @@ els.addPaymentRow?.addEventListener("click", () => {
 
 els.generateDocument?.addEventListener("click", () => { if (validateDocumentForm()) renderDocumentPreview(formDocument()); });
 els.saveDocument?.addEventListener("click", saveCurrentDocument);
-els.docFromBooking?.addEventListener("change", (event) => { if (event.target.value) prefillDocFromBooking(event.target.value); });
+els.docFromBooking?.addEventListener("change", (event) => {
+  const id = event.target.value;
+  if (!confirmDocumentReplacement()) {
+    event.target.value = event.target.dataset.currentId || "";
+    return;
+  }
+  if (id) prefillDocFromBooking(id);
+  else fillDocumentForm({ ...defaultDocumentDraft(), type: els.docType.value });
+  setDocumentFeedback("Unsaved changes", true);
+});
 els.newDocument?.addEventListener("click", () => { if (confirmDocumentReplacement()) fillDocumentForm(defaultDocumentDraft()); });
 els.duplicateDocument?.addEventListener("click", duplicateCurrentDocument);
 els.printDocument?.addEventListener("click", printDocumentPreview);

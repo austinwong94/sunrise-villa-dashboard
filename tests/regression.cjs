@@ -51,7 +51,7 @@ async function run() {
       check('Same-day checkout allows a new arrival', conflictingBookings({ ...booking, id: 'another', arrival: '2026-10-03', nights: 1 }).length === 0);
       check('Overlapping stays are detected', conflictingBookings({ ...booking, id: 'another', arrival: '2026-10-02', nights: 1 }).length === 1);
       check('Different villas may overlap', conflictingBookings({ ...booking, id: 'another', villa: 'Windmill' }).length === 0);
-      openBookingDialog(booking);
+      openBookingDialog(booking, true);
       els.guestInput.value = 'Updated Guest';
       els.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       check('Editing a booking retains WhatsApp history', bookings[0].whatsappSent === true && bookings[0].sentLog.checkin === '2026-09-21');

@@ -24,7 +24,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&display=swap" />
-    <link rel="stylesheet" href="./styles.css?v=20260921-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260922-1" />
+    <link rel="stylesheet" href="./workflow.css?v=20260922-3" />
   </head>
   <body>
 <section class="cloud-auth" id="cloudAuthPanel" aria-label="Cloud storage login" data-status="offline">
@@ -310,7 +311,7 @@
                 <button class="ghost-button" id="syncCloudNow" type="button">Sync cloud now</button>
                 <button class="ghost-button danger-action hidden" id="cloudLogout" type="button">Sign out</button>
                 <div class="backup-menu-row">
-                  <span>Last backup: <strong id="backupStatus">Not yet</strong></span>
+                  <span>Last export request: <strong id="backupStatus">Not yet</strong></span>
                 </div>
                 <details class="recovery-menu-row">
                   <summary>Recovery history</summary>
@@ -341,7 +342,7 @@
           <span class="health-pill" id="dataHealthStatus" role="status" aria-live="polite">Cloud: checking</span>
           <span class="health-pill secondary" id="dataHealthLastSync">Last synced: -</span>
           <span class="health-pill secondary" id="dataHealthBackup">JSON export: not yet</span>
-          <span class="health-pill secondary" id="dataHealthRecords">0 bookings saved</span>
+          <span class="health-pill secondary" id="dataHealthRecords">0 bookings</span>
           <span class="health-pill secondary version-pill">Version 2026.09.21</span>
         </section>
 
@@ -1906,6 +1907,12 @@
     <!-- Supabase JS is self-hosted (vendored) instead of loaded from a CDN, so no third-party
          server can inject code into this authenticated page. Update deliberately; see security/ docs. -->
     <script src="./vendor/supabase-js-2.108.2.min.js?v=20260623-2"></script>
-    <script src="./app.js?v=20260921-1"></script>
+    <script src="./backup-crypto.js?v=20260922-3"></script>
+    <script src="./workflow-core.js?v=20260922-1"></script>
+    <script src="./app.js?v=20260922-4"></script>
+    <script src="./workspace.js?v=20260922-2"></script>
+    <script src="./recovery.js?v=20260922-3"></script>
+    <script src="./expense-review.js?v=20260922-2"></script>
+    <script src="./backup-ui.js?v=20260922-3"></script>
   </body>
 </html>

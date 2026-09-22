@@ -21,3 +21,13 @@ deploy.sh
 *.log
 test-results/
 playwright-report/
+
+# Local credentials and private exports must never reach GitHub Pages.
+.env
+.env.*
+!.env.example
+backups/
+*.svbackup.json
+sunrise-villa-backup-*.json
+sunrise-villa-before-restore-*.json
+sunrise-villa-recovery-*.json
