@@ -20,7 +20,7 @@ Concurrent-device edits pause saving instead of silently overwriting another dev
 
 For a save conflict, download the local JSON backup, then use Load cloud copy. Compare and re-enter the intended changes. Do not repeatedly force-upload an older backup.
 
-Cloud replacement now keeps pending edits marked unsaved until a valid cloud response is ready and a local recovery point has been stored. An outage, failed recovery write, or edit made during the read stops replacement. Saves wait until the read settles. If a previously known cloud workspace is missing, local records are kept and saving pauses instead of uploading a new empty workspace. Duplicate cloud rows, missing save versions, and an unexpected workspace owner require investigation; the app does not silently choose or delete records. Only a genuinely new account initializes an empty workspace. Browser recovery omits attachment images, so keep a full independent export before resolving conflicts.
+Cloud replacement now keeps pending edits marked unsaved until a valid cloud response is ready and a local recovery point has been stored. An outage, failed recovery write, or edit made during the read stops replacement. Saves wait until the read settles. If a previously known cloud workspace is missing, local records are kept and saving pauses instead of uploading a new empty workspace. Duplicate cloud rows now open the latest valid copy with saving paused and an in-app Review saved copies action. Review dates and counts, download either of the two most recent copies, then explicitly confirm Use this workspace. Confirmation rechecks both versions, records the chosen row and updates only that row; no other rows are deleted or merged. The confirmation is remembered in the chosen snapshot until a different sibling/version is detected. Pending local edits from a different version still require backup and conflict resolution. Missing save versions and an unexpected workspace owner continue to require investigation. A server uniqueness constraint remains an administrative follow-up; this client recovery does not migrate the database. Only a genuinely new account initializes an empty workspace. Browser recovery omits attachment images, so keep a full independent export before resolving conflicts.
 
 Data tools provides encrypted or plain JSON export/import and local recovery history. Recovery snapshots are limited by browser storage and may omit attachment images; they are not independent server backups. JSON exports contain private data and must be stored securely. Signing out clears this browser's local cache and recovery history. Keep independent JSON exports, including receipt attachments, before major changes.
 
@@ -69,6 +69,7 @@ GitHub Pages publishes the repository root. Required runtime files:
 - expense-review.js
 - backup-crypto.js
 - backup-ui.js
+- cloud-copies.js
 - styles.css
 - workflow.css
 - framebuster.js
@@ -90,6 +91,7 @@ npm test
 
 Tests use synthetic bookings, mock Supabase writes, and block external HTTPS requests. No real guests are created or edited.
 The regression suite covers payments, receipts, balance invoices, backup validation, account isolation and concurrent saves. Security tests cover encryption roundtrips, tampering, password errors, parameter validation and an independent Node AES-GCM decryption. Browser tests exercise encrypted downloads, unlocking, non-destructive file checks and session lock during encryption.
+Real-SDK duplicate-copy tests cover login recovery, untouched older copies, backup downloads, explicit confirmation, remembered selection, stale-review rejection and session-lock cancellation.
 Cloud-recovery tests cover missing/deleted workspaces, duplicate rows, invalid save versions, recovery-storage failure, corrupt local metadata, delayed reads, edits during reload, session changes, normal reconnects and first-time initialization.
 The workflow suite additionally covers guest switching, truthful message statuses, payment reconciliation, posting buttons, expense/budget reconciliation, historical cost links, restore previews, cancelled/failed restores, retained attachments and privacy on session lock. Layout checks cover the existing screens and new workspaces at 1440, 1080 and 390 pixels.
 

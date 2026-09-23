@@ -10,7 +10,7 @@ const SUPABASE_URL = "https://nigzeyamrzrozftbujmm.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Hs81yUXxrGC4ydDZ7nWGsQ_MlCtxqED";
 const CLOUD_DATA_TYPE = "full_app_backup";
 const CLOUD_RECORD_KEY = "sunrise-villa-main";
-const APP_VERSION = "2026.09.22";
+const APP_VERSION = "2026.09.24";
 
 // --- "Keep me signed in" storage adapter (the only user-approved edit to the frozen auth layer) ---
 // Routes the Supabase session token to localStorage (persists across browser restarts) when the
@@ -3506,16 +3506,16 @@ async function loadCloudSnapshot({ replaceLocal = false } = {}) {
     const revision = cloudRevision;
     const fingerprint = replaceLocal ? JSON.stringify([bookings, documents, taxPlan, profitData, appSettings]) : "";
     setCloudStatus("syncing", "Loading your workspace", "Checking Supabase for your latest saved data.");
-    const { data, error } = await supabaseClient.from("app_data")
+    const { data: rows, error } = await supabaseClient.from("app_data")
       .select("id, data, updated_at").eq("data_type", CLOUD_DATA_TYPE)
       .eq("record_key", CLOUD_RECORD_KEY).eq("user_id", user.id)
-      .order("updated_at", { ascending: false }).limit(2).maybeSingle();
+      .order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(2);
     if (generation !== authGeneration || cloudUser?.id !== user.id) return false;
-    if (error?.code === "PGRST116") throw Object.assign(new Error("There are multiple cloud workspace records. Loading stopped without choosing or deleting one. Contact support to review the database."), { pauseSaving: true });
     if (error) throw error;
     if (replaceLocal && (revision !== cloudRevision || fingerprint !== JSON.stringify([bookings, documents, taxPlan, profitData, appSettings]))) {
       throw new Error("Your records changed while the cloud copy was loading. Nothing was replaced. Download a backup and load the cloud copy again when you have finished editing.");
     }
+    const data = inspectCloudCopies(rows);
     // An open tab's pending state is authoritative; another tab may have changed the shared cache.
     const local = cloudReady
       ? { userId: user.id, updatedAt: cloudKnownUpdatedAt, dirty: cloudDirty }
@@ -3572,6 +3572,11 @@ async function loadCloudSnapshot({ replaceLocal = false } = {}) {
     cloudReady = true;
     writeSyncState();
     syncCloudAuthUi();
+    if (cloudCopyReview?.needsReview) {
+      cloudConflict = true;
+      setCloudStatus("error", "Review your saved copies", "More than one saved workspace was found. The latest valid cloud copy is available; pending local edits were kept. Review saved copies to confirm which workspace to keep using. Cloud saving is paused; nothing was deleted.");
+      return false;
+    }
     if (cloudConflict) {
       setCloudStatus("error", "Save paused", "This device has unsaved edits and the cloud also changed. Download a backup, then load the cloud copy.");
       return false;
@@ -3599,6 +3604,7 @@ async function applyCloudSession(session) {
   const nextUser = session?.user || null;
   if (nextUser?.id === cloudUser?.id) return;
   authGeneration += 1;
+  clearCloudCopyReview();
   cloudReady = false;
   cloudConflict = false;
   cloudRecordId = "";
@@ -3666,6 +3672,7 @@ cloudEls().form?.addEventListener("submit", async (event) => {
 });
 
 function purgeLocalSensitiveData() {
+  clearCloudCopyReview();
   // Called on sign-out AFTER the cloud is confirmed to hold the latest data.
   // Clears every local copy so a shared/stolen device can't read the P&C data after
   // logout. Everything is restored from Supabase on the next login. In-memory is left
@@ -3755,6 +3762,7 @@ function shortDateTimeLabel(value) {
 }
 
 function renderDataHealth(statusMode = cloudStatusMode) {
+  renderCloudCopyAction();
   const notice = document.querySelector("#syncNotice");
   if (notice) {
     notice.hidden = statusMode !== "error";

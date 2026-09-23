@@ -112,3 +112,15 @@ body[data-workspace-view=guide] #openAddBooking { display: none; }
   .restore-preview .recovery-table td::before { content: attr(data-label); display: block; color: var(--muted); font-size: 10px; font-weight: 400; margin-bottom: 4px; }
   .restore-preview .booking-facts { grid-template-columns: 1fr; gap: 10px; }
 }
+
+#cloudCopiesDialog .recovery-option { text-transform: none; letter-spacing: 0; font-weight: 400; }
+@media (max-width: 600px) {
+  #cloudCopiesDialog table { width: 100%; min-width: 0; }
+  #cloudCopiesDialog thead { display: none; }
+  #cloudCopiesDialog tbody { display: grid; gap: 12px; }
+  #cloudCopiesDialog tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  #cloudCopiesDialog th { grid-column: 1 / -1; padding: 8px; }
+  #cloudCopiesDialog td { min-width: 0; padding: 4px 8px; border: 0; white-space: normal; }
+  #cloudCopiesDialog td::before { content: attr(data-label); display: block; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+  #cloudCopiesDialog td:last-child { grid-column: 1 / -1; }
+}

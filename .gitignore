@@ -31,3 +31,4 @@ backups/
 sunrise-villa-backup-*.json
 sunrise-villa-before-restore-*.json
 sunrise-villa-recovery-*.json
+sunrise-villa-cloud-copy-*.json

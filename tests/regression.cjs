@@ -172,6 +172,7 @@ async function run() {
           select() { return this; },
           eq(key, value) { filters[key] = value; return this; },
           order() { return this; }, limit() { return this; },
+          then(resolve, reject) { return this.maybeSingle().then(result => ({ ...result, data: result.error ? null : result.data ? [result.data] : [] })).then(resolve, reject); },
           single() { return this.maybeSingle(); },
           async maybeSingle() {
             requests++;
@@ -218,7 +219,7 @@ async function run() {
       check('Confirmed cloud deletions load without reviving stale browser rows', bookings.length === 0 && documents.length === 0);
       cloudReady = false;
       syncCloudAuthUi();
-      supabaseClient = { from() { return { select() { return this; }, eq() { return this; }, order() { return this; }, limit() { return this; }, async maybeSingle() { return { data: null, error: { message: 'Simulated outage' } }; } }; } };
+      supabaseClient = { from() { return { select() { return this; }, eq() { return this; }, order() { return this; }, limit() { return this; }, then(resolve, reject) { return this.maybeSingle().then(result => ({ ...result, data: result.error ? null : result.data ? [result.data] : [] })).then(resolve, reject); }, async maybeSingle() { return { data: null, error: { message: 'Simulated outage' } }; } }; } };
       await loadCloudSnapshot();
       check('Failed cloud load leaves private workspace locked', document.querySelector('#appShell').hidden && !cloudReady);
       check('Saving is blocked until cloud load succeeds', await saveCloudSnapshot() === false);
@@ -229,7 +230,7 @@ async function run() {
       maybeAutoSyncIcal = () => {};
       loadBookingCandidates = () => {};
       mergeServerIcalBlocks = () => {};
-      supabaseClient = { from() { return { select() { return this; }, eq() { return this; }, order() { return this; }, limit() { return this; }, async maybeSingle() { return { data: { id: 'other-row', updated_at: 'other', data: { bookings: [], documents: [] } }, error: null }; } }; } };
+      supabaseClient = { from() { return { select() { return this; }, eq() { return this; }, order() { return this; }, limit() { return this; }, then(resolve, reject) { return this.maybeSingle().then(result => ({ ...result, data: result.error ? null : result.data ? [result.data] : [] })).then(resolve, reject); }, async maybeSingle() { return { data: { id: 'other-row', updated_at: 'other', data: { bookings: [], documents: [] } }, error: null }; } }; } };
       await applyCloudSession({ user: { id: 'another-owner' } });
       check('Changing accounts does not inherit old tax records', taxPlan.expenses.length === 0);
       check('Recovery history is restricted to its account', !visibleRecoverySnapshots().some(snapshot => snapshot.data.taxPlan?.expenses?.some(expense => expense.vendor === 'Private prior account')));

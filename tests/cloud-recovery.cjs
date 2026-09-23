@@ -71,6 +71,7 @@ async function run() {
             select() { return this; }, eq(key, value) { filters[key] = value; return this; }, order() { return this; },
             limit(value) { lastLimit = value; return this; },
             update(value) { payload = clone(value); return this; }, insert(value) { payload = clone(value); return this; },
+            then(resolve, reject) { return this.maybeSingle().then(result => ({ ...result, data: result.error ? null : result.data ? [result.data] : [] })).then(resolve, reject); },
             single() { return this.maybeSingle(); },
             async maybeSingle() {
               if (!payload) {
@@ -133,8 +134,8 @@ async function run() {
       reset({ dirty: false });
       readError = { code: 'PGRST116', message: 'Multiple rows' };
       await loadCloudSnapshot();
-      check('Cloud lookup checks for duplicate workspace rows', lastLimit === 2 && bookings.length === 1 && cloudStatusMessage.includes('multiple'));
-      check('Duplicate rows pause writes as well as reads', cloudConflict && await saveCloudSnapshot() === false && writes.length === 0);
+      check('Plural cloud lookup keeps records when the API returns an error', lastLimit === 2 && bookings.length === 1 && cloudStatusMessage === 'Multiple rows');
+      check('A failed cloud lookup never automatically writes over its records', writes.length === 0 && cloudStatusMode === 'error');
 
       reset({ dirty: false, ready: false });
       cloudKnownUpdatedAt = '';
